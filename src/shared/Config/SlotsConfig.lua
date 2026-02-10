@@ -1,31 +1,41 @@
 --[[
 	SlotsConfig.lua
-	Defines how many slots unlock per rebirth level.
+	Defines how many pad slots unlock per rebirth level.
+	Layout: 4 rows x 5 columns = 20 total possible pads.
+	18 rebirth-based + 1 premium + 1 reserved = 20.
 	Premium Slot = 1 extra slot purchasable with Robux.
 ]]
 
 local SlotsConfig = {}
 
--- Number of rebirth-based slots at each rebirth count
--- Key = rebirth count, Value = total rebirth slots unlocked
+-- Rebirth-based slots: Key = rebirth count, Value = total rebirth slots
 -- Players always have at least 1 slot (slot 1)
 SlotsConfig.SlotsByRebirth = {
-	[0] = 1,  -- start with 1 slot
-	[1] = 2,
-	[2] = 3,
-	[3] = 4,
-	[5] = 5,
-	[8] = 6,
+	[0]  = 1,   -- start with 1 slot
+	[1]  = 3,
+	[2]  = 5,
+	[3]  = 7,
+	[4]  = 9,
+	[5]  = 12,
+	[8]  = 15,
+	[10] = 18,
 }
 
 -- Maximum possible rebirth-based slots
-SlotsConfig.MaxRebirthSlots = 6
+SlotsConfig.MaxRebirthSlots = 18
 
--- Premium slot (Robux purchase) adds 1 on top of rebirth slots
+-- Premium slot adds 1 on top
 SlotsConfig.PremiumSlotBonus = 1
+
+-- Premium slot index (always the last one)
+SlotsConfig.PremiumSlotIndex = 19
 
 -- Absolute maximum (rebirth max + premium)
 SlotsConfig.MaxTotalSlots = SlotsConfig.MaxRebirthSlots + SlotsConfig.PremiumSlotBonus
+
+-- Grid layout (must match DesignConfig.Base)
+SlotsConfig.GridRows = 4
+SlotsConfig.GridCols = 5
 
 --- Get number of rebirth-based slots for a given rebirth count
 function SlotsConfig.GetSlotsForRebirth(rebirthCount: number): number
@@ -45,6 +55,21 @@ function SlotsConfig.GetTotalSlots(rebirthCount: number, hasPremiumSlot: boolean
 		base = base + SlotsConfig.PremiumSlotBonus
 	end
 	return math.min(base, SlotsConfig.MaxTotalSlots)
+end
+
+--- Get the rebirth level needed to unlock a specific slot index
+function SlotsConfig.GetRebirthForSlot(slotIndex: number): number
+	if slotIndex == SlotsConfig.PremiumSlotIndex then
+		return -1 -- premium, not rebirth-based
+	end
+
+	local needed = 999
+	for reqRebirth, slotCount in pairs(SlotsConfig.SlotsByRebirth) do
+		if slotCount >= slotIndex and reqRebirth < needed then
+			needed = reqRebirth
+		end
+	end
+	return needed ~= 999 and needed or -1
 end
 
 return SlotsConfig

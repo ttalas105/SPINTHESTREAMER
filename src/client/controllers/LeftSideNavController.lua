@@ -1,8 +1,7 @@
 --[[
 	LeftSideNavController.lua
-	Vertical icon menu on the left side of the screen:
-	Store, Rebirth, Streamers, Index/Collection.
-	Square buttons with bright icons and labels.
+	Left vertical icon menu with real image icons:
+	STORE, REBIRTH, PETS, INDEX, SETTINGS
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -17,17 +16,18 @@ local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
 local buttons = {}
-local onButtonClicked = {} -- { [buttonName] = callback }
+local onButtonClicked = {}
 
 -------------------------------------------------
--- BUTTON DEFINITIONS
+-- BUTTON DEFINITIONS with real Roblox asset icons
 -------------------------------------------------
 
 local menuItems = {
-	{ name = "Store",      icon = "$",  color = Color3.fromRGB(50, 200, 80)  },
-	{ name = "Rebirth",    icon = "R",  color = Color3.fromRGB(255, 180, 40) },
-	{ name = "Streamers",  icon = "S",  color = Color3.fromRGB(100, 140, 255) },
-	{ name = "Collection", icon = "C",  color = Color3.fromRGB(200, 80, 255) },
+	{ name = "Store",    imageId = "rbxassetid://11385419687", color = Color3.fromRGB(220, 50, 70),  label = "Store" },
+	{ name = "Rebirth",  imageId = "rbxassetid://8729314720",  color = Color3.fromRGB(220, 50, 70),  label = "Rebirth" },
+	{ name = "Pets",     imageId = "rbxassetid://13001190578",  color = Color3.fromRGB(255, 165, 40), label = "Pets" },
+	{ name = "Index",    imageId = "rbxassetid://6867518950",   color = Color3.fromRGB(220, 50, 70),  label = "Index" },
+	{ name = "Settings", imageId = "rbxassetid://7059346386",   color = Color3.fromRGB(100, 130, 180), label = "Settings" },
 }
 
 -------------------------------------------------
@@ -38,11 +38,10 @@ function LeftSideNavController.Init()
 	local screenGui = UIHelper.CreateScreenGui("LeftSideNavGui", 4)
 	screenGui.Parent = playerGui
 
-	-- Container
 	local container = Instance.new("Frame")
 	container.Name = "LeftSideContainer"
-	container.Size = UDim2.new(0, 70, 0, (#menuItems * 70) + ((#menuItems - 1) * 8))
-	container.Position = UDim2.new(0, 10, 0.5, 0)
+	container.Size = UDim2.new(0, 70, 0, (#menuItems * 72) + ((#menuItems - 1) * 4))
+	container.Position = UDim2.new(0, 8, 0.5, 0)
 	container.AnchorPoint = Vector2.new(0, 0.5)
 	container.BackgroundTransparency = 1
 	container.BorderSizePixel = 0
@@ -51,22 +50,22 @@ function LeftSideNavController.Init()
 	local listLayout = Instance.new("UIListLayout")
 	listLayout.FillDirection = Enum.FillDirection.Vertical
 	listLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-	listLayout.Padding = UDim.new(0, 8)
+	listLayout.Padding = UDim.new(0, 4)
 	listLayout.Parent = container
 
 	for _, item in ipairs(menuItems) do
 		local iconBtn, clickZone = UIHelper.CreateIconButton({
 			Name = item.name,
-			Size = UDim2.new(0, 64, 0, 64),
+			Size = UDim2.new(0, 66, 0, 66),
 			Color = item.color,
 			HoverColor = Color3.new(
 				math.min(item.color.R + 0.15, 1),
 				math.min(item.color.G + 0.15, 1),
 				math.min(item.color.B + 0.15, 1)
 			),
-			Icon = item.icon,
-			Label = item.name,
-			CornerRadius = DesignConfig.Layout.ButtonCorner,
+			ImageId = item.imageId,
+			Label = item.label,
+			CornerRadius = UDim.new(0, 10),
 			Parent = container,
 		})
 

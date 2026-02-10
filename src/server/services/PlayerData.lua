@@ -1,8 +1,9 @@
 --[[
 	PlayerData.lua
 	Manages per-player persistent data via DataStoreService.
-	Stores: cash, collection (streamerId -> count), rebirthCount,
-	        premiumSlotUnlocked, equippedStreamers, doubleCash.
+	Stores: cash, inventory (list of streamer IDs), equippedPads,
+	        collection (discovered unique streamers), rebirthCount,
+	        premiumSlotUnlocked, doubleCash, spinCredits.
 	Replicates relevant state to the owning client.
 ]]
 
@@ -15,16 +16,17 @@ local SlotsConfig = require(ReplicatedStorage.Shared.Config.SlotsConfig)
 local PlayerData = {}
 PlayerData._cache = {} -- userId -> data table
 
-local dataStore = DataStoreService:GetDataStore("SpinTheStreamer_v1")
+local dataStore = DataStoreService:GetDataStore("SpinTheStreamer_v2")
 
 local DEFAULT_DATA = {
 	cash = 500,
-	collection = {},          -- { [streamerId] = count }
+	inventory = {},           -- { "Marlon", "XQC", "Ninja", ... } list of streamer IDs
+	equippedPads = {},        -- { ["1"] = "KaiCenat", ["2"] = "Speed" } pad slot -> streamer ID
+	collection = {},          -- { ["Marlon"] = true, ["XQC"] = true } discovered uniques
 	rebirthCount = 0,
 	premiumSlotUnlocked = false,
-	equippedStreamers = {},   -- { [slotIndex] = streamerId }
 	doubleCash = false,
-	spinCredits = 0,          -- from Robux purchases
+	spinCredits = 0,
 }
 
 local RemoteEvents = ReplicatedStorage:WaitForChild("RemoteEvents")
@@ -50,10 +52,31 @@ local function loadData(player)
 
 	local data
 	if success and result then
-		-- Merge with defaults for any missing keys
 		data = deepCopy(DEFAULT_DATA)
 		for k, v in pairs(result) do
 			data[k] = v
+		end
+		-- Migration: if old format had "collection" as {id = count}, convert
+		if data.collection and next(data.collection) then
+			local firstVal = select(2, next(data.collection))
+			if type(firstVal) == "number" then
+				-- Old format: migrate to new
+				local newCollection = {}
+				local newInventory = data.inventory or {}
+				for streamerId, count in pairs(data.collection) do
+					newCollection[streamerId] = true
+					for _ = 1, count do
+						table.insert(newInventory, streamerId)
+					end
+				end
+				data.collection = newCollection
+				data.inventory = newInventory
+			end
+		end
+		-- Migration: if old format had "equippedStreamers", move to equippedPads
+		if data.equippedStreamers and not data.equippedPads then
+			data.equippedPads = data.equippedStreamers
+			data.equippedStreamers = nil
 		end
 	else
 		data = deepCopy(DEFAULT_DATA)
@@ -79,18 +102,17 @@ end
 -- REPLICATION
 -------------------------------------------------
 
---- Send the full player data snapshot to client
 function PlayerData.Replicate(player)
 	local data = PlayerData._cache[player.UserId]
 	if not data then return end
 
-	-- Send a safe copy (strip anything non-serializable)
 	local payload = {
 		cash = data.cash,
+		inventory = data.inventory,
+		equippedPads = data.equippedPads,
 		collection = data.collection,
 		rebirthCount = data.rebirthCount,
 		premiumSlotUnlocked = data.premiumSlotUnlocked,
-		equippedStreamers = data.equippedStreamers,
 		doubleCash = data.doubleCash,
 		spinCredits = data.spinCredits,
 		totalSlots = SlotsConfig.GetTotalSlots(data.rebirthCount, data.premiumSlotUnlocked),
@@ -125,7 +147,7 @@ function PlayerData.Init()
 		end
 	end)
 
-	-- Handle already-connected players (in case of late init)
+	-- Handle already-connected players
 	for _, player in ipairs(Players:GetPlayers()) do
 		if not PlayerData._cache[player.UserId] then
 			local data = loadData(player)
@@ -138,6 +160,10 @@ end
 function PlayerData.Get(player)
 	return PlayerData._cache[player.UserId]
 end
+
+-------------------------------------------------
+-- CASH
+-------------------------------------------------
 
 function PlayerData.GetCash(player): number
 	local data = PlayerData.Get(player)
@@ -159,34 +185,138 @@ function PlayerData.SpendCash(player, amount: number): boolean
 	return true
 end
 
-function PlayerData.AddStreamer(player, streamerId: string)
+-------------------------------------------------
+-- INVENTORY (new system)
+-------------------------------------------------
+
+--- Add a streamer to the player's inventory
+function PlayerData.AddToInventory(player, streamerId: string)
 	local data = PlayerData.Get(player)
 	if not data then return end
-	data.collection[streamerId] = (data.collection[streamerId] or 0) + 1
+	table.insert(data.inventory, streamerId)
+	-- Also mark as discovered in collection
+	data.collection[streamerId] = true
 	PlayerData.Replicate(player)
 end
 
-function PlayerData.RemoveStreamer(player, streamerId: string): boolean
+--- Remove a streamer from inventory by index
+function PlayerData.RemoveFromInventory(player, inventoryIndex: number): string?
+	local data = PlayerData.Get(player)
+	if not data then return nil end
+	if inventoryIndex < 1 or inventoryIndex > #data.inventory then return nil end
+	local streamerId = table.remove(data.inventory, inventoryIndex)
+	PlayerData.Replicate(player)
+	return streamerId
+end
+
+--- Remove the first occurrence of a streamer ID from inventory
+function PlayerData.RemoveStreamerFromInventory(player, streamerId: string): boolean
 	local data = PlayerData.Get(player)
 	if not data then return false end
-	local count = data.collection[streamerId] or 0
-	if count < 2 then return false end -- keep at least 1
-	data.collection[streamerId] = count - 1
+	for i, id in ipairs(data.inventory) do
+		if id == streamerId then
+			table.remove(data.inventory, i)
+			PlayerData.Replicate(player)
+			return true
+		end
+	end
+	return false
+end
+
+--- Get inventory
+function PlayerData.GetInventory(player)
+	local data = PlayerData.Get(player)
+	if not data then return {} end
+	return data.inventory
+end
+
+--- Count how many of a specific streamer are in inventory
+function PlayerData.CountInInventory(player, streamerId: string): number
+	local data = PlayerData.Get(player)
+	if not data then return 0 end
+	local count = 0
+	for _, id in ipairs(data.inventory) do
+		if id == streamerId then count = count + 1 end
+	end
+	return count
+end
+
+-------------------------------------------------
+-- EQUIP / UNEQUIP (pad slots)
+-------------------------------------------------
+
+--- Equip a streamer from inventory to a pad slot
+function PlayerData.EquipToPad(player, streamerId: string, padSlot: number): boolean
+	local data = PlayerData.Get(player)
+	if not data then return false end
+
+	-- Check slot is unlocked
+	local totalSlots = SlotsConfig.GetTotalSlots(data.rebirthCount, data.premiumSlotUnlocked)
+	if padSlot < 1 or padSlot > totalSlots then return false end
+
+	-- Check premium slot
+	if padSlot == SlotsConfig.PremiumSlotIndex and not data.premiumSlotUnlocked then
+		return false
+	end
+
+	-- Find and remove from inventory
+	local found = false
+	for i, id in ipairs(data.inventory) do
+		if id == streamerId then
+			table.remove(data.inventory, i)
+			found = true
+			break
+		end
+	end
+	if not found then return false end
+
+	-- If something is already on this pad, put it back in inventory
+	local existing = data.equippedPads[tostring(padSlot)]
+	if existing then
+		table.insert(data.inventory, existing)
+	end
+
+	data.equippedPads[tostring(padSlot)] = streamerId
 	PlayerData.Replicate(player)
 	return true
 end
 
-function PlayerData.HasStreamer(player, streamerId: string): boolean
+--- Unequip a streamer from a pad slot back to inventory
+function PlayerData.UnequipFromPad(player, padSlot: number): boolean
 	local data = PlayerData.Get(player)
 	if not data then return false end
-	return (data.collection[streamerId] or 0) > 0
+
+	local key = tostring(padSlot)
+	local streamerId = data.equippedPads[key]
+	if not streamerId then return false end
+
+	-- Move back to inventory
+	table.insert(data.inventory, streamerId)
+	data.equippedPads[key] = nil
+	PlayerData.Replicate(player)
+	return true
 end
 
-function PlayerData.GetStreamerCount(player, streamerId: string): number
+--- Get equipped pads
+function PlayerData.GetEquippedPads(player)
 	local data = PlayerData.Get(player)
-	if not data then return 0 end
-	return data.collection[streamerId] or 0
+	if not data then return {} end
+	return data.equippedPads
 end
+
+-------------------------------------------------
+-- COLLECTION (index of discovered uniques)
+-------------------------------------------------
+
+function PlayerData.HasDiscovered(player, streamerId: string): boolean
+	local data = PlayerData.Get(player)
+	if not data then return false end
+	return data.collection[streamerId] == true
+end
+
+-------------------------------------------------
+-- REBIRTH
+-------------------------------------------------
 
 function PlayerData.GetRebirthCount(player): number
 	local data = PlayerData.Get(player)
@@ -204,38 +334,24 @@ function PlayerData.ResetForRebirth(player)
 	local data = PlayerData.Get(player)
 	if not data then return end
 	data.cash = 0
-	data.equippedStreamers = {}
-	-- Collection is kept
+	-- Clear equipped pads, put equipped streamers back into inventory
+	for key, streamerId in pairs(data.equippedPads) do
+		table.insert(data.inventory, streamerId)
+	end
+	data.equippedPads = {}
+	-- Inventory and collection are kept
 	PlayerData.Replicate(player)
 end
+
+-------------------------------------------------
+-- PREMIUM & PASSES
+-------------------------------------------------
 
 function PlayerData.SetPremiumSlot(player, unlocked: boolean)
 	local data = PlayerData.Get(player)
 	if not data then return end
 	data.premiumSlotUnlocked = unlocked
 	PlayerData.Replicate(player)
-end
-
-function PlayerData.EquipStreamer(player, slotIndex: number, streamerId: string): boolean
-	local data = PlayerData.Get(player)
-	if not data then return false end
-
-	-- Check they own the streamer
-	if (data.collection[streamerId] or 0) <= 0 then return false end
-
-	-- Check slot is unlocked
-	local totalSlots = SlotsConfig.GetTotalSlots(data.rebirthCount, data.premiumSlotUnlocked)
-	if slotIndex < 1 or slotIndex > totalSlots then return false end
-
-	data.equippedStreamers[tostring(slotIndex)] = streamerId
-	PlayerData.Replicate(player)
-	return true
-end
-
-function PlayerData.GetEquippedStreamers(player)
-	local data = PlayerData.Get(player)
-	if not data then return {} end
-	return data.equippedStreamers
 end
 
 function PlayerData.AddSpinCredits(player, amount: number)

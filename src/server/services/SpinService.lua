@@ -1,7 +1,7 @@
 --[[
 	SpinService.lua
-	Handles spin requests: cost check, weighted RNG, server luck,
-	add streamer to collection, notify client of result.
+	Handles spin requests: cost check, weighted RNG, server luck.
+	Spin results go to INVENTORY (not auto-equip).
 	Mythic pulls trigger a server-wide alert.
 ]]
 
@@ -14,17 +14,15 @@ local Economy = require(ReplicatedStorage.Shared.Config.Economy)
 
 local SpinService = {}
 
--- Server-wide luck multiplier (1x or 2x from Robux purchase)
 SpinService.ServerLuckMultiplier = Economy.DefaultLuckMultiplier
 
--- RemoteEvents
 local RemoteEvents = ReplicatedStorage:WaitForChild("RemoteEvents")
 local SpinRequest = RemoteEvents:WaitForChild("SpinRequest")
 local SpinResult = RemoteEvents:WaitForChild("SpinResult")
 local MythicAlert = RemoteEvents:WaitForChild("MythicAlert")
 
--- Dependencies (set during Init)
 local PlayerData
+local BaseService
 
 -------------------------------------------------
 -- RNG
@@ -32,20 +30,15 @@ local PlayerData
 
 local rng = Random.new()
 
---- Pick a rarity based on weights, applying luck multiplier
---- Higher luck shifts weight toward rarer tiers
 local function pickRarity(luckMultiplier: number): string
-	-- Build adjusted weights
 	local adjusted = {}
 	local total = 0
 
 	for i, tier in ipairs(Rarities.Tiers) do
 		local w = tier.weight
-		-- Luck multiplier boosts rarer tiers (index > 1)
 		if i > 1 and luckMultiplier > 1 then
 			w = w * (1 + (luckMultiplier - 1) * (i / #Rarities.Tiers))
 		end
-		-- Reduce common slightly when luck is active
 		if i == 1 and luckMultiplier > 1 then
 			w = w * (1 / luckMultiplier)
 		end
@@ -62,15 +55,12 @@ local function pickRarity(luckMultiplier: number): string
 		end
 	end
 
-	-- Fallback
 	return "Common"
 end
 
---- Pick a random streamer from the given rarity
 local function pickStreamer(rarityName: string)
 	local pool = Streamers.ByRarity[rarityName]
 	if not pool or #pool == 0 then
-		-- Fallback to Common
 		pool = Streamers.ByRarity["Common"]
 	end
 	return pool[rng:NextInteger(1, #pool)]
@@ -89,28 +79,21 @@ local function handleSpin(player)
 	local usedCredit = PlayerData.UseSpinCredit(player)
 	if not usedCredit then
 		if not PlayerData.SpendCash(player, Economy.SpinCost) then
-			-- Not enough cash
 			SpinResult:FireClient(player, { success = false, reason = "Not enough cash!" })
 			return
 		end
 	end
 
-	-- Apply rebirth luck scaling (small bonus)
-	local rebirthLuck = 1 + (data.rebirthCount * 0.02) -- 2% per rebirth
+	-- Apply rebirth luck scaling
+	local rebirthLuck = 1 + (data.rebirthCount * 0.02)
 	local totalLuck = SpinService.ServerLuckMultiplier * rebirthLuck
 
 	-- Roll
 	local rarityName = pickRarity(totalLuck)
 	local streamer = pickStreamer(rarityName)
 
-	-- Add to collection
-	PlayerData.AddStreamer(player, streamer.id)
-
-	-- Auto-equip in slot 1 if nothing equipped
-	local equipped = PlayerData.GetEquippedStreamers(player)
-	if not equipped["1"] then
-		PlayerData.EquipStreamer(player, 1, streamer.id)
-	end
+	-- Add to inventory (not auto-equip)
+	PlayerData.AddToInventory(player, streamer.id)
 
 	-- Send result to client
 	SpinResult:FireClient(player, {
@@ -134,8 +117,9 @@ end
 -- PUBLIC
 -------------------------------------------------
 
-function SpinService.Init(playerDataModule)
+function SpinService.Init(playerDataModule, baseServiceModule)
 	PlayerData = playerDataModule
+	BaseService = baseServiceModule
 
 	SpinRequest.OnServerEvent:Connect(function(player)
 		handleSpin(player)

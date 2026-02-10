@@ -1,6 +1,7 @@
 --[[
 	HUDController.lua
-	Heads-up display showing: cash, rebirth count, spin credits.
+	Bottom-left currency display showing: cash, rebirth count, spin credits.
+	Matches reference: hearts (rebirth) + cash in bottom-left corner.
 	Updates in real time when PlayerDataUpdate fires from server.
 ]]
 
@@ -24,16 +25,17 @@ local spinCreditsLabel
 -- Local data mirror
 HUDController.Data = {
 	cash = 0,
-	rebirthCount = 0,
-	spinCredits = 0,
+	inventory = {},
+	equippedPads = {},
 	collection = {},
-	equippedStreamers = {},
+	rebirthCount = 0,
 	totalSlots = 1,
 	premiumSlotUnlocked = false,
 	doubleCash = false,
+	spinCredits = 0,
 }
 
-local onDataUpdated = {} -- callback list
+local onDataUpdated = {}
 
 -------------------------------------------------
 -- BUILD UI
@@ -43,65 +45,44 @@ function HUDController.Init()
 	local screenGui = UIHelper.CreateScreenGui("HUDGui", 3)
 	screenGui.Parent = playerGui
 
-	-- Top-left currency display
-	local hudContainer = UIHelper.CreateRoundedFrame({
-		Name = "HUDContainer",
-		Size = UDim2.new(0, 220, 0, 90),
-		Position = UDim2.new(0, 12, 0, 70),
-		AnchorPoint = Vector2.new(0, 0),
-		Color = DesignConfig.Colors.NavBackground,
-		CornerRadius = DesignConfig.Layout.PanelCorner,
-		StrokeColor = Color3.fromRGB(60, 60, 90),
-		Parent = screenGui,
-	})
-
-	local padding = Instance.new("UIPadding")
-	padding.PaddingLeft = UDim.new(0, 12)
-	padding.PaddingRight = UDim.new(0, 12)
-	padding.PaddingTop = UDim.new(0, 8)
-	padding.PaddingBottom = UDim.new(0, 8)
-	padding.Parent = hudContainer
+	-- Bottom-left currency display (matches reference layout)
+	local hudContainer = Instance.new("Frame")
+	hudContainer.Name = "HUDContainer"
+	hudContainer.Size = UDim2.new(0, 160, 0, 55)
+	hudContainer.Position = UDim2.new(0, 10, 1, -90)
+	hudContainer.AnchorPoint = Vector2.new(0, 1)
+	hudContainer.BackgroundTransparency = 1
+	hudContainer.BorderSizePixel = 0
+	hudContainer.Parent = screenGui
 
 	local listLayout = Instance.new("UIListLayout")
 	listLayout.FillDirection = Enum.FillDirection.Vertical
-	listLayout.Padding = UDim.new(0, 4)
+	listLayout.Padding = UDim.new(0, 2)
 	listLayout.Parent = hudContainer
 
-	-- Cash
-	cashLabel = UIHelper.CreateLabel({
-		Name = "CashLabel",
-		Size = UDim2.new(1, 0, 0, 24),
-		Text = "$ 500",
-		TextColor = DesignConfig.Colors.Accent,
-		Font = DesignConfig.Fonts.Primary,
-		TextSize = DesignConfig.FontSizes.Header,
-		Parent = hudContainer,
-	})
-	cashLabel.TextXAlignment = Enum.TextXAlignment.Left
-
-	-- Rebirth
-	rebirthLabel = UIHelper.CreateLabel({
-		Name = "RebirthLabel",
-		Size = UDim2.new(1, 0, 0, 20),
-		Text = "Rebirth: 0",
-		TextColor = Color3.fromRGB(255, 200, 60),
-		Font = DesignConfig.Fonts.Secondary,
-		TextSize = DesignConfig.FontSizes.Caption,
-		Parent = hudContainer,
-	})
+	-- Rebirth (hearts icon)
+	rebirthLabel = Instance.new("TextLabel")
+	rebirthLabel.Name = "RebirthLabel"
+	rebirthLabel.Size = UDim2.new(1, 0, 0, 24)
+	rebirthLabel.BackgroundTransparency = 1
+	rebirthLabel.TextColor3 = Color3.fromRGB(255, 80, 80)
+	rebirthLabel.Font = DesignConfig.Fonts.Primary
+	rebirthLabel.TextSize = DesignConfig.FontSizes.Body
+	rebirthLabel.Text = "♥ 0"
 	rebirthLabel.TextXAlignment = Enum.TextXAlignment.Left
+	rebirthLabel.Parent = hudContainer
 
-	-- Spin credits
-	spinCreditsLabel = UIHelper.CreateLabel({
-		Name = "SpinCreditsLabel",
-		Size = UDim2.new(1, 0, 0, 20),
-		Text = "Spins: 0",
-		TextColor = Color3.fromRGB(200, 120, 255),
-		Font = DesignConfig.Fonts.Secondary,
-		TextSize = DesignConfig.FontSizes.Caption,
-		Parent = hudContainer,
-	})
-	spinCreditsLabel.TextXAlignment = Enum.TextXAlignment.Left
+	-- Cash
+	cashLabel = Instance.new("TextLabel")
+	cashLabel.Name = "CashLabel"
+	cashLabel.Size = UDim2.new(1, 0, 0, 26)
+	cashLabel.BackgroundTransparency = 1
+	cashLabel.TextColor3 = DesignConfig.Colors.Accent
+	cashLabel.Font = DesignConfig.Fonts.Primary
+	cashLabel.TextSize = DesignConfig.FontSizes.Header
+	cashLabel.Text = "$100"
+	cashLabel.TextXAlignment = Enum.TextXAlignment.Left
+	cashLabel.Parent = hudContainer
 
 	-- Listen for data updates from server
 	local RemoteEvents = ReplicatedStorage:WaitForChild("RemoteEvents")
@@ -117,31 +98,33 @@ end
 -------------------------------------------------
 
 function HUDController.UpdateData(payload)
+	local previousCash = HUDController.Data.cash
+
 	for key, value in pairs(payload) do
 		HUDController.Data[key] = value
 	end
 
-	-- Animate cash change
+	-- Update cash display
 	if cashLabel then
-		cashLabel.Text = "$ " .. tostring(HUDController.Data.cash)
-		-- Quick flash on change
-		local tweenInfo = TweenInfo.new(0.15, Enum.EasingStyle.Quad)
-		TweenService:Create(cashLabel, tweenInfo, {
-			TextSize = DesignConfig.FontSizes.Header + 4,
-		}):Play()
-		task.delay(0.15, function()
-			TweenService:Create(cashLabel, tweenInfo, {
-				TextSize = DesignConfig.FontSizes.Header,
-			}):Play()
-		end)
+		cashLabel.Text = "$" .. tostring(HUDController.Data.cash)
+
+		-- Flash on change
+		if HUDController.Data.cash ~= previousCash then
+			local flashColor = HUDController.Data.cash > previousCash
+				and Color3.fromRGB(100, 255, 100)
+				or Color3.fromRGB(255, 100, 100)
+			cashLabel.TextColor3 = flashColor
+			task.delay(0.2, function()
+				TweenService:Create(cashLabel, TweenInfo.new(0.3), {
+					TextColor3 = DesignConfig.Colors.Accent,
+				}):Play()
+			end)
+		end
 	end
 
+	-- Update rebirth display
 	if rebirthLabel then
-		rebirthLabel.Text = "Rebirth: " .. tostring(HUDController.Data.rebirthCount)
-	end
-
-	if spinCreditsLabel then
-		spinCreditsLabel.Text = "Spins: " .. tostring(HUDController.Data.spinCredits)
+		rebirthLabel.Text = "♥ " .. tostring(HUDController.Data.rebirthCount)
 	end
 
 	-- Fire data update callbacks

@@ -1,7 +1,7 @@
 --[[
 	RebirthService.lua
-	Handles rebirth: cost check, reset cash/equipped, increment rebirth,
-	unlock additional slots.
+	Handles rebirth: cost check, reset cash + equipped pads
+	(equipped items return to inventory), increment rebirth.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -14,7 +14,8 @@ local RebirthResult = RemoteEvents:WaitForChild("RebirthResult")
 
 local RebirthService = {}
 
-local PlayerData -- set in Init
+local PlayerData
+local BaseService
 
 -------------------------------------------------
 -- REBIRTH LOGIC
@@ -30,17 +31,22 @@ local function handleRebirth(player)
 	if data.cash < cost then
 		RebirthResult:FireClient(player, {
 			success = false,
-			reason = "Not enough cash! Need " .. tostring(cost),
+			reason = "Not enough cash! Need $" .. tostring(cost),
 		})
 		return
 	end
 
-	-- Reset cash and equipped (collection kept)
+	-- Reset cash and equipped pads (items go back to inventory)
 	PlayerData.ResetForRebirth(player)
 
 	-- Increment rebirth
 	local newCount = data.rebirthCount + 1
 	PlayerData.SetRebirthCount(player, newCount)
+
+	-- Update base pads to reflect new unlock count
+	if BaseService then
+		BaseService.UpdateBasePads(player)
+	end
 
 	RebirthResult:FireClient(player, {
 		success = true,
@@ -53,8 +59,9 @@ end
 -- PUBLIC
 -------------------------------------------------
 
-function RebirthService.Init(playerDataModule)
+function RebirthService.Init(playerDataModule, baseServiceModule)
 	PlayerData = playerDataModule
+	BaseService = baseServiceModule
 
 	RebirthRequest.OnServerEvent:Connect(function(player)
 		handleRebirth(player)

@@ -16,7 +16,6 @@ local UIHelper = {}
 -- SCREEN GUI
 -------------------------------------------------
 
---- Create a ScreenGui with standard settings
 function UIHelper.CreateScreenGui(name: string, displayOrder: number?)
 	local gui = Instance.new("ScreenGui")
 	gui.Name = name
@@ -31,7 +30,6 @@ end
 -- ROUNDED FRAME
 -------------------------------------------------
 
---- Create a Frame with rounded corners, optional stroke
 function UIHelper.CreateRoundedFrame(props)
 	local frame = Instance.new("Frame")
 	frame.Name = props.Name or "Frame"
@@ -64,7 +62,6 @@ end
 -- BUTTON
 -------------------------------------------------
 
---- Create a styled TextButton with hover/click animations
 function UIHelper.CreateButton(props)
 	local button = Instance.new("TextButton")
 	button.Name = props.Name or "Button"
@@ -90,7 +87,6 @@ function UIHelper.CreateButton(props)
 		stroke.Parent = button
 	end
 
-	-- Hover and click animation
 	local idleColor = props.Color or DesignConfig.Colors.ButtonIdle
 	local hoverColor = props.HoverColor or DesignConfig.Colors.ButtonHover
 	local tweenInfo = TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
@@ -112,7 +108,6 @@ function UIHelper.CreateButton(props)
 		}):Play()
 	end)
 
-	-- Click feedback
 	button.MouseButton1Down:Connect(function()
 		TweenService:Create(button, TweenInfo.new(0.08), {
 			Size = props.Size and UDim2.new(
@@ -163,7 +158,8 @@ function UIHelper.CreateLabel(props)
 end
 
 -------------------------------------------------
--- ICON BUTTON (square/circle icon + small label)
+-- ICON BUTTON (image icon + label underneath)
+-- Uses ImageLabel for real asset icons
 -------------------------------------------------
 
 function UIHelper.CreateIconButton(props)
@@ -179,29 +175,48 @@ function UIHelper.CreateIconButton(props)
 	corner.CornerRadius = props.CornerRadius or DesignConfig.Layout.ButtonCorner
 	corner.Parent = container
 
-	-- Icon text (emoji placeholder)
-	local icon = Instance.new("TextLabel")
-	icon.Name = "Icon"
-	icon.Size = UDim2.new(1, 0, 0.6, 0)
-	icon.Position = UDim2.new(0, 0, 0, 0)
-	icon.BackgroundTransparency = 1
-	icon.TextColor3 = DesignConfig.Colors.White
-	icon.Font = DesignConfig.Fonts.Primary
-	icon.TextScaled = true
-	icon.Text = props.Icon or "?"
-	icon.Parent = container
+	-- Image icon (if asset ID provided) or text fallback
+	if props.ImageId and props.ImageId ~= "" then
+		local icon = Instance.new("ImageLabel")
+		icon.Name = "Icon"
+		icon.Size = UDim2.new(0.7, 0, 0.55, 0)
+		icon.Position = UDim2.new(0.5, 0, 0.05, 0)
+		icon.AnchorPoint = Vector2.new(0.5, 0)
+		icon.BackgroundTransparency = 1
+		icon.Image = props.ImageId
+		icon.ScaleType = Enum.ScaleType.Fit
+		icon.Parent = container
+	else
+		local icon = Instance.new("TextLabel")
+		icon.Name = "Icon"
+		icon.Size = UDim2.new(1, 0, 0.6, 0)
+		icon.Position = UDim2.new(0, 0, 0, 0)
+		icon.BackgroundTransparency = 1
+		icon.TextColor3 = DesignConfig.Colors.White
+		icon.Font = DesignConfig.Fonts.Primary
+		icon.TextScaled = true
+		icon.Text = props.Icon or "?"
+		icon.Parent = container
+	end
 
-	-- Label
+	-- Label underneath
 	local label = Instance.new("TextLabel")
 	label.Name = "Label"
-	label.Size = UDim2.new(1, 0, 0.4, 0)
-	label.Position = UDim2.new(0, 0, 0.6, 0)
+	label.Size = UDim2.new(1, 0, 0.35, 0)
+	label.Position = UDim2.new(0, 0, 0.65, 0)
 	label.BackgroundTransparency = 1
-	label.TextColor3 = DesignConfig.Colors.TextSecondary
-	label.Font = DesignConfig.Fonts.Secondary
+	label.TextColor3 = DesignConfig.Colors.White
+	label.Font = DesignConfig.Fonts.Primary
 	label.TextScaled = true
 	label.Text = props.Label or ""
 	label.Parent = container
+
+	-- Drop shadow / stroke on label for readability
+	local labelStroke = Instance.new("UIStroke")
+	labelStroke.Color = Color3.new(0, 0, 0)
+	labelStroke.Thickness = 1.5
+	labelStroke.Transparency = 0.3
+	labelStroke.Parent = label
 
 	-- Click detection (invisible button over the frame)
 	local clickButton = Instance.new("TextButton")
@@ -223,7 +238,7 @@ function UIHelper.CreateIconButton(props)
 		TweenService:Create(container, tweenInfo, { BackgroundColor3 = idleColor }):Play()
 	end)
 
-	-- Notification badge (optional, hidden by default)
+	-- Notification badge (hidden by default)
 	local badge = UIHelper.CreateRoundedFrame({
 		Name = "Badge",
 		Size = UDim2.new(0, 20, 0, 20),
@@ -256,7 +271,6 @@ end
 -- MODAL OVERLAY
 -------------------------------------------------
 
---- Create a full-screen dark overlay for popups
 function UIHelper.CreateModalOverlay(screenGui, onClick)
 	local overlay = Instance.new("TextButton")
 	overlay.Name = "ModalOverlay"
@@ -322,7 +336,6 @@ function UIHelper.CameraShake(intensity, duration)
 
 	duration = duration or 0.3
 	local elapsed = 0
-	local originalCF = camera.CFrame
 
 	task.spawn(function()
 		while elapsed < duration do

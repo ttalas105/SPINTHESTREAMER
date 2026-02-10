@@ -1,7 +1,7 @@
 --[[
 	TopNavController.lua
-	Top-center navigation bar: SHOPS, PLOT, SPIN
-	Rounded buttons with glow, highlight on active tab.
+	Top-center navigation bar: SHOPS, BASE, SELL
+	Matches the reference layout with colored tab buttons.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -16,18 +16,18 @@ local TopNavController = {}
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
-local activeTab = "SPIN" -- default tab
+local activeTab = "BASE" -- default tab
 local tabButtons = {}
-local onTabChanged = {} -- callback list
+local onTabChanged = {}
 
 -------------------------------------------------
--- TAB DEFINITIONS
+-- TAB DEFINITIONS (matches reference image)
 -------------------------------------------------
 
 local tabs = {
-	{ name = "SHOPS",   color = Color3.fromRGB(60, 140, 255) },
-	{ name = "PLOT",    color = Color3.fromRGB(100, 220, 80) },
-	{ name = "SPIN",    color = Color3.fromRGB(200, 60, 255) },
+	{ name = "SHOPS",  color = Color3.fromRGB(60, 140, 255) },  -- blue
+	{ name = "BASE",   color = Color3.fromRGB(255, 165, 40)  },  -- orange
+	{ name = "SELL",   color = Color3.fromRGB(220, 200, 40)  },  -- yellow
 }
 
 -------------------------------------------------
@@ -41,66 +41,56 @@ function TopNavController.Init()
 	-- Container
 	local container = Instance.new("Frame")
 	container.Name = "TopNavContainer"
-	container.Size = UDim2.new(0.5, 0, 0, 50)
-	container.Position = UDim2.new(0.5, 0, 0, 12)
+	container.Size = UDim2.new(0.42, 0, 0, 48)
+	container.Position = UDim2.new(0.5, 0, 0, 10)
 	container.AnchorPoint = Vector2.new(0.5, 0)
-	container.BackgroundColor3 = DesignConfig.Colors.NavBackground
-	container.BackgroundTransparency = 0.2
+	container.BackgroundTransparency = 1
 	container.BorderSizePixel = 0
 	container.Parent = screenGui
-
-	local corner = Instance.new("UICorner")
-	corner.CornerRadius = DesignConfig.Layout.PanelCorner
-	corner.Parent = container
-
-	local stroke = Instance.new("UIStroke")
-	stroke.Color = Color3.fromRGB(80, 80, 120)
-	stroke.Thickness = 1.5
-	stroke.Parent = container
 
 	-- Layout
 	local listLayout = Instance.new("UIListLayout")
 	listLayout.FillDirection = Enum.FillDirection.Horizontal
 	listLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 	listLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-	listLayout.Padding = UDim.new(0, 8)
+	listLayout.Padding = UDim.new(0, 10)
 	listLayout.Parent = container
-
-	local padding = Instance.new("UIPadding")
-	padding.PaddingLeft = UDim.new(0, 8)
-	padding.PaddingRight = UDim.new(0, 8)
-	padding.Parent = container
 
 	-- Create tab buttons
 	for _, tabInfo in ipairs(tabs) do
 		local isActive = tabInfo.name == activeTab
-		local btnColor = isActive and tabInfo.color or DesignConfig.Colors.NavInactive
 
 		local btn = UIHelper.CreateButton({
 			Name = "Tab_" .. tabInfo.name,
-			Size = UDim2.new(0.3, -6, 1, -12),
-			Color = btnColor,
-			HoverColor = tabInfo.color,
+			Size = UDim2.new(0, 130, 0, 44),
+			Color = tabInfo.color,
+			HoverColor = Color3.new(
+				math.min(tabInfo.color.R + 0.1, 1),
+				math.min(tabInfo.color.G + 0.1, 1),
+				math.min(tabInfo.color.B + 0.1, 1)
+			),
 			TextColor = DesignConfig.Colors.White,
 			Text = tabInfo.name,
 			Font = DesignConfig.Fonts.Primary,
-			TextSize = DesignConfig.FontSizes.Body,
-			CornerRadius = DesignConfig.Layout.ButtonCorner,
+			TextSize = DesignConfig.FontSizes.Header,
+			CornerRadius = UDim.new(0, 10),
+			StrokeColor = Color3.new(
+				math.min(tabInfo.color.R + 0.2, 1),
+				math.min(tabInfo.color.G + 0.2, 1),
+				math.min(tabInfo.color.B + 0.2, 1)
+			),
 			Parent = container,
 		})
 
-		-- Glow stroke on active
-		local glowStroke = Instance.new("UIStroke")
-		glowStroke.Name = "GlowStroke"
-		glowStroke.Color = tabInfo.color
-		glowStroke.Thickness = isActive and 2 or 0
-		glowStroke.Transparency = isActive and 0.3 or 1
-		glowStroke.Parent = btn
+		-- Bold stroke on active
+		local borderStroke = btn:FindFirstChildOfClass("UIStroke")
+		if borderStroke then
+			borderStroke.Thickness = isActive and 3 or 1.5
+		end
 
 		tabButtons[tabInfo.name] = {
 			button = btn,
 			color = tabInfo.color,
-			glowStroke = glowStroke,
 		}
 
 		btn.MouseButton1Click:Connect(function()
@@ -115,20 +105,18 @@ end
 
 function TopNavController.SetActiveTab(tabName: string)
 	activeTab = tabName
-	local tweenInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quad)
+	local tweenInfo = TweenInfo.new(0.15, Enum.EasingStyle.Quad)
 
 	for name, data in pairs(tabButtons) do
 		local isActive = name == tabName
-		TweenService:Create(data.button, tweenInfo, {
-			BackgroundColor3 = isActive and data.color or DesignConfig.Colors.NavInactive,
-		}):Play()
-		TweenService:Create(data.glowStroke, tweenInfo, {
-			Thickness = isActive and 2 or 0,
-			Transparency = isActive and 0.3 or 1,
-		}):Play()
+		local stroke = data.button:FindFirstChildOfClass("UIStroke")
+		if stroke then
+			TweenService:Create(stroke, tweenInfo, {
+				Thickness = isActive and 3 or 1.5,
+			}):Play()
+		end
 	end
 
-	-- Fire callbacks
 	for _, callback in ipairs(onTabChanged) do
 		task.spawn(callback, tabName)
 	end

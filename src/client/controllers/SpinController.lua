@@ -2,7 +2,7 @@
 	SpinController.lua
 	Full spin wheel UI with animation, rarity-based VFX,
 	screen shake, glow, and result display.
-	Listens for SpinResult from server.
+	Spin results now go to INVENTORY — shown with "Added to inventory!" text.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -33,6 +33,9 @@ local resultFrame
 local spinButton
 local isSpinning = false
 
+-- Callback for when a spin result arrives
+local onSpinResult = nil
+
 -- Wheel segments
 local SEGMENT_COUNT = 12
 local segments = {}
@@ -42,7 +45,6 @@ local segments = {}
 -------------------------------------------------
 
 local function buildWheel(parent)
-	-- Wheel background circle
 	wheelFrame = UIHelper.CreateRoundedFrame({
 		Name = "WheelFrame",
 		Size = UDim2.new(0, 340, 0, 340),
@@ -54,7 +56,6 @@ local function buildWheel(parent)
 		Parent = parent,
 	})
 
-	-- Inner wheel with segments
 	local innerWheel = Instance.new("Frame")
 	innerWheel.Name = "InnerWheel"
 	innerWheel.Size = UDim2.new(0.9, 0, 0.9, 0)
@@ -63,8 +64,6 @@ local function buildWheel(parent)
 	innerWheel.BackgroundTransparency = 1
 	innerWheel.Parent = wheelFrame
 
-	-- Create wheel segments (streamer cards arranged in a circle)
-	-- We display a subset of streamers on the wheel
 	local displayStreamers = {}
 	for i = 1, math.min(SEGMENT_COUNT, #Streamers.List) do
 		table.insert(displayStreamers, Streamers.List[i])
@@ -79,10 +78,8 @@ local function buildWheel(parent)
 			Name = "Seg_" .. streamer.id,
 			Size = UDim2.new(0, 60, 0, 60),
 			Position = UDim2.new(
-				0.5 + math.sin(rad) * radius,
-				0,
-				0.5 - math.cos(rad) * radius,
-				0
+				0.5 + math.sin(rad) * radius, 0,
+				0.5 - math.cos(rad) * radius, 0
 			),
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			Color = Rarities.ByName[streamer.rarity] and Rarities.ByName[streamer.rarity].color or Color3.fromRGB(100, 100, 100),
@@ -90,7 +87,6 @@ local function buildWheel(parent)
 			Parent = innerWheel,
 		})
 
-		-- Streamer initial
 		UIHelper.CreateLabel({
 			Name = "Initial",
 			Size = UDim2.new(1, 0, 0.65, 0),
@@ -101,7 +97,6 @@ local function buildWheel(parent)
 			Parent = segFrame,
 		})
 
-		-- Rarity tag
 		UIHelper.CreateLabel({
 			Name = "RarityTag",
 			Size = UDim2.new(1, 0, 0.35, 0),
@@ -119,8 +114,8 @@ local function buildWheel(parent)
 		}
 	end
 
-	-- Center pointer
-	local pointer = UIHelper.CreateRoundedFrame({
+	-- Pointer
+	UIHelper.CreateRoundedFrame({
 		Name = "Pointer",
 		Size = UDim2.new(0, 20, 0, 30),
 		Position = UDim2.new(0.5, 0, 0, -5),
@@ -152,7 +147,7 @@ end
 local function buildResultDisplay(parent)
 	resultFrame = UIHelper.CreateRoundedFrame({
 		Name = "ResultFrame",
-		Size = UDim2.new(0.6, 0, 0, 100),
+		Size = UDim2.new(0.7, 0, 0, 110),
 		Position = UDim2.new(0.5, 0, 0.78, 0),
 		AnchorPoint = Vector2.new(0.5, 0),
 		Color = DesignConfig.Colors.BackgroundLight,
@@ -164,8 +159,8 @@ local function buildResultDisplay(parent)
 
 	UIHelper.CreateLabel({
 		Name = "ResultLabel",
-		Size = UDim2.new(1, -20, 0, 30),
-		Position = UDim2.new(0.5, 0, 0, 10),
+		Size = UDim2.new(1, -20, 0, 22),
+		Position = UDim2.new(0.5, 0, 0, 8),
 		AnchorPoint = Vector2.new(0.5, 0),
 		Text = "YOU GOT:",
 		TextColor = DesignConfig.Colors.TextSecondary,
@@ -177,7 +172,7 @@ local function buildResultDisplay(parent)
 	UIHelper.CreateLabel({
 		Name = "StreamerName",
 		Size = UDim2.new(1, -20, 0, 35),
-		Position = UDim2.new(0.5, 0, 0, 38),
+		Position = UDim2.new(0.5, 0, 0, 30),
 		AnchorPoint = Vector2.new(0.5, 0),
 		Text = "",
 		TextColor = DesignConfig.Colors.White,
@@ -188,13 +183,26 @@ local function buildResultDisplay(parent)
 
 	UIHelper.CreateLabel({
 		Name = "RarityLabel",
-		Size = UDim2.new(1, -20, 0, 20),
-		Position = UDim2.new(0.5, 0, 0, 72),
+		Size = UDim2.new(1, -20, 0, 18),
+		Position = UDim2.new(0.5, 0, 0, 65),
 		AnchorPoint = Vector2.new(0.5, 0),
 		Text = "",
 		TextColor = Color3.fromRGB(170, 170, 170),
 		Font = DesignConfig.Fonts.Primary,
 		TextSize = DesignConfig.FontSizes.Caption,
+		Parent = resultFrame,
+	})
+
+	-- "Added to inventory!" text
+	UIHelper.CreateLabel({
+		Name = "InventoryNotice",
+		Size = UDim2.new(1, -20, 0, 16),
+		Position = UDim2.new(0.5, 0, 0, 86),
+		AnchorPoint = Vector2.new(0.5, 0),
+		Text = "Added to inventory!",
+		TextColor = DesignConfig.Colors.Accent,
+		Font = DesignConfig.Fonts.Secondary,
+		TextSize = DesignConfig.FontSizes.Small,
 		Parent = resultFrame,
 	})
 
@@ -209,11 +217,9 @@ local function playSpinAnimation(callback)
 	local innerWheel = wheelFrame:FindFirstChild("InnerWheel")
 	if not innerWheel then return end
 
-	-- Total rotation: multiple full spins + random landing
 	local totalRotation = 360 * 5 + math.random(0, 360)
 	local duration = 3.5
 
-	-- Animate rotation
 	local startTime = tick()
 	local startRotation = innerWheel.Rotation
 
@@ -223,7 +229,6 @@ local function playSpinAnimation(callback)
 			if elapsed >= duration then break end
 
 			local progress = elapsed / duration
-			-- Ease out cubic for deceleration
 			local eased = 1 - (1 - progress) ^ 3
 			innerWheel.Rotation = startRotation + totalRotation * eased
 
@@ -242,7 +247,6 @@ local function showResult(data)
 	local rarityInfo = Rarities.ByName[data.rarity]
 	local rarityColor = rarityInfo and rarityInfo.color or Color3.fromRGB(170, 170, 170)
 
-	-- Update result frame
 	local nameLabel = resultFrame:FindFirstChild("StreamerName")
 	local rarityLabel = resultFrame:FindFirstChild("RarityLabel")
 
@@ -255,19 +259,16 @@ local function showResult(data)
 		rarityLabel.TextColor3 = rarityColor
 	end
 
-	-- Show result with animation
 	resultFrame.Visible = true
 	UIHelper.ScaleIn(resultFrame, 0.3)
 
-	-- Glow the wheel border with rarity color
+	-- Glow wheel border
 	local stroke = wheelFrame:FindFirstChildOfClass("UIStroke")
 	if stroke then
 		TweenService:Create(stroke, TweenInfo.new(0.3), {
 			Color = rarityColor,
 			Thickness = 4,
 		}):Play()
-
-		-- Reset after delay
 		task.delay(2, function()
 			TweenService:Create(stroke, TweenInfo.new(0.5), {
 				Color = Color3.fromRGB(150, 120, 255),
@@ -276,13 +277,13 @@ local function showResult(data)
 		end)
 	end
 
-	-- Camera shake based on rarity
+	-- Camera shake for high rarities
 	local shakeIntensity = rarityInfo and rarityInfo.shakeIntensity or 0
 	if shakeIntensity > 0 then
 		UIHelper.CameraShake(shakeIntensity * 0.1, 0.4)
 	end
 
-	-- Flash effect for high rarities
+	-- Flash for legendary/mythic
 	if data.rarity == "Legendary" or data.rarity == "Mythic" then
 		local flash = Instance.new("Frame")
 		flash.Name = "Flash"
@@ -295,15 +296,19 @@ local function showResult(data)
 		TweenService:Create(flash, TweenInfo.new(0.5), {
 			BackgroundTransparency = 1,
 		}):Play()
-
 		task.delay(0.5, function()
 			flash:Destroy()
 		end)
 	end
+
+	-- Notify callback (for inventory flash)
+	if onSpinResult then
+		task.spawn(onSpinResult, data)
+	end
 end
 
 -------------------------------------------------
--- MYTHIC SERVER-WIDE ALERT
+-- MYTHIC ALERT
 -------------------------------------------------
 
 local function showMythicAlert(data)
@@ -332,7 +337,6 @@ local function showMythicAlert(data)
 
 	UIHelper.ScaleIn(alert, 0.4)
 
-	-- Remove after 4 seconds
 	task.delay(4, function()
 		local tween = TweenService:Create(alert, TweenInfo.new(0.5), {
 			Position = UDim2.new(0.5, 0, -0.1, 0),
@@ -352,11 +356,10 @@ function SpinController.Init()
 	screenGui = UIHelper.CreateScreenGui("SpinGui", 10)
 	screenGui.Parent = playerGui
 
-	-- Main spin container
 	spinContainer = UIHelper.CreateRoundedFrame({
 		Name = "SpinContainer",
 		Size = UDim2.new(0.45, 0, 0.85, 0),
-		Position = UDim2.new(0.5, 0, 0.52, 0),
+		Position = UDim2.new(0.5, 0, 0.5, 0),
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Color = DesignConfig.Colors.Background,
 		CornerRadius = DesignConfig.Layout.ModalCorner,
@@ -365,7 +368,6 @@ function SpinController.Init()
 	})
 	spinContainer.Visible = false
 
-	-- Title
 	UIHelper.CreateLabel({
 		Name = "SpinTitle",
 		Size = UDim2.new(1, 0, 0, 40),
@@ -378,17 +380,13 @@ function SpinController.Init()
 		Parent = spinContainer,
 	})
 
-	-- Build wheel
 	buildWheel(spinContainer)
-
-	-- Build result display
 	buildResultDisplay(spinContainer)
 
-	-- Spin button
 	spinButton = UIHelper.CreateButton({
 		Name = "SpinButton",
 		Size = UDim2.new(0.4, 0, 0, 50),
-		Position = UDim2.new(0.5, 0, 0.93, 0),
+		Position = UDim2.new(0.5, 0, 0.95, 0),
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Color = DesignConfig.Colors.Accent,
 		HoverColor = Color3.fromRGB(0, 230, 120),
@@ -408,7 +406,6 @@ function SpinController.Init()
 	-- Listen for spin results
 	SpinResult.OnClientEvent:Connect(function(data)
 		if data.success then
-			-- Play animation then show result
 			playSpinAnimation(function()
 				showResult(data)
 				isSpinning = false
@@ -416,8 +413,6 @@ function SpinController.Init()
 			end)
 		else
 			isSpinning = false
-			spinButton.Text = "SPIN  ($" .. Economy.SpinCost .. ")"
-			-- Show error briefly
 			spinButton.Text = data.reason or "ERROR"
 			task.delay(1.5, function()
 				spinButton.Text = "SPIN  ($" .. Economy.SpinCost .. ")"
@@ -440,7 +435,6 @@ function SpinController.RequestSpin()
 	isSpinning = true
 	resultFrame.Visible = false
 	spinButton.Text = "SPINNING..."
-
 	SpinRequest:FireServer()
 end
 
@@ -455,6 +449,11 @@ end
 
 function SpinController.IsVisible(): boolean
 	return spinContainer.Visible
+end
+
+--- Set callback for spin result (used by Main to flash inventory)
+function SpinController.OnSpinResult(callback)
+	onSpinResult = callback
 end
 
 return SpinController

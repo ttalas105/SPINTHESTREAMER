@@ -1,8 +1,7 @@
 --[[
 	RightSideNavController.lua
-	Vertical icon menu on the right side of the screen:
-	Friends, Rewards, Quests, Settings.
-	Rounded-square icons, cartoony style.
+	Right vertical icon menu with real image icons:
+	INVITE, DAILY, PLAYTIME
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -20,14 +19,13 @@ local buttons = {}
 local onButtonClicked = {}
 
 -------------------------------------------------
--- BUTTON DEFINITIONS
+-- BUTTON DEFINITIONS with real Roblox asset icons
 -------------------------------------------------
 
 local menuItems = {
-	{ name = "Friends",  icon = "F",  color = Color3.fromRGB(80, 180, 255) },
-	{ name = "Rewards",  icon = "!",  color = Color3.fromRGB(255, 200, 50) },
-	{ name = "Quests",   icon = "Q",  color = Color3.fromRGB(80, 220, 140) },
-	{ name = "Settings", icon = "G",  color = Color3.fromRGB(140, 140, 170) },
+	{ name = "Invite",   imageId = "rbxassetid://11385395257",  color = Color3.fromRGB(255, 165, 40), label = "Invite" },
+	{ name = "Daily",    imageId = "rbxassetid://13569499711",   color = Color3.fromRGB(100, 160, 255), label = "Daily" },
+	{ name = "Playtime", imageId = "rbxassetid://15254183851",   color = Color3.fromRGB(220, 60, 60),  label = "Playtime" },
 }
 
 -------------------------------------------------
@@ -38,11 +36,10 @@ function RightSideNavController.Init()
 	local screenGui = UIHelper.CreateScreenGui("RightSideNavGui", 4)
 	screenGui.Parent = playerGui
 
-	-- Container
 	local container = Instance.new("Frame")
 	container.Name = "RightSideContainer"
-	container.Size = UDim2.new(0, 70, 0, (#menuItems * 70) + ((#menuItems - 1) * 8))
-	container.Position = UDim2.new(1, -10, 0.5, 0)
+	container.Size = UDim2.new(0, 70, 0, (#menuItems * 72) + ((#menuItems - 1) * 4))
+	container.Position = UDim2.new(1, -8, 0.5, 0)
 	container.AnchorPoint = Vector2.new(1, 0.5)
 	container.BackgroundTransparency = 1
 	container.BorderSizePixel = 0
@@ -51,22 +48,22 @@ function RightSideNavController.Init()
 	local listLayout = Instance.new("UIListLayout")
 	listLayout.FillDirection = Enum.FillDirection.Vertical
 	listLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-	listLayout.Padding = UDim.new(0, 8)
+	listLayout.Padding = UDim.new(0, 4)
 	listLayout.Parent = container
 
 	for _, item in ipairs(menuItems) do
 		local iconBtn, clickZone = UIHelper.CreateIconButton({
 			Name = item.name,
-			Size = UDim2.new(0, 64, 0, 64),
+			Size = UDim2.new(0, 66, 0, 66),
 			Color = item.color,
 			HoverColor = Color3.new(
 				math.min(item.color.R + 0.15, 1),
 				math.min(item.color.G + 0.15, 1),
 				math.min(item.color.B + 0.15, 1)
 			),
-			Icon = item.icon,
-			Label = item.name,
-			CornerRadius = DesignConfig.Layout.ButtonCorner,
+			ImageId = item.imageId,
+			Label = item.label,
+			CornerRadius = UDim.new(0, 10),
 			Parent = container,
 		})
 

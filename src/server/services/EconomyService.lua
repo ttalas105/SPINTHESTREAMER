@@ -1,6 +1,7 @@
 --[[
 	EconomyService.lua
-	Handles economy: passive income, selling duplicates, cash multipliers.
+	Handles economy: passive income, selling from inventory, cash multipliers.
+	Sell flow: player selects item from inventory -> sell for cash.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -15,10 +16,10 @@ local SellResult = RemoteEvents:WaitForChild("SellResult")
 
 local EconomyService = {}
 
-local PlayerData -- set in Init
+local PlayerData
 
 -------------------------------------------------
--- SELL DUPLICATE
+-- SELL FROM INVENTORY
 -------------------------------------------------
 
 local function handleSell(player, streamerId: string)
@@ -31,10 +32,10 @@ local function handleSell(player, streamerId: string)
 		return
 	end
 
-	-- Must have at least 2 to sell (keep 1)
-	local count = PlayerData.GetStreamerCount(player, streamerId)
-	if count < 2 then
-		SellResult:FireClient(player, { success = false, reason = "Need at least 2 to sell a duplicate." })
+	-- Remove from inventory (first occurrence)
+	local removed = PlayerData.RemoveStreamerFromInventory(player, streamerId)
+	if not removed then
+		SellResult:FireClient(player, { success = false, reason = "Not in your inventory!" })
 		return
 	end
 
@@ -42,13 +43,6 @@ local function handleSell(player, streamerId: string)
 	local price = Economy.SellPrices[streamerInfo.rarity] or Economy.SellPrices.Common
 	if PlayerData.HasDoubleCash(player) then
 		price = price * Economy.DoubleCashMultiplier
-	end
-
-	-- Execute
-	local removed = PlayerData.RemoveStreamer(player, streamerId)
-	if not removed then
-		SellResult:FireClient(player, { success = false, reason = "Failed to remove." })
-		return
 	end
 
 	PlayerData.AddCash(player, price)
