@@ -83,8 +83,16 @@ TopNavController.OnTabChanged(function(tabName)
 end)
 
 -------------------------------------------------
--- WIRE LEFT SIDE NAV
+-- WIRE LEFT SIDE NAV (Index, Pets, Store)
 -------------------------------------------------
+
+LeftSideNavController.OnClick("Index", function()
+	print("[Client] Index/Collection not yet implemented")
+end)
+
+LeftSideNavController.OnClick("Pets", function()
+	print("[Client] Pets not yet implemented")
+end)
 
 LeftSideNavController.OnClick("Store", function()
 	if StoreController.IsOpen() then
@@ -94,35 +102,17 @@ LeftSideNavController.OnClick("Store", function()
 	end
 end)
 
-LeftSideNavController.OnClick("Rebirth", function()
+-------------------------------------------------
+-- WIRE RIGHT SIDE NAV (Rebirth, Settings)
+-------------------------------------------------
+
+RightSideNavController.OnClick("Rebirth", function()
 	local RebirthRequest = RemoteEvents:WaitForChild("RebirthRequest")
 	RebirthRequest:FireServer()
 end)
 
-LeftSideNavController.OnClick("Pets", function()
-	print("[Client] Pets not yet implemented")
-end)
-
-LeftSideNavController.OnClick("Index", function()
-	print("[Client] Index/Collection not yet implemented")
-end)
-
-LeftSideNavController.OnClick("Settings", function()
+RightSideNavController.OnClick("Settings", function()
 	print("[Client] Settings not yet implemented")
-end)
-
--------------------------------------------------
--- WIRE RIGHT SIDE NAV
--------------------------------------------------
-
-RightSideNavController.OnClick("Invite", function()
-	print("[Client] Invite not yet implemented")
-end)
-RightSideNavController.OnClick("Daily", function()
-	print("[Client] Daily rewards not yet implemented")
-end)
-RightSideNavController.OnClick("Playtime", function()
-	print("[Client] Playtime rewards not yet implemented")
 end)
 
 -------------------------------------------------

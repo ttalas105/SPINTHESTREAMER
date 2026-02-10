@@ -175,7 +175,7 @@ function UIHelper.CreateIconButton(props)
 	corner.CornerRadius = props.CornerRadius or DesignConfig.Layout.ButtonCorner
 	corner.Parent = container
 
-	-- Image icon (if asset ID provided) or text fallback
+	-- Image icon (if asset ID provided) or cartoon emoji text icon
 	if props.ImageId and props.ImageId ~= "" then
 		local icon = Instance.new("ImageLabel")
 		icon.Name = "Icon"
@@ -189,24 +189,25 @@ function UIHelper.CreateIconButton(props)
 	else
 		local icon = Instance.new("TextLabel")
 		icon.Name = "Icon"
-		icon.Size = UDim2.new(1, 0, 0.6, 0)
-		icon.Position = UDim2.new(0, 0, 0, 0)
+		icon.Size = UDim2.new(1, 0, 0.62, 0)
+		icon.Position = UDim2.new(0, 0, 0.02, 0)
 		icon.BackgroundTransparency = 1
-		icon.TextColor3 = DesignConfig.Colors.White
-		icon.Font = DesignConfig.Fonts.Primary
+		icon.TextColor3 = props.IconColor3 or DesignConfig.Colors.White
+		-- Cartoon-style font for emoji icons (FredokaOne is bouncy and kid-friendly)
+		icon.Font = props.IconFont or DesignConfig.Fonts.Accent
 		icon.TextScaled = true
 		icon.Text = props.Icon or "?"
 		icon.Parent = container
 	end
 
-	-- Label underneath
+	-- Label underneath (optional cartoon font for kid-friendly nav)
 	local label = Instance.new("TextLabel")
 	label.Name = "Label"
 	label.Size = UDim2.new(1, 0, 0.35, 0)
 	label.Position = UDim2.new(0, 0, 0.65, 0)
 	label.BackgroundTransparency = 1
 	label.TextColor3 = DesignConfig.Colors.White
-	label.Font = DesignConfig.Fonts.Primary
+	label.Font = props.LabelFont or DesignConfig.Fonts.Primary
 	label.TextScaled = true
 	label.Text = props.Label or ""
 	label.Parent = container

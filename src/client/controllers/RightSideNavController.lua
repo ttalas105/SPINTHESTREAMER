@@ -1,7 +1,7 @@
 --[[
 	RightSideNavController.lua
-	Right vertical icon menu with real image icons:
-	INVITE, DAILY, PLAYTIME
+	Right vertical icon menu — bubbly, kid-friendly:
+	REBIRTH, SETTINGS
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -19,13 +19,21 @@ local buttons = {}
 local onButtonClicked = {}
 
 -------------------------------------------------
--- BUTTON DEFINITIONS with real Roblox asset icons
+-- Bubbly kid-friendly button style (match left nav)
+-------------------------------------------------
+local BUTTON_SIZE = 74
+local BUTTON_PADDING = 14
+local BUBBLE_CORNER = 22
+local STROKE_THICKNESS = 3
+local STROKE_COLOR = Color3.fromRGB(30, 25, 50)
+
+-------------------------------------------------
+-- RIGHT: Rebirth, Settings (cartoon emoji icons for kids)
 -------------------------------------------------
 
 local menuItems = {
-	{ name = "Invite",   imageId = "rbxassetid://11385395257",  color = Color3.fromRGB(255, 165, 40), label = "Invite" },
-	{ name = "Daily",    imageId = "rbxassetid://13569499711",   color = Color3.fromRGB(100, 160, 255), label = "Daily" },
-	{ name = "Playtime", imageId = "rbxassetid://15254183851",   color = Color3.fromRGB(220, 60, 60),  label = "Playtime" },
+	{ name = "Rebirth",  icon = "✨", color = Color3.fromRGB(255, 100, 140),  label = "Rebirth" },
+	{ name = "Settings", icon = "⚙️", color = Color3.fromRGB(100, 160, 220),  label = "Settings" },
 }
 
 -------------------------------------------------
@@ -36,10 +44,11 @@ function RightSideNavController.Init()
 	local screenGui = UIHelper.CreateScreenGui("RightSideNavGui", 4)
 	screenGui.Parent = playerGui
 
+	local totalHeight = (#menuItems * BUTTON_SIZE) + ((#menuItems - 1) * BUTTON_PADDING)
 	local container = Instance.new("Frame")
 	container.Name = "RightSideContainer"
-	container.Size = UDim2.new(0, 70, 0, (#menuItems * 72) + ((#menuItems - 1) * 4))
-	container.Position = UDim2.new(1, -8, 0.5, 0)
+	container.Size = UDim2.new(0, BUTTON_SIZE + 12, 0, totalHeight)
+	container.Position = UDim2.new(1, -12, 0.5, 0)
 	container.AnchorPoint = Vector2.new(1, 0.5)
 	container.BackgroundTransparency = 1
 	container.BorderSizePixel = 0
@@ -48,24 +57,32 @@ function RightSideNavController.Init()
 	local listLayout = Instance.new("UIListLayout")
 	listLayout.FillDirection = Enum.FillDirection.Vertical
 	listLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-	listLayout.Padding = UDim.new(0, 4)
+	listLayout.Padding = UDim.new(0, BUTTON_PADDING)
 	listLayout.Parent = container
 
 	for _, item in ipairs(menuItems) do
 		local iconBtn, clickZone = UIHelper.CreateIconButton({
 			Name = item.name,
-			Size = UDim2.new(0, 66, 0, 66),
+			Size = UDim2.new(0, BUTTON_SIZE, 0, BUTTON_SIZE),
 			Color = item.color,
 			HoverColor = Color3.new(
-				math.min(item.color.R + 0.15, 1),
-				math.min(item.color.G + 0.15, 1),
-				math.min(item.color.B + 0.15, 1)
+				math.min(item.color.R + 0.12, 1),
+				math.min(item.color.G + 0.12, 1),
+				math.min(item.color.B + 0.12, 1)
 			),
-			ImageId = item.imageId,
+			Icon = item.icon,
+			IconFont = Enum.Font.Cartoon,
+			LabelFont = Enum.Font.Cartoon,
 			Label = item.label,
-			CornerRadius = UDim.new(0, 10),
+			CornerRadius = UDim.new(0, BUBBLE_CORNER),
 			Parent = container,
 		})
+
+		-- Bold cartoon outline for bubbly look
+		local stroke = Instance.new("UIStroke")
+		stroke.Color = STROKE_COLOR
+		stroke.Thickness = STROKE_THICKNESS
+		stroke.Parent = iconBtn
 
 		buttons[item.name] = iconBtn
 

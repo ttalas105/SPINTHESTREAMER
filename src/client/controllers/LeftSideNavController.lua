@@ -1,7 +1,7 @@
 --[[
 	LeftSideNavController.lua
-	Left vertical icon menu with real image icons:
-	STORE, REBIRTH, PETS, INDEX, SETTINGS
+	Left vertical icon menu — bubbly, kid-friendly:
+	INDEX, PETS, STORE
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -19,15 +19,22 @@ local buttons = {}
 local onButtonClicked = {}
 
 -------------------------------------------------
--- BUTTON DEFINITIONS with real Roblox asset icons
+-- Bubbly kid-friendly button style
+-------------------------------------------------
+local BUTTON_SIZE = 74
+local BUTTON_PADDING = 14
+local BUBBLE_CORNER = 22
+local STROKE_THICKNESS = 3
+local STROKE_COLOR = Color3.fromRGB(30, 25, 50)
+
+-------------------------------------------------
+-- LEFT: Index, Pets, Store (cartoon emoji icons for kids)
 -------------------------------------------------
 
 local menuItems = {
-	{ name = "Store",    imageId = "rbxassetid://11385419687", color = Color3.fromRGB(220, 50, 70),  label = "Store" },
-	{ name = "Rebirth",  imageId = "rbxassetid://8729314720",  color = Color3.fromRGB(220, 50, 70),  label = "Rebirth" },
-	{ name = "Pets",     imageId = "rbxassetid://13001190578",  color = Color3.fromRGB(255, 165, 40), label = "Pets" },
-	{ name = "Index",    imageId = "rbxassetid://6867518950",   color = Color3.fromRGB(220, 50, 70),  label = "Index" },
-	{ name = "Settings", imageId = "rbxassetid://7059346386",   color = Color3.fromRGB(100, 130, 180), label = "Settings" },
+	{ name = "Index",  icon = "📖", color = Color3.fromRGB(100, 200, 255),  label = "Index" },
+	{ name = "Pets",   icon = "🐾", color = Color3.fromRGB(255, 165, 50),   label = "Pets" },
+	{ name = "Store",  icon = "🛒", color = Color3.fromRGB(255, 90, 120),   label = "Store" },
 }
 
 -------------------------------------------------
@@ -38,10 +45,11 @@ function LeftSideNavController.Init()
 	local screenGui = UIHelper.CreateScreenGui("LeftSideNavGui", 4)
 	screenGui.Parent = playerGui
 
+	local totalHeight = (#menuItems * BUTTON_SIZE) + ((#menuItems - 1) * BUTTON_PADDING)
 	local container = Instance.new("Frame")
 	container.Name = "LeftSideContainer"
-	container.Size = UDim2.new(0, 70, 0, (#menuItems * 72) + ((#menuItems - 1) * 4))
-	container.Position = UDim2.new(0, 8, 0.5, 0)
+	container.Size = UDim2.new(0, BUTTON_SIZE + 12, 0, totalHeight)
+	container.Position = UDim2.new(0, 12, 0.5, 0)
 	container.AnchorPoint = Vector2.new(0, 0.5)
 	container.BackgroundTransparency = 1
 	container.BorderSizePixel = 0
@@ -50,24 +58,32 @@ function LeftSideNavController.Init()
 	local listLayout = Instance.new("UIListLayout")
 	listLayout.FillDirection = Enum.FillDirection.Vertical
 	listLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-	listLayout.Padding = UDim.new(0, 4)
+	listLayout.Padding = UDim.new(0, BUTTON_PADDING)
 	listLayout.Parent = container
 
 	for _, item in ipairs(menuItems) do
 		local iconBtn, clickZone = UIHelper.CreateIconButton({
 			Name = item.name,
-			Size = UDim2.new(0, 66, 0, 66),
+			Size = UDim2.new(0, BUTTON_SIZE, 0, BUTTON_SIZE),
 			Color = item.color,
 			HoverColor = Color3.new(
-				math.min(item.color.R + 0.15, 1),
-				math.min(item.color.G + 0.15, 1),
-				math.min(item.color.B + 0.15, 1)
+				math.min(item.color.R + 0.12, 1),
+				math.min(item.color.G + 0.12, 1),
+				math.min(item.color.B + 0.12, 1)
 			),
-			ImageId = item.imageId,
+			Icon = item.icon,
+			IconFont = Enum.Font.Cartoon,
+			LabelFont = Enum.Font.Cartoon,
 			Label = item.label,
-			CornerRadius = UDim.new(0, 10),
+			CornerRadius = UDim.new(0, BUBBLE_CORNER),
 			Parent = container,
 		})
+
+		-- Bold cartoon outline for bubbly look
+		local stroke = Instance.new("UIStroke")
+		stroke.Color = STROKE_COLOR
+		stroke.Thickness = STROKE_THICKNESS
+		stroke.Parent = iconBtn
 
 		buttons[item.name] = iconBtn
 
