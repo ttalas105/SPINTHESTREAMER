@@ -19,6 +19,7 @@ local RightSideNavController = require(controllers.RightSideNavController)
 local HUDController          = require(controllers.HUDController)
 local StoreController        = require(controllers.StoreController)
 local SpinController         = require(controllers.SpinController)
+local SpinStandController    = require(controllers.SpinStandController)
 local SlotPadController      = require(controllers.SlotPadController)
 local InventoryController    = require(controllers.InventoryController)
 local UIHelper               = require(controllers.UIHelper)
@@ -35,8 +36,28 @@ LeftSideNavController.Init()
 RightSideNavController.Init()
 StoreController.Init()
 SpinController.Init()
+SpinStandController.Init()
 InventoryController.Init()
 SlotPadController.Init(InventoryController)
+
+-------------------------------------------------
+-- HIDE PLAYER HEALTH BARS
+-------------------------------------------------
+
+local function hideCharacterHealth(character)
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	if humanoid then
+		humanoid.HealthDisplayType = Enum.HumanoidHealthDisplayType.AlwaysOff
+	end
+end
+
+local localPlayer = Players.LocalPlayer
+if localPlayer.Character then
+	hideCharacterHealth(localPlayer.Character)
+end
+localPlayer.CharacterAdded:Connect(function(char)
+	hideCharacterHealth(char)
+end)
 
 -------------------------------------------------
 -- TELEPORT + BASE TRACKING
@@ -59,7 +80,6 @@ end)
 -------------------------------------------------
 
 TopNavController.OnTabChanged(function(tabName)
-	-- Hide spin wheel when switching tabs
 	SpinController.Hide()
 	if StoreController.IsOpen() then
 		StoreController.Close()
@@ -71,12 +91,11 @@ TopNavController.OnTabChanged(function(tabName)
 	if not rootPart then return end
 
 	if tabName == "BASE" then
-		-- Teleport to player's base
 		if myBasePosition then
 			rootPart.CFrame = CFrame.new(myBasePosition + Vector3.new(0, 5, 0))
 		end
 	elseif tabName == "SHOP" then
-		-- Teleport to the shop area
+		-- Shop area = gamepasses (Store button opens the Store modal)
 		local shopPos = DesignConfig.HubCenter + Vector3.new(0, 5, 15)
 		rootPart.CFrame = CFrame.new(shopPos)
 	end

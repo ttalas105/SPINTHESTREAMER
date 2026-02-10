@@ -20,6 +20,7 @@ local RemoteEvents = ReplicatedStorage:WaitForChild("RemoteEvents")
 local SpinRequest = RemoteEvents:WaitForChild("SpinRequest")
 local SpinResult = RemoteEvents:WaitForChild("SpinResult")
 local MythicAlert = RemoteEvents:WaitForChild("MythicAlert")
+local BuyCrateRequest = RemoteEvents:WaitForChild("BuyCrateRequest")
 
 local PlayerData
 local BaseService
@@ -114,6 +115,57 @@ local function handleSpin(player)
 end
 
 -------------------------------------------------
+-- CRATE SPIN (buy at spin stand: cost + luck bonus)
+-------------------------------------------------
+
+local function handleCrateSpin(player, crateId: number)
+	if not PlayerData then return end
+	local data = PlayerData.Get(player)
+	if not data then return end
+
+	local cost, luckBonus
+	if crateId == 1 then
+		cost = Economy.Crate1Cost
+		luckBonus = Economy.Crate1LuckBonus
+	elseif crateId == 2 then
+		cost = Economy.Crate2Cost
+		luckBonus = Economy.Crate2LuckBonus
+	else
+		SpinResult:FireClient(player, { success = false, reason = "Invalid crate!" })
+		return
+	end
+
+	if not PlayerData.SpendCash(player, cost) then
+		SpinResult:FireClient(player, { success = false, reason = "Not enough cash!" })
+		return
+	end
+
+	-- Rebirth luck + server luck + crate bonus
+	local rebirthLuck = 1 + (data.rebirthCount * 0.02)
+	local totalLuck = SpinService.ServerLuckMultiplier * rebirthLuck * (1 + luckBonus)
+
+	local rarityName = pickRarity(totalLuck)
+	local streamer = pickStreamer(rarityName)
+
+	PlayerData.AddToInventory(player, streamer.id)
+
+	SpinResult:FireClient(player, {
+		success = true,
+		streamerId = streamer.id,
+		displayName = streamer.displayName,
+		rarity = rarityName,
+	})
+
+	if rarityName == "Mythic" then
+		MythicAlert:FireAllClients({
+			playerName = player.Name,
+			streamerId = streamer.id,
+			displayName = streamer.displayName,
+		})
+	end
+end
+
+-------------------------------------------------
 -- PUBLIC
 -------------------------------------------------
 
@@ -123,6 +175,10 @@ function SpinService.Init(playerDataModule, baseServiceModule)
 
 	SpinRequest.OnServerEvent:Connect(function(player)
 		handleSpin(player)
+	end)
+
+	BuyCrateRequest.OnServerEvent:Connect(function(player, crateId: number)
+		handleCrateSpin(player, crateId)
 	end)
 end
 

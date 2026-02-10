@@ -22,7 +22,9 @@
 				"EquipResult": { "$className": "RemoteEvent" },
 				"UnequipRequest": { "$className": "RemoteEvent" },
 				"UnequipResult": { "$className": "RemoteEvent" },
-				"BaseReady": { "$className": "RemoteEvent" }
+				"BaseReady": { "$className": "RemoteEvent" },
+				"BuyCrateRequest": { "$className": "RemoteEvent" },
+				"OpenSpinStandGui": { "$className": "RemoteEvent" }
 			}
 		},
 		"ServerScriptService": {

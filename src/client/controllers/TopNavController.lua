@@ -20,7 +20,7 @@ local tabButtons = {}
 local onTabChanged = {}
 
 -------------------------------------------------
--- TAB DEFINITIONS — teleport buttons
+-- TAB DEFINITIONS — BASE / SHOP teleport only
 -------------------------------------------------
 
 local tabs = {

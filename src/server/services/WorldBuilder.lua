@@ -682,12 +682,71 @@ local function buildPaths()
 end
 
 -------------------------------------------------
+-- MAP BOUNDARIES (INVISIBLE WALLS)
+-------------------------------------------------
+
+local function buildBoundaries()
+	local bounds = Instance.new("Folder")
+	bounds.Name = "Boundaries"
+	bounds.Parent = Workspace
+
+	local w, l = DesignConfig.MapWidth, DesignConfig.MapLength
+	local cz = l / 2 - 150
+	local halfW = w / 2
+	local halfL = l / 2
+
+	local wallHeight = 60
+	local wallThickness = 2
+	local wallColor = DesignConfig.Colors.Baseplate
+
+	-- Front (toward negative Z)
+	p({
+		Name = "Boundary_Front",
+		Size = Vector3.new(w, wallHeight, wallThickness),
+		Position = Vector3.new(0, wallHeight / 2, cz - halfL - wallThickness / 2),
+		Color = wallColor,
+		Transparency = 1,
+		Parent = bounds,
+	})
+
+	-- Back (toward positive Z)
+	p({
+		Name = "Boundary_Back",
+		Size = Vector3.new(w, wallHeight, wallThickness),
+		Position = Vector3.new(0, wallHeight / 2, cz + halfL + wallThickness / 2),
+		Color = wallColor,
+		Transparency = 1,
+		Parent = bounds,
+	})
+
+	-- Left (negative X)
+	p({
+		Name = "Boundary_Left",
+		Size = Vector3.new(wallThickness, wallHeight, l + wallThickness * 2),
+		Position = Vector3.new(-halfW - wallThickness / 2, wallHeight / 2, cz),
+		Color = wallColor,
+		Transparency = 1,
+		Parent = bounds,
+	})
+
+	-- Right (positive X)
+	p({
+		Name = "Boundary_Right",
+		Size = Vector3.new(wallThickness, wallHeight, l + wallThickness * 2),
+		Position = Vector3.new(halfW + wallThickness / 2, wallHeight / 2, cz),
+		Color = wallColor,
+		Transparency = 1,
+		Parent = bounds,
+	})
+end
+
+-------------------------------------------------
 -- PUBLIC
 -------------------------------------------------
 
 function WorldBuilder.Build()
 	for _, name in ipairs({
-		"Baseplate", "Water", "Hub", "Decorations",
+		"Baseplate", "Water", "Hub", "Decorations", "Boundaries",
 		"SpawnPoint", "Paths", "PlayerBases", "PlayerBaseData", "SpeedPads", "Conveyors",
 	}) do
 		local e = Workspace:FindFirstChild(name)
@@ -702,6 +761,7 @@ function WorldBuilder.Build()
 	buildDecorations()
 	buildSpawn()
 	buildPaths()
+	buildBoundaries()
 
 	print("[WorldBuilder] Built — shops + speed pads + 4 base structures placed")
 end

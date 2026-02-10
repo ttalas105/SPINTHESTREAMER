@@ -1,9 +1,7 @@
 --[[
 	StoreController.lua
-	Full-screen Store popup modal.
-	Top section: Spin Crates (Buy 1/5/10 Spins).
-	Bottom section: Passes (VIP, Auto Spin, Luck Boost, 2x Cash).
-	Dark panel, bright cards, red X close button.
+	Store popup = Game Passes only (VIP, Auto Spin, Luck Boost, 2x Cash).
+	Crates/cases live in the Spin shop (TopNav Spin tab).
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -12,7 +10,6 @@ local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 
 local DesignConfig = require(ReplicatedStorage.Shared.Config.DesignConfig)
-local Economy = require(ReplicatedStorage.Shared.Config.Economy)
 local UIHelper = require(script.Parent.UIHelper)
 
 local StoreController = {}
@@ -20,151 +17,20 @@ local StoreController = {}
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
-local RemoteEvents = ReplicatedStorage:WaitForChild("RemoteEvents")
-local SpinRequest = RemoteEvents:WaitForChild("SpinRequest")
-
 local screenGui
 local modalFrame
 local overlay
 local isOpen = false
 
 -------------------------------------------------
--- SPIN CRATE SECTION
--------------------------------------------------
-
-local function createSpinSection(parent)
-	local section = UIHelper.CreateRoundedFrame({
-		Name = "SpinCratesSection",
-		Size = UDim2.new(1, -20, 0, 200),
-		Position = UDim2.new(0.5, 0, 0, 10),
-		AnchorPoint = Vector2.new(0.5, 0),
-		Color = DesignConfig.Colors.BackgroundLight,
-		CornerRadius = DesignConfig.Layout.PanelCorner,
-		Parent = parent,
-	})
-
-	-- Section title
-	UIHelper.CreateLabel({
-		Name = "Title",
-		Size = UDim2.new(1, 0, 0, 35),
-		Position = UDim2.new(0, 10, 0, 5),
-		Text = "SPIN CRATES",
-		TextColor = DesignConfig.Colors.White,
-		Font = DesignConfig.Fonts.Accent,
-		TextSize = DesignConfig.FontSizes.Header,
-		Parent = section,
-	}).TextXAlignment = Enum.TextXAlignment.Left
-
-	-- Mystery box placeholder
-	local mysteryBox = UIHelper.CreateRoundedFrame({
-		Name = "MysteryBox",
-		Size = UDim2.new(0, 80, 0, 80),
-		Position = UDim2.new(0, 20, 0, 45),
-		Color = Color3.fromRGB(60, 50, 100),
-		CornerRadius = DesignConfig.Layout.ButtonCorner,
-		StrokeColor = Color3.fromRGB(200, 120, 255),
-		Parent = section,
-	})
-
-	UIHelper.CreateLabel({
-		Name = "BoxIcon",
-		Size = UDim2.new(1, 0, 1, 0),
-		Text = "?",
-		TextColor = Color3.fromRGB(200, 120, 255),
-		Font = DesignConfig.Fonts.Accent,
-		TextSize = 48,
-		TextScaled = false,
-		Parent = mysteryBox,
-	})
-
-	-- Spin buy buttons
-	local spinOptions = {
-		{ label = "1 Spin",   cost = Economy.SpinCost,   count = 1 },
-		{ label = "5 Spins",  cost = Economy.SpinCost5,  count = 5 },
-		{ label = "10 Spins", cost = Economy.SpinCost10, count = 10 },
-	}
-
-	local buttonsContainer = Instance.new("Frame")
-	buttonsContainer.Name = "SpinButtons"
-	buttonsContainer.Size = UDim2.new(1, -130, 0, 130)
-	buttonsContainer.Position = UDim2.new(0, 120, 0, 45)
-	buttonsContainer.BackgroundTransparency = 1
-	buttonsContainer.Parent = section
-
-	local btnLayout = Instance.new("UIListLayout")
-	btnLayout.FillDirection = Enum.FillDirection.Horizontal
-	btnLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
-	btnLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-	btnLayout.Padding = UDim.new(0, 10)
-	btnLayout.Parent = buttonsContainer
-
-	for _, opt in ipairs(spinOptions) do
-		local card = UIHelper.CreateRoundedFrame({
-			Name = "SpinCard_" .. opt.count,
-			Size = UDim2.new(0, 120, 0, 120),
-			Color = DesignConfig.Colors.Background,
-			CornerRadius = DesignConfig.Layout.ButtonCorner,
-			StrokeColor = DesignConfig.Colors.Accent,
-			Parent = buttonsContainer,
-		})
-
-		UIHelper.CreateLabel({
-			Name = "Label",
-			Size = UDim2.new(1, 0, 0.4, 0),
-			Position = UDim2.new(0, 0, 0, 5),
-			Text = opt.label,
-			TextColor = DesignConfig.Colors.White,
-			Font = DesignConfig.Fonts.Primary,
-			TextSize = DesignConfig.FontSizes.Caption,
-			Parent = card,
-		})
-
-		UIHelper.CreateLabel({
-			Name = "Cost",
-			Size = UDim2.new(1, 0, 0.3, 0),
-			Position = UDim2.new(0, 0, 0.4, 0),
-			Text = "$ " .. tostring(opt.cost),
-			TextColor = DesignConfig.Colors.Accent,
-			Font = DesignConfig.Fonts.Primary,
-			TextSize = DesignConfig.FontSizes.Body,
-			Parent = card,
-		})
-
-		local buyBtn = UIHelper.CreateButton({
-			Name = "BuyBtn",
-			Size = UDim2.new(0.8, 0, 0, 28),
-			Position = UDim2.new(0.5, 0, 1, -35),
-			AnchorPoint = Vector2.new(0.5, 0),
-			Color = DesignConfig.Colors.Accent,
-			HoverColor = Color3.fromRGB(0, 230, 120),
-			Text = "BUY",
-			TextColor = DesignConfig.Colors.White,
-			Font = DesignConfig.Fonts.Primary,
-			TextSize = DesignConfig.FontSizes.Caption,
-			Parent = card,
-		})
-
-		buyBtn.MouseButton1Click:Connect(function()
-			-- Fire spin requests (server handles cost)
-			for _ = 1, opt.count do
-				SpinRequest:FireServer()
-				if opt.count > 1 then task.wait(0.1) end
-			end
-		end)
-	end
-
-	return section
-end
-
--------------------------------------------------
--- PASSES SECTION
+-- PASSES SECTION (Game Passes only)
 -------------------------------------------------
 
 local function createPassesSection(parent)
 	local section = UIHelper.CreateRoundedFrame({
 		Name = "PassesSection",
 		Size = UDim2.new(1, -20, 0, 180),
-		Position = UDim2.new(0.5, 0, 0, 225),
+		Position = UDim2.new(0.5, 0, 0, 10),
 		AnchorPoint = Vector2.new(0.5, 0),
 		Color = DesignConfig.Colors.BackgroundLight,
 		CornerRadius = DesignConfig.Layout.PanelCorner,
@@ -331,13 +197,12 @@ function StoreController.Init()
 	content.AnchorPoint = Vector2.new(0.5, 0)
 	content.BackgroundTransparency = 1
 	content.BorderSizePixel = 0
-	content.CanvasSize = UDim2.new(0, 0, 0, 430)
+	content.CanvasSize = UDim2.new(0, 0, 0, 220)
 	content.ScrollBarThickness = 4
 	content.ScrollBarImageColor3 = Color3.fromRGB(100, 100, 140)
 	content.Parent = modalFrame
 
-	-- Build sections
-	createSpinSection(content)
+	-- Game Passes only (crates are in Spin shop)
 	createPassesSection(content)
 end
 

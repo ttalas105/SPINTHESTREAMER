@@ -8,6 +8,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
+local StarterGui = game:GetService("StarterGui")
 
 local DesignConfig = require(ReplicatedStorage.Shared.Config.DesignConfig)
 local UIHelper = require(script.Parent.UIHelper)
@@ -19,8 +20,6 @@ local playerGui = player:WaitForChild("PlayerGui")
 
 -- Cached references
 local cashLabel
-local rebirthLabel
-local spinCreditsLabel
 
 -- Local data mirror
 HUDController.Data = {
@@ -42,35 +41,23 @@ local onDataUpdated = {}
 -------------------------------------------------
 
 function HUDController.Init()
+	-- Hide default Roblox health bar; we show our own HUD instead.
+	pcall(function()
+		StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Health, false)
+	end)
+
 	local screenGui = UIHelper.CreateScreenGui("HUDGui", 3)
 	screenGui.Parent = playerGui
 
-	-- Bottom-left currency display (matches reference layout)
+	-- Bottom-left currency display (cash only)
 	local hudContainer = Instance.new("Frame")
 	hudContainer.Name = "HUDContainer"
-	hudContainer.Size = UDim2.new(0, 160, 0, 55)
-	hudContainer.Position = UDim2.new(0, 10, 1, -90)
+	hudContainer.Size = UDim2.new(0, 160, 0, 32)
+	hudContainer.Position = UDim2.new(0, 12, 1, -12)
 	hudContainer.AnchorPoint = Vector2.new(0, 1)
 	hudContainer.BackgroundTransparency = 1
 	hudContainer.BorderSizePixel = 0
 	hudContainer.Parent = screenGui
-
-	local listLayout = Instance.new("UIListLayout")
-	listLayout.FillDirection = Enum.FillDirection.Vertical
-	listLayout.Padding = UDim.new(0, 2)
-	listLayout.Parent = hudContainer
-
-	-- Rebirth (hearts icon)
-	rebirthLabel = Instance.new("TextLabel")
-	rebirthLabel.Name = "RebirthLabel"
-	rebirthLabel.Size = UDim2.new(1, 0, 0, 24)
-	rebirthLabel.BackgroundTransparency = 1
-	rebirthLabel.TextColor3 = Color3.fromRGB(255, 80, 80)
-	rebirthLabel.Font = DesignConfig.Fonts.Primary
-	rebirthLabel.TextSize = DesignConfig.FontSizes.Body
-	rebirthLabel.Text = "♥ 0"
-	rebirthLabel.TextXAlignment = Enum.TextXAlignment.Left
-	rebirthLabel.Parent = hudContainer
 
 	-- Cash
 	cashLabel = Instance.new("TextLabel")
@@ -120,11 +107,6 @@ function HUDController.UpdateData(payload)
 				}):Play()
 			end)
 		end
-	end
-
-	-- Update rebirth display
-	if rebirthLabel then
-		rebirthLabel.Text = "♥ " .. tostring(HUDController.Data.rebirthCount)
 	end
 
 	-- Fire data update callbacks

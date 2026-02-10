@@ -14,6 +14,14 @@ Economy.SpinCost5 = 450       -- discounted 5-pack
 Economy.SpinCost10 = 800      -- discounted 10-pack
 
 -------------------------------------------------
+-- SPIN STAND CRATES (buy at stall for luck bonus)
+-------------------------------------------------
+Economy.Crate1Cost = 50
+Economy.Crate2Cost = 200
+Economy.Crate1LuckBonus = 0.10   -- +10% luck
+Economy.Crate2LuckBonus = 0.30  -- +30% luck
+
+-------------------------------------------------
 -- REBIRTH
 -------------------------------------------------
 Economy.RebirthBaseCost = 1000
