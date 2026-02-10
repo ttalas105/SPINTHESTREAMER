@@ -1,0 +1,57 @@
+{
+	"name": "SpinTheStreamer",
+	"tree": {
+		"$className": "DataModel",
+		"ReplicatedStorage": {
+			"$className": "ReplicatedStorage",
+			"Shared": {
+				"$path": "src/shared"
+			},
+			"RemoteEvents": {
+				"$className": "Folder",
+				"SpinRequest": { "$className": "RemoteEvent" },
+				"SpinResult": { "$className": "RemoteEvent" },
+				"SellRequest": { "$className": "RemoteEvent" },
+				"SellResult": { "$className": "RemoteEvent" },
+				"RebirthRequest": { "$className": "RemoteEvent" },
+				"RebirthResult": { "$className": "RemoteEvent" },
+				"PlayerDataUpdate": { "$className": "RemoteEvent" },
+				"MythicAlert": { "$className": "RemoteEvent" },
+				"NavigateTo": { "$className": "RemoteEvent" }
+			}
+		},
+		"ServerScriptService": {
+			"$className": "ServerScriptService",
+			"$path": "src/server"
+		},
+		"StarterPlayer": {
+			"$className": "StarterPlayer",
+			"StarterPlayerScripts": {
+				"$className": "StarterPlayerScripts",
+				"$path": "src/client"
+			}
+		},
+		"StarterGui": {
+			"$className": "StarterGui",
+			"$ignoreUnknownInstances": true
+		},
+		"Workspace": {
+			"$className": "Workspace",
+			"$properties": {
+				"Gravity": 196.2
+			}
+		},
+		"Lighting": {
+			"$className": "Lighting",
+			"$properties": {
+				"Brightness": 2,
+				"ClockTime": 14,
+				"Ambient": [0.5, 0.5, 0.5],
+				"OutdoorAmbient": [0.5, 0.5, 0.5]
+			}
+		},
+		"SoundService": {
+			"$className": "SoundService"
+		}
+	}
+}
