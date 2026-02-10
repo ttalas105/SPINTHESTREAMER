@@ -2,33 +2,23 @@
 	SlotsConfig.lua
 	Defines how many pad slots unlock per rebirth level.
 	Layout: 4 rows x 5 columns = 20 total possible pads.
-	18 rebirth-based + 1 premium + 1 reserved = 20.
-	Premium Slot = 1 extra slot purchasable with Robux.
+	Players start with 4 open slots; each rebirth adds 1 more.
+	Premium Slot = 1 extra slot purchasable with Robux (slot 20).
 ]]
 
 local SlotsConfig = {}
 
--- Rebirth-based slots: Key = rebirth count, Value = total rebirth slots
--- Players always have at least 1 slot (slot 1)
-SlotsConfig.SlotsByRebirth = {
-	[0]  = 1,   -- start with 1 slot
-	[1]  = 3,
-	[2]  = 5,
-	[3]  = 7,
-	[4]  = 9,
-	[5]  = 12,
-	[8]  = 15,
-	[10] = 18,
-}
+-- Starting slots (no rebirths needed)
+SlotsConfig.StartingSlots = 4
 
--- Maximum possible rebirth-based slots
-SlotsConfig.MaxRebirthSlots = 18
+-- Maximum possible rebirth-based slots (slots 1-19)
+SlotsConfig.MaxRebirthSlots = 19
 
 -- Premium slot adds 1 on top
 SlotsConfig.PremiumSlotBonus = 1
 
--- Premium slot index (always the last one)
-SlotsConfig.PremiumSlotIndex = 19
+-- Premium slot index (always the last one, slot 20)
+SlotsConfig.PremiumSlotIndex = 20
 
 -- Absolute maximum (rebirth max + premium)
 SlotsConfig.MaxTotalSlots = SlotsConfig.MaxRebirthSlots + SlotsConfig.PremiumSlotBonus
@@ -37,14 +27,10 @@ SlotsConfig.MaxTotalSlots = SlotsConfig.MaxRebirthSlots + SlotsConfig.PremiumSlo
 SlotsConfig.GridRows = 4
 SlotsConfig.GridCols = 5
 
---- Get number of rebirth-based slots for a given rebirth count
+--- Get number of rebirth-based slots for a given rebirth count.
+--- Start with 4 slots, each rebirth adds 1.
 function SlotsConfig.GetSlotsForRebirth(rebirthCount: number): number
-	local slots = 1
-	for reqRebirth, slotCount in pairs(SlotsConfig.SlotsByRebirth) do
-		if rebirthCount >= reqRebirth and slotCount > slots then
-			slots = slotCount
-		end
-	end
+	local slots = SlotsConfig.StartingSlots + rebirthCount
 	return math.min(slots, SlotsConfig.MaxRebirthSlots)
 end
 
@@ -57,19 +43,17 @@ function SlotsConfig.GetTotalSlots(rebirthCount: number, hasPremiumSlot: boolean
 	return math.min(base, SlotsConfig.MaxTotalSlots)
 end
 
---- Get the rebirth level needed to unlock a specific slot index
+--- Get the rebirth level needed to unlock a specific slot index.
+--- Slots 1-4 are free (rebirth 0). Slot 5 = rebirth 1, slot 6 = rebirth 2, etc.
 function SlotsConfig.GetRebirthForSlot(slotIndex: number): number
 	if slotIndex == SlotsConfig.PremiumSlotIndex then
 		return -1 -- premium, not rebirth-based
 	end
-
-	local needed = 999
-	for reqRebirth, slotCount in pairs(SlotsConfig.SlotsByRebirth) do
-		if slotCount >= slotIndex and reqRebirth < needed then
-			needed = reqRebirth
-		end
+	if slotIndex <= SlotsConfig.StartingSlots then
+		return 0 -- free from the start
 	end
-	return needed ~= 999 and needed or -1
+	-- Each rebirth unlocks 1 more slot beyond the starting 4
+	return slotIndex - SlotsConfig.StartingSlots
 end
 
 return SlotsConfig

@@ -124,33 +124,84 @@ DesignConfig.MapWidth  = 400
 DesignConfig.MapLength = 1000
 
 -------------------------------------------------
--- STALLS (hub near spawn)
+-- STALLS (open-air market stalls near spawn)
+-- Layout: striped canopy, wooden cart, NPC behind counter
 -------------------------------------------------
+DesignConfig.HubCenter = Vector3.new(0, 0.5, -100)
+
 DesignConfig.Stalls = {
-	{ name = "SPIN",     color = DesignConfig.Colors.StallPurple, icon = "rbxassetid://0" },
-	{ name = "SELL",     color = DesignConfig.Colors.StallRed,    icon = "rbxassetid://0" },
-	{ name = "REBIRTH",  color = DesignConfig.Colors.StallYellow, icon = "rbxassetid://0" },
-	{ name = "UPGRADES", color = DesignConfig.Colors.StallGreen,  icon = "rbxassetid://0" },
+	{
+		name      = "Spin",
+		color     = Color3.fromRGB(60, 160, 230),   -- blue canopy
+		roofColor = Color3.fromRGB(60, 160, 230),
+		npc = {
+			skinColor   = Color3.fromRGB(255, 220, 185),
+			outfitColor = Color3.fromRGB(60, 130, 220),
+			pantsColor  = Color3.fromRGB(35, 35, 55),
+		},
+	},
+	{
+		name      = "Sell",
+		color     = Color3.fromRGB(220, 60, 60),    -- red canopy
+		roofColor = Color3.fromRGB(220, 60, 60),
+		npc = {
+			skinColor   = Color3.fromRGB(245, 210, 175),
+			outfitColor = Color3.fromRGB(200, 50, 50),
+			pantsColor  = Color3.fromRGB(40, 40, 50),
+		},
+	},
+	{
+		name      = "Potions",
+		color     = Color3.fromRGB(170, 60, 210),   -- purple canopy
+		roofColor = Color3.fromRGB(170, 60, 210),
+		npc = {
+			skinColor   = Color3.fromRGB(255, 225, 195),
+			outfitColor = Color3.fromRGB(150, 50, 190),
+			pantsColor  = Color3.fromRGB(40, 30, 50),
+		},
+	},
+	{
+		name      = "Upgrades",
+		color     = Color3.fromRGB(50, 180, 80),    -- green canopy
+		roofColor = Color3.fromRGB(50, 180, 80),
+		npc = {
+			skinColor   = Color3.fromRGB(250, 215, 180),
+			outfitColor = Color3.fromRGB(40, 160, 70),
+			pantsColor  = Color3.fromRGB(30, 45, 35),
+		},
+	},
+	{
+		name      = "Gems",
+		color     = Color3.fromRGB(230, 180, 40),   -- gold canopy
+		roofColor = Color3.fromRGB(230, 180, 40),
+		npc = {
+			skinColor   = Color3.fromRGB(248, 218, 185),
+			outfitColor = Color3.fromRGB(210, 170, 30),
+			pantsColor  = Color3.fromRGB(50, 45, 30),
+		},
+	},
 }
-DesignConfig.StallSpacing = 22
-DesignConfig.HubCenter = Vector3.new(0, 0.5, -80)
 
 -------------------------------------------------
--- CONVEYOR — SINGLE WIDE STRIP
+-- SPEED PAD (online asset) — TWO STRIPS SIDE BY SIDE
+-- One going forward (+Z), one going backward (-Z)
 -------------------------------------------------
-DesignConfig.Conveyor = {
-	Width        = 34,          -- single wide strip
+DesignConfig.SpeedPad = {
+	AssetId      = 288415410,
 	Speed        = 55,
-	StartZ       = 20,
-	EndZ         = 880,
-	ArrowSpacing = 22,          -- green chevrons every N studs
-	RailHeight   = 1.2,
-	RailWidth    = 1.5,
+	StripGap     = 12,          -- X offset from center for each strip
+	CenterZ      = 200,         -- center Z of the speed pad area
+	Length        = 400,         -- how long the speed pad area is
 }
 
 -------------------------------------------------
--- PER-PLAYER BASE — 1 column per side, 8 per side
+-- PER-PLAYER BASE (online asset) — 8 BASES TOTAL
+-- 4 on each side of the speed pads, entrances facing inward
 -------------------------------------------------
+DesignConfig.BaseAsset = {
+	AssetId      = 112269866373242,
+}
+
 DesignConfig.Base = {
 	PadRows     = 4,
 	PadCols     = 5,
@@ -161,17 +212,30 @@ DesignConfig.Base = {
 	BorderHeight   = 1.5,
 	BorderThickness = 1.2,
 
-	-- 2 columns: left side and right side of conveyor
-	-- X positions calculated from conveyor width + gap
-	ColumnGap   = 12,           -- gap between conveyor edge and base edge
-	RowStartZ   = 40,
-	RowSpacing  = 105,          -- Z spacing between base centers
-	BasesPerSide = 8,           -- 8 on left, 8 on right = 16 max
+	BasesPerSide = 4,           -- 4 on left, 4 on right = 8 max
+	MaxPlayers   = 8,
 
 	SpawnOffset = Vector3.new(0, 3, -10),
 }
 
--- Calculate base floor size and column X positions
+-- Pre-calculate 8 base positions:
+-- Left side:  4 bases stacked along Z
+-- Right side: 4 bases stacked along Z
+-- All entrances face the speed pad (center)
+DesignConfig.BasePositions = {
+	-- Left side (rotation 90 = entrance faces right toward speed pad)
+	{ position = Vector3.new(-70, 0.5, 80),   rotation = 90  },  -- Left 1
+	{ position = Vector3.new(-70, 0.5, 160),  rotation = 90  },  -- Left 2
+	{ position = Vector3.new(-70, 0.5, 240),  rotation = 90  },  -- Left 3
+	{ position = Vector3.new(-70, 0.5, 320),  rotation = 90  },  -- Left 4
+	-- Right side (rotation -90 = entrance faces left toward speed pad)
+	{ position = Vector3.new(70,  0.5, 80),   rotation = -90 },  -- Right 1
+	{ position = Vector3.new(70,  0.5, 160),  rotation = -90 },  -- Right 2
+	{ position = Vector3.new(70,  0.5, 240),  rotation = -90 },  -- Right 3
+	{ position = Vector3.new(70,  0.5, 320),  rotation = -90 },  -- Right 4
+}
+
+-- Calculate base floor size (still needed for pad grid)
 do
 	local b = DesignConfig.Base
 	local gridWidth = (b.PadCols - 1) * b.PadSpacing + b.PadSize.X
@@ -179,13 +243,6 @@ do
 	b.FloorWidth = gridWidth + b.FloorPadding * 2
 	b.FloorDepth = gridDepth + b.FloorPadding * 2
 	b.FloorSize = Vector3.new(b.FloorWidth, 1, b.FloorDepth)
-
-	-- Column X positions: left and right of conveyor
-	local convHalf = DesignConfig.Conveyor.Width / 2
-	local baseHalf = b.FloorWidth / 2
-	b.LeftColumnX  = -(convHalf + b.ColumnGap + baseHalf)
-	b.RightColumnX =  (convHalf + b.ColumnGap + baseHalf)
-	b.Columns = { b.LeftColumnX, b.RightColumnX }
 end
 
 return DesignConfig

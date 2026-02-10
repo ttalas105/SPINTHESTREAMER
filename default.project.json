@@ -47,7 +47,16 @@
 			}
 		},
 		"Lighting": {
-			"$className": "Lighting"
+			"$className": "Lighting",
+			"$properties": {
+				"Brightness": 2,
+				"ClockTime": 14,
+				"Ambient": [0, 0, 0],
+				"OutdoorAmbient": [0.502, 0.502, 0.502],
+				"GlobalShadows": true,
+				"EnvironmentDiffuseScale": 0,
+				"EnvironmentSpecularScale": 0
+			}
 		},
 		"SoundService": {
 			"$className": "SoundService"

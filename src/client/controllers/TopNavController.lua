@@ -1,7 +1,6 @@
 --[[
 	TopNavController.lua
-	Top-center navigation bar: SHOPS, BASE, SELL
-	Matches the reference layout with colored tab buttons.
+	Top-center navigation bar: BASE and SHOP teleport buttons.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -21,13 +20,12 @@ local tabButtons = {}
 local onTabChanged = {}
 
 -------------------------------------------------
--- TAB DEFINITIONS (matches reference image)
+-- TAB DEFINITIONS — teleport buttons
 -------------------------------------------------
 
 local tabs = {
-	{ name = "SHOPS",  color = Color3.fromRGB(60, 140, 255) },  -- blue
-	{ name = "BASE",   color = Color3.fromRGB(255, 165, 40)  },  -- orange
-	{ name = "SELL",   color = Color3.fromRGB(220, 200, 40)  },  -- yellow
+	{ name = "BASE",  color = Color3.fromRGB(255, 165, 40) },   -- orange
+	{ name = "SHOP",  color = Color3.fromRGB(60, 140, 255) },   -- blue
 }
 
 -------------------------------------------------

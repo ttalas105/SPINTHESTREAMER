@@ -16,7 +16,18 @@ local SlotsConfig = require(ReplicatedStorage.Shared.Config.SlotsConfig)
 local PlayerData = {}
 PlayerData._cache = {} -- userId -> data table
 
-local dataStore = DataStoreService:GetDataStore("SpinTheStreamer_v2")
+local dataStore
+local ok, err = pcall(function()
+	dataStore = DataStoreService:GetDataStore("SpinTheStreamer_v2")
+end)
+if not ok then
+	warn("[PlayerData] DataStore unavailable (Studio?): " .. tostring(err))
+	-- Create a mock so the game still runs without persistence
+	dataStore = {
+		GetAsync = function() return nil end,
+		SetAsync = function() end,
+	}
+end
 
 local DEFAULT_DATA = {
 	cash = 500,

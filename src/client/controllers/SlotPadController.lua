@@ -37,9 +37,9 @@ local InventoryController
 -------------------------------------------------
 
 local function findPads()
-	local basesFolder = Workspace:WaitForChild("PlayerBases", 15)
+	local basesFolder = Workspace:WaitForChild("PlayerBaseData", 15)
 	if not basesFolder then
-		warn("[SlotPadController] PlayerBases folder not found!")
+		warn("[SlotPadController] PlayerBaseData folder not found!")
 		return
 	end
 

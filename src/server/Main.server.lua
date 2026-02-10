@@ -26,4 +26,4 @@ EconomyService.Init(PlayerData)
 RebirthService.Init(PlayerData, BaseService)
 StoreService.Init(PlayerData, SpinService)
 
-print("[Server] Spin the Streamer initialized! Map size: 400x1000 studs, 16 base slots")
+print("[Server] Spin the Streamer initialized! Map size: 400x1000 studs, 8 base slots")

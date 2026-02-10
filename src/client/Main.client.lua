@@ -39,22 +39,25 @@ InventoryController.Init()
 SlotPadController.Init(InventoryController)
 
 -------------------------------------------------
--- BASE READY
+-- TELEPORT + BASE TRACKING
 -------------------------------------------------
+
+local DesignConfig = require(ReplicatedStorage.Shared.Config.DesignConfig)
+local myBasePosition = nil
 
 local BaseReady = RemoteEvents:WaitForChild("BaseReady")
 BaseReady.OnClientEvent:Connect(function(data)
 	if data.position then
+		myBasePosition = data.position
 		SlotPadController.SetBasePosition(data.position)
 		print("[Client] Base assigned at position: " .. tostring(data.position))
 	end
 end)
 
 -------------------------------------------------
--- WIRE TOP NAV TABS (SHOPS / BASE / SELL)
+-- WIRE TOP NAV TABS (BASE / SHOP) — TELEPORT
 -------------------------------------------------
 
--- Default: show nothing special (player walks around)
 TopNavController.OnTabChanged(function(tabName)
 	-- Hide spin wheel when switching tabs
 	SpinController.Hide()
@@ -62,18 +65,20 @@ TopNavController.OnTabChanged(function(tabName)
 		StoreController.Close()
 	end
 
-	if tabName == "SHOPS" then
-		SpinController.Show()
-	elseif tabName == "BASE" then
-		-- BASE tab: player focuses on their base pads
-		-- (just hides other UIs, pads are always visible in world)
-	elseif tabName == "SELL" then
-		-- SELL tab: sell from inventory
-		-- For now, the sell button sells the selected inventory item
-		local selIdx, selId = InventoryController.GetSelectedItem()
-		if selId then
-			InventoryController.SellSelected()
+	local character = Players.LocalPlayer.Character
+	if not character then return end
+	local rootPart = character:FindFirstChild("HumanoidRootPart")
+	if not rootPart then return end
+
+	if tabName == "BASE" then
+		-- Teleport to player's base
+		if myBasePosition then
+			rootPart.CFrame = CFrame.new(myBasePosition + Vector3.new(0, 5, 0))
 		end
+	elseif tabName == "SHOP" then
+		-- Teleport to the shop area
+		local shopPos = DesignConfig.HubCenter + Vector3.new(0, 5, 15)
+		rootPart.CFrame = CFrame.new(shopPos)
 	end
 end)
 

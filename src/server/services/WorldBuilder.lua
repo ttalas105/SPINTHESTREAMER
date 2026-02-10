@@ -1,14 +1,18 @@
 --[[
 	WorldBuilder.lua
-	Bright minty-green rectangular map with a single wide dark-purple
-	conveyor strip running down the center, green chevron arrows,
-	purple glow entrance, stalls at one end, and palm trees.
-	Matches the reference RNG game aesthetic.
+	Builds the game world:
+	  - Bright minty-green rectangular map
+	  - Shop stalls from online asset with custom NPCs
+	  - Speed pads from online asset (forward + backward)
+	  - 4 player bases from online asset (2 per side)
+	  - Palm trees and decorations
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 local Lighting = game:GetService("Lighting")
+local Players = game:GetService("Players")
+local InsertService = game:GetService("InsertService")
 
 local DesignConfig = require(ReplicatedStorage.Shared.Config.DesignConfig)
 
@@ -18,33 +22,37 @@ local WorldBuilder = {}
 -- HELPERS
 -------------------------------------------------
 
-local function part(props)
-	local p = Instance.new("Part")
-	p.Anchored = true
-	p.CanCollide = props.CanCollide ~= false
-	p.Size = props.Size or Vector3.new(4, 1, 4)
-	p.Position = props.Position or Vector3.new(0, 0, 0)
-	p.Color = props.Color or Color3.fromRGB(200, 200, 200)
-	p.Material = props.Material or Enum.Material.SmoothPlastic
-	p.Name = props.Name or "Part"
-	p.TopSurface = Enum.SurfaceType.Smooth
-	p.BottomSurface = Enum.SurfaceType.Smooth
-	if props.Transparency then p.Transparency = props.Transparency end
-	if props.Reflectance then p.Reflectance = props.Reflectance end
-	if props.CFrame then p.CFrame = props.CFrame end
-	p.Parent = props.Parent or Workspace
-	return p
+local function p(props)
+	local part = Instance.new("Part")
+	part.Anchored = true
+	part.CanCollide = props.CanCollide ~= false
+	part.Size = props.Size or Vector3.new(4, 1, 4)
+	part.Color = props.Color or Color3.fromRGB(200, 200, 200)
+	part.Material = props.Material or Enum.Material.SmoothPlastic
+	part.Name = props.Name or "Part"
+	part.TopSurface = Enum.SurfaceType.Smooth
+	part.BottomSurface = Enum.SurfaceType.Smooth
+	if props.Transparency then part.Transparency = props.Transparency end
+	if props.Reflectance then part.Reflectance = props.Reflectance end
+	if props.CFrame then
+		part.CFrame = props.CFrame
+	elseif props.Position then
+		part.Position = props.Position
+	end
+	if props.Shape then part.Shape = props.Shape end
+	part.Parent = props.Parent or Workspace
+	return part
 end
 
-local function billboard(parent, text, textColor, bgColor, offset)
+local function billboard(parent, text, textColor, bgColor, size, offset)
 	local bb = Instance.new("BillboardGui")
-	bb.Size = UDim2.new(8, 0, 2, 0)
+	bb.Size = size or UDim2.new(8, 0, 2, 0)
 	bb.StudsOffset = offset or Vector3.new(0, 4, 0)
 	bb.AlwaysOnTop = false
 	bb.Parent = parent
 	local lbl = Instance.new("TextLabel")
 	lbl.Size = UDim2.new(1, 0, 1, 0)
-	lbl.BackgroundTransparency = bgColor and 0.3 or 1
+	lbl.BackgroundTransparency = bgColor and 0.15 or 1
 	lbl.BackgroundColor3 = bgColor or Color3.new(0, 0, 0)
 	lbl.TextColor3 = textColor or DesignConfig.Colors.White
 	lbl.Font = DesignConfig.Fonts.Accent
@@ -56,43 +64,89 @@ local function billboard(parent, text, textColor, bgColor, offset)
 		c.CornerRadius = UDim.new(0.2, 0)
 		c.Parent = lbl
 	end
+	local stroke = Instance.new("UIStroke")
+	stroke.Thickness = 2
+	stroke.Color = Color3.fromRGB(0, 0, 0)
+	stroke.Parent = lbl
 	return bb
 end
 
+local function getModelBounds(model)
+	local min = Vector3.new(math.huge, math.huge, math.huge)
+	local max = Vector3.new(-math.huge, -math.huge, -math.huge)
+	for _, part in ipairs(model:GetDescendants()) do
+		if part:IsA("BasePart") then
+			local pos = part.Position
+			local half = part.Size / 2
+			min = Vector3.new(
+				math.min(min.X, pos.X - half.X),
+				math.min(min.Y, pos.Y - half.Y),
+				math.min(min.Z, pos.Z - half.Z))
+			max = Vector3.new(
+				math.max(max.X, pos.X + half.X),
+				math.max(max.Y, pos.Y + half.Y),
+				math.max(max.Z, pos.Z + half.Z))
+		end
+	end
+	return min, max
+end
+
+-- Load an asset, strip scripts, anchor parts, return the first Model child with parts
+local function loadAndPrepAsset(assetId, label)
+	local ok, asset = pcall(function()
+		return InsertService:LoadAsset(assetId)
+	end)
+	if not ok or not asset then
+		warn("[WorldBuilder] Failed to load " .. label .. ": " .. tostring(asset))
+		return nil
+	end
+	print("[WorldBuilder] Loaded " .. label)
+
+	-- Strip scripts
+	for _, obj in ipairs(asset:GetDescendants()) do
+		if obj:IsA("BaseScript") or obj:IsA("ModuleScript") then obj:Destroy() end
+	end
+	-- Anchor all parts
+	for _, part in ipairs(asset:GetDescendants()) do
+		if part:IsA("BasePart") then part.Anchored = true end
+	end
+	-- Freeze humanoids
+	for _, hum in ipairs(asset:GetDescendants()) do
+		if hum:IsA("Humanoid") then
+			hum.WalkSpeed = 0
+			hum.JumpPower = 0
+			hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+		end
+	end
+	return asset
+end
+
+-- Move a model so its bottom-center is at targetPos with optional Y rotation
+local function positionModel(model, targetPos, yRotDeg)
+	yRotDeg = yRotDeg or 0
+	local bmin, bmax = getModelBounds(model)
+	local center = Vector3.new((bmin.X+bmax.X)/2, bmin.Y, (bmin.Z+bmax.Z)/2)
+	local delta = CFrame.new(targetPos) * CFrame.Angles(0, math.rad(yRotDeg), 0) * CFrame.new(center):Inverse()
+	for _, part in ipairs(model:GetDescendants()) do
+		if part:IsA("BasePart") then part.CFrame = delta * part.CFrame end
+	end
+end
+
 -------------------------------------------------
--- FORCE BRIGHT DAYTIME
+-- LIGHTING
 -------------------------------------------------
 
 local function setupLighting()
-	Lighting.Brightness = 3
-	Lighting.ClockTime = 14.5
-	Lighting.GeographicLatitude = 0
-	Lighting.Ambient = Color3.fromRGB(140, 140, 140)
-	Lighting.OutdoorAmbient = Color3.fromRGB(140, 140, 140)
+	Lighting.Brightness = 2
+	Lighting.ClockTime = 14
+	Lighting.GeographicLatitude = 41.733
+	Lighting.Ambient = Color3.new(0, 0, 0)
+	Lighting.OutdoorAmbient = Color3.fromRGB(128, 128, 128)
 	Lighting.ColorShift_Bottom = Color3.new(0, 0, 0)
 	Lighting.ColorShift_Top = Color3.new(0, 0, 0)
-	Lighting.FogEnd = 100000
-	Lighting.FogStart = 0
-	Lighting.FogColor = Color3.fromRGB(192, 220, 255)
 	Lighting.GlobalShadows = true
-	Lighting.EnvironmentDiffuseScale = 1
-	Lighting.EnvironmentSpecularScale = 1
-
-	for _, child in ipairs(Lighting:GetChildren()) do
-		if child:IsA("Atmosphere") or child:IsA("BloomEffect")
-			or child:IsA("ColorCorrectionEffect") or child:IsA("BlurEffect") then
-			child:Destroy()
-		end
-	end
-
-	local atm = Instance.new("Atmosphere")
-	atm.Density = 0.3
-	atm.Offset = 0
-	atm.Color = Color3.fromRGB(200, 225, 255)
-	atm.Decay = Color3.fromRGB(100, 140, 200)
-	atm.Glare = 0
-	atm.Haze = 0
-	atm.Parent = Lighting
+	Lighting.EnvironmentDiffuseScale = 0
+	Lighting.EnvironmentSpecularScale = 0
 end
 
 -------------------------------------------------
@@ -103,52 +157,86 @@ local function buildBaseplate()
 	local w, l = DesignConfig.MapWidth, DesignConfig.MapLength
 	local cz = l / 2 - 150
 
-	part({
-		Name = "Baseplate",
+	p({ Name = "Baseplate",
 		Size = Vector3.new(w, 1, l),
 		Position = Vector3.new(0, 0, cz),
-		Color = DesignConfig.Colors.Baseplate,
-	})
+		Color = DesignConfig.Colors.Baseplate })
 
-	part({
-		Name = "Water",
+	p({ Name = "Water",
 		Size = Vector3.new(w * 3, 0.5, l * 3),
 		Position = Vector3.new(0, -0.5, cz),
 		Color = DesignConfig.Colors.Water,
-		CanCollide = false,
-		Transparency = 0.25,
-	})
+		CanCollide = false, Transparency = 0.25 })
 end
 
 -------------------------------------------------
--- HUB & STALLS
+-- NPC BUILDER (R15 with pcall -> part-based fallback)
 -------------------------------------------------
 
-local function buildStall(cfg, pos, parent)
-	local m = Instance.new("Model")
-	m.Name = "Stall_" .. cfg.name
+local function buildNPC(cfg, pos, parent)
+	local name = cfg.name or "NPC"
+	local skin = cfg.skinColor or Color3.fromRGB(255, 220, 185)
+	local outfit = cfg.outfitColor or Color3.fromRGB(100, 100, 200)
+	local pants = cfg.pantsColor or Color3.fromRGB(40, 40, 60)
 
-	part({ Name = "Counter", Size = Vector3.new(12, 3, 5), Position = pos + Vector3.new(0,1.5,0),
-		Color = Color3.fromRGB(140,100,60), Parent = m })
-	part({ Name = "Top", Size = Vector3.new(12.4, 0.4, 5.4), Position = pos + Vector3.new(0,3.2,0),
-		Color = cfg.color, Parent = m })
-	local awning = part({ Name = "Awning", Size = Vector3.new(14, 0.5, 7), Position = pos + Vector3.new(0,8,-0.5),
-		Color = cfg.color, Parent = m })
-	part({ Name = "Stripe", Size = Vector3.new(14, 0.6, 1), Position = pos + Vector3.new(0,7.9,2.5),
-		Color = DesignConfig.Colors.White, Parent = m })
-	for _, x in ipairs({-6, 6}) do
-		part({ Name = "Pole", Size = Vector3.new(0.6,8,0.6), Position = pos + Vector3.new(x,4,2.5),
-			Color = Color3.fromRGB(220,220,220), Parent = m })
+	local ok, model = pcall(function()
+		local desc = Instance.new("HumanoidDescription")
+		desc.HeadColor = skin
+		desc.LeftArmColor = skin
+		desc.RightArmColor = skin
+		desc.TorsoColor = outfit
+		desc.LeftLegColor = pants
+		desc.RightLegColor = pants
+		desc.HeadScale = 1.2
+		desc.BodyTypeScale = 0
+		desc.ProportionScale = 0
+		return Players:CreateHumanoidModelFromDescription(desc, Enum.HumanoidRigType.R15)
+	end)
+
+	if ok and model then
+		model.Name = "NPC_" .. name
+		for _, pt in ipairs(model:GetDescendants()) do
+			if pt:IsA("BasePart") then pt.Anchored = true end
+		end
+		local root = model:FindFirstChild("HumanoidRootPart")
+		if root then
+			root.CFrame = CFrame.new(pos + Vector3.new(0, 3, 0))
+				* CFrame.Angles(0, math.rad(180), 0)
+		end
+		local hum = model:FindFirstChildOfClass("Humanoid")
+		if hum then
+			hum.WalkSpeed = 0
+			hum.JumpPower = 0
+			hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+		end
+		model.Parent = parent
+		return model
 	end
-	part({ Name = "NPC", Size = Vector3.new(2,3,1.5), Position = pos + Vector3.new(0,4.5,-1),
-		Color = cfg.color, Parent = m })
-	part({ Name = "Head", Size = Vector3.new(1.5,1.5,1.5), Position = pos + Vector3.new(0,6.5,-1),
-		Color = Color3.fromRGB(255,205,148), Parent = m })
-	billboard(awning, cfg.name, DesignConfig.Colors.White, cfg.color, Vector3.new(0,3,0))
 
-	m.Parent = parent or Workspace
-	return m
+	-- Fallback: part-based character
+	warn("[WorldBuilder] R15 failed, using parts for " .. name)
+	local npc = Instance.new("Model")
+	npc.Name = "NPC_" .. name
+	local head = p({ Name = "Head", Size = Vector3.new(2, 2, 2),
+		Position = pos + Vector3.new(0, 5.5, 0), Color = skin, Parent = npc })
+	local mesh = Instance.new("SpecialMesh")
+	mesh.MeshType = Enum.MeshType.Sphere; mesh.Parent = head
+	p({ Name = "Torso", Size = Vector3.new(2, 2.2, 1.2),
+		Position = pos + Vector3.new(0, 3.5, 0), Color = outfit, Parent = npc })
+	p({ Name = "LegL", Size = Vector3.new(0.8, 2.4, 0.8),
+		Position = pos + Vector3.new(-0.5, 1.2, 0), Color = pants, Parent = npc })
+	p({ Name = "LegR", Size = Vector3.new(0.8, 2.4, 0.8),
+		Position = pos + Vector3.new(0.5, 1.2, 0), Color = pants, Parent = npc })
+	npc.Parent = parent
+	return npc
 end
+
+-------------------------------------------------
+-- SHOP HUB (asset 95566802299515)
+-------------------------------------------------
+
+local SHOP_ASSET_ID = 95566802299515
+local STALL_SPACING = 30
 
 local function buildHub()
 	local hub = Instance.new("Folder")
@@ -156,235 +244,411 @@ local function buildHub()
 	hub.Parent = Workspace
 
 	local stalls = DesignConfig.Stalls
-	local sp = DesignConfig.StallSpacing
 	local ctr = DesignConfig.HubCenter
-	local tw = (#stalls - 1) * sp
-	local sx = ctr.X - tw / 2
 
-	for i, s in ipairs(stalls) do
-		buildStall(s, Vector3.new(sx + (i-1)*sp, ctr.Y, ctr.Z), hub)
+	local asset = loadAndPrepAsset(SHOP_ASSET_ID, "Shop asset")
+	local stallTemplate = nil
+	local shopLoaded = false
+
+	if asset then
+		-- Find best stall template (widest Model at depth >= 2)
+		local best, bestParts = nil, 0
+		local function search(obj, depth)
+			if obj:IsA("Model") and depth >= 2 then
+				local pc = 0
+				for _, d in ipairs(obj:GetDescendants()) do
+					if d:IsA("BasePart") then pc = pc + 1 end
+				end
+				local bmin, bmax = getModelBounds(obj)
+				local sz = bmax - bmin
+				if pc > bestParts and sz.X > 4 and sz.Z > 4 then
+					best = obj; bestParts = pc
+				end
+			end
+			for _, child in ipairs(obj:GetChildren()) do
+				if child:IsA("Model") or child:IsA("Folder") then search(child, depth + 1) end
+			end
+		end
+		search(asset, 0)
+		if not best then
+			for _, child in ipairs(asset:GetChildren()) do
+				if child:IsA("Model") then best = child; break end
+			end
+		end
+		stallTemplate = best
+		if stallTemplate then
+			print("[WorldBuilder] Stall template: " .. stallTemplate.Name .. " (" .. bestParts .. " parts)")
+		end
 	end
 
-	part({ Name = "HubFloor", Size = Vector3.new(tw + 40, 0.2, 30),
-		Position = ctr + Vector3.new(0, 0.1, 0),
-		Color = Color3.fromRGB(140, 215, 170), Parent = hub })
+	if stallTemplate then
+		local totalW = (#stalls - 1) * STALL_SPACING
+		local startX = ctr.X - totalW / 2
+
+		for i, stallCfg in ipairs(stalls) do
+			local x = startX + (i - 1) * STALL_SPACING
+			local targetPos = Vector3.new(x, ctr.Y, ctr.Z)
+
+			local clone = stallTemplate:Clone()
+			clone.Name = "Stall_" .. stallCfg.name
+
+			-- Remove old GUIs and NPCs
+			for _, gui in ipairs(clone:GetDescendants()) do
+				if gui:IsA("BillboardGui") or gui:IsA("SurfaceGui") then gui:Destroy() end
+			end
+			for _, lbl in ipairs(clone:GetDescendants()) do
+				if lbl:IsA("TextLabel") or lbl:IsA("TextButton") then lbl.Text = stallCfg.name end
+			end
+			local humModels = {}
+			for _, desc in ipairs(clone:GetDescendants()) do
+				if desc:IsA("Humanoid") and desc.Parent:IsA("Model") then
+					table.insert(humModels, desc.Parent)
+				end
+			end
+			for _, m in ipairs(humModels) do m:Destroy() end
+
+			for _, part in ipairs(clone:GetDescendants()) do
+				if part:IsA("BasePart") then part.Anchored = true end
+			end
+
+			positionModel(clone, targetPos)
+			clone.Parent = hub
+
+			-- Sign
+			local bmin, bmax = getModelBounds(clone)
+			local signAnchor = p({ Name = "Sign_" .. stallCfg.name,
+				Size = Vector3.new(1, 1, 1),
+				Position = targetPos + Vector3.new(0, (bmax.Y - bmin.Y) + 3, 0),
+				Transparency = 1, CanCollide = false, Parent = hub })
+			billboard(signAnchor, stallCfg.name,
+				DesignConfig.Colors.White,
+				stallCfg.color or Color3.fromRGB(100,100,200),
+				UDim2.new(10, 0, 3, 0), Vector3.new(0, 0, 0))
+
+			-- Our NPC
+			if stallCfg.npc then
+				local npcCfg = stallCfg.npc
+				npcCfg.name = stallCfg.name
+				buildNPC(npcCfg, targetPos + Vector3.new(0, 0, -2), hub)
+			end
+		end
+
+		shopLoaded = true
+		p({ Name = "MarketFloor",
+			Size = Vector3.new(totalW + 50, 0.2, 60),
+			Position = ctr + Vector3.new(0, 0.1, 0),
+			Color = Color3.fromRGB(60, 75, 120),
+			Material = Enum.Material.Cobblestone, Parent = hub })
+	end
+
+	if not shopLoaded then
+		warn("[WorldBuilder] Using fallback stalls")
+		local SP = 26
+		local totalW = (#stalls - 1) * SP
+		local startX = ctr.X - totalW / 2
+		for i, cfg in ipairs(stalls) do
+			local pos = Vector3.new(startX + (i-1)*SP, ctr.Y, ctr.Z)
+			local signPart = p({ Name = "Sign_"..cfg.name,
+				Size = Vector3.new(12, 3.5, 0.4),
+				Position = pos + Vector3.new(0, 13, 0),
+				Color = cfg.color, Transparency = 0.1, Parent = hub })
+			billboard(signPart, cfg.name, DesignConfig.Colors.White, nil,
+				UDim2.new(10,0,3,0), Vector3.new(0,0,0))
+			if cfg.npc then
+				local npcCfg = cfg.npc; npcCfg.name = cfg.name
+				buildNPC(npcCfg, pos, hub)
+			end
+		end
+		p({ Name = "MarketFloor",
+			Size = Vector3.new(totalW + 40, 0.2, 50),
+			Position = ctr + Vector3.new(0, 0.1, 0),
+			Color = Color3.fromRGB(60, 75, 120),
+			Material = Enum.Material.Cobblestone, Parent = hub })
+	end
 end
 
 -------------------------------------------------
--- SINGLE WIDE CONVEYOR with green chevron arrows
+-- SPEED PADS (asset 11651534875)
+-- Two strips: one forward (+Z), one backward (-Z)
 -------------------------------------------------
 
-local function buildConveyor()
+local function buildSpeedPads()
 	local folder = Instance.new("Folder")
-	folder.Name = "Conveyors"
+	folder.Name = "SpeedPads"
 	folder.Parent = Workspace
 
-	local cfg = DesignConfig.Conveyor
-	local w = cfg.Width
-	local startZ = cfg.StartZ
-	local endZ = cfg.EndZ
-	local length = endZ - startZ
-	local centerZ = startZ + length / 2
-	local halfW = w / 2
+	local cfg = DesignConfig.SpeedPad
+	local speed = cfg.Speed
 
-	-- Main dark conveyor surface
-	local strip = part({
-		Name = "ConveyorStrip_1",
-		Size = Vector3.new(w, 0.3, length),
-		Position = Vector3.new(0, 0.55, centerZ),
-		Color = DesignConfig.Colors.ConveyorBase,
-		Reflectance = 0.03,
-		Parent = folder,
-	})
+	local asset = loadAndPrepAsset(cfg.AssetId, "Speed pad")
+	local padTemplate = nil
 
-	-- Purple underglow
-	local glow = Instance.new("PointLight")
-	glow.Color = DesignConfig.Colors.ConveyorGlow
-	glow.Brightness = 0.5
-	glow.Range = 20
-	glow.Parent = strip
-
-	-- GREEN CHEVRON ARROWS (V-shaped, like the reference)
-	for z = startZ + 5, endZ - 10, cfg.ArrowSpacing do
-		-- Center bar of the chevron
-		part({
-			Name = "ChevronBar",
-			Size = Vector3.new(w * 0.6, 0.1, 1.2),
-			Position = Vector3.new(0, 0.72, z),
-			Color = DesignConfig.Colors.ConveyorArrow,
-			Material = Enum.Material.Neon,
-			CanCollide = false,
-			Parent = folder,
-		})
-
-		-- Left wing of chevron (angled)
-		local leftWing = part({
-			Name = "ChevronL",
-			Size = Vector3.new(w * 0.35, 0.1, 1.2),
-			Color = DesignConfig.Colors.ConveyorArrow,
-			Material = Enum.Material.Neon,
-			CanCollide = false,
-			Parent = folder,
-		})
-		leftWing.CFrame = CFrame.new(Vector3.new(-w * 0.18, 0.72, z + 2.5))
-			* CFrame.Angles(0, math.rad(35), 0)
-
-		-- Right wing of chevron (angled)
-		local rightWing = part({
-			Name = "ChevronR",
-			Size = Vector3.new(w * 0.35, 0.1, 1.2),
-			Color = DesignConfig.Colors.ConveyorArrow,
-			Material = Enum.Material.Neon,
-			CanCollide = false,
-			Parent = folder,
-		})
-		rightWing.CFrame = CFrame.new(Vector3.new(w * 0.18, 0.72, z + 2.5))
-			* CFrame.Angles(0, math.rad(-35), 0)
-	end
-
-	-- Side accent lines (thin neon)
-	for _, side in ipairs({-1, 1}) do
-		part({
-			Name = "SideLine",
-			Size = Vector3.new(0.5, 0.15, length),
-			Position = Vector3.new(side * (halfW - 0.5), 0.72, centerZ),
-			Color = DesignConfig.Colors.ConveyorStripe,
-			Material = Enum.Material.Neon,
-			CanCollide = false,
-			Parent = folder,
-		})
-	end
-
-	-- Side rails
-	for _, side in ipairs({-1, 1}) do
-		part({
-			Name = "Rail",
-			Size = Vector3.new(cfg.RailWidth, cfg.RailHeight, length + 6),
-			Position = Vector3.new(side * (halfW + cfg.RailWidth/2 + 0.5), cfg.RailHeight/2 + 0.5, centerZ),
-			Color = DesignConfig.Colors.ConveyorBorder,
-			Parent = folder,
-		})
-	end
-
-	-- PURPLE GLOW ENTRANCE (like reference — glowing purple arch)
-	local glowEntry = part({
-		Name = "GlowEntry",
-		Size = Vector3.new(w + 8, 10, 4),
-		Position = Vector3.new(0, 5.5, startZ - 2),
-		Color = DesignConfig.Colors.ConveyorGlow,
-		Material = Enum.Material.Neon,
-		Transparency = 0.55,
-		CanCollide = false,
-		Parent = folder,
-	})
-	local entryLight = Instance.new("PointLight")
-	entryLight.Color = DesignConfig.Colors.ConveyorGlow
-	entryLight.Brightness = 3
-	entryLight.Range = 40
-	entryLight.Parent = glowEntry
-
-	billboard(glowEntry, "SPEED BOOST", DesignConfig.Colors.ConveyorArrow, nil, Vector3.new(0, 3, 0))
-
-	-- PUSH LOGIC
-	strip.Touched:Connect(function(hit)
-		local char = hit.Parent
-		if not char then return end
-		local hum = char:FindFirstChildOfClass("Humanoid")
-		local root = char:FindFirstChild("HumanoidRootPart")
-		if not hum or not root then return end
-		if root:FindFirstChild("ConveyorPush") then return end
-
-		local bv = Instance.new("BodyVelocity")
-		bv.Name = "ConveyorPush"
-		bv.Velocity = Vector3.new(0, 0, cfg.Speed)
-		bv.MaxForce = Vector3.new(0, 0, 60000)
-		bv.P = 1250
-		bv.Parent = root
-	end)
-
-	strip.TouchEnded:Connect(function(hit)
-		local char = hit.Parent
-		if not char then return end
-		local root = char:FindFirstChild("HumanoidRootPart")
-		if not root then return end
-		task.delay(0.15, function()
-			local still = false
-			for _, p in ipairs(root:GetTouchingParts()) do
-				if p.Name:match("^ConveyorStrip") then still = true; break end
+	if asset then
+		-- Log children
+		print("[WorldBuilder] Speed pad asset children:")
+		for _, child in ipairs(asset:GetChildren()) do
+			local pc = 0
+			for _, d in ipairs(child:GetDescendants()) do
+				if d:IsA("BasePart") then pc = pc + 1 end
 			end
-			if not still then
-				local push = root:FindFirstChild("ConveyorPush")
-				if push then push:Destroy() end
+			print("  " .. child.ClassName .. ": " .. child.Name .. " (" .. pc .. " parts)")
+			if pc > 0 and not padTemplate then padTemplate = child end
+		end
+		if not padTemplate then padTemplate = asset end
+
+		-- Log template bounds
+		local bmin, bmax = getModelBounds(padTemplate)
+		local sz = bmax - bmin
+		print("[WorldBuilder] Speed pad template: " .. padTemplate.Name
+			.. " size=" .. string.format("%.0fx%.0fx%.0f", sz.X, sz.Y, sz.Z))
+	end
+
+	local function placeStrip(name, xPos, yRot, pushZ)
+		local stripFolder = Instance.new("Model")
+		stripFolder.Name = name
+
+		if padTemplate then
+			local tmin, tmax = getModelBounds(padTemplate)
+			local sz = tmax - tmin
+			local totalLen = cfg.Length or 300
+
+			print("[WorldBuilder] Speed pad size: " .. string.format("%.0fx%.0fx%.0f", sz.X, sz.Y, sz.Z))
+
+			-- Determine which axis is longer and whether we need to rotate
+			local needRotate = sz.X > sz.Z
+			local tileStep = needRotate and sz.X or sz.Z
+			if tileStep < 2 then tileStep = 6 end
+
+			-- Overlap tiles generously to eliminate all visible seams
+			local overlap = tileStep * 0.15
+			local effectiveStep = tileStep - overlap
+
+			local startZ = cfg.CenterZ - totalLen / 2
+			local numTiles = math.ceil(totalLen / effectiveStep)
+			local baseRot = needRotate and 90 or 0
+
+			print("[WorldBuilder] Tiling " .. numTiles .. " pads seamlessly (step=" .. string.format("%.1f", effectiveStep) .. ")")
+
+			for i = 0, numTiles - 1 do
+				local tile = padTemplate:Clone()
+				tile.Name = "Tile_" .. i
+				for _, part in ipairs(tile:GetDescendants()) do
+					if part:IsA("BasePart") then part.Anchored = true end
+				end
+				local tileZ = startZ + i * effectiveStep
+				positionModel(tile, Vector3.new(xPos, 0.5, tileZ), baseRot + yRot)
+				tile.Parent = stripFolder
 			end
-		end)
-	end)
+		else
+			-- Fallback: one long plain strip
+			p({ Name = "Strip", Size = Vector3.new(20, 0.5, cfg.Length),
+				Position = Vector3.new(xPos, 0.75, cfg.CenterZ),
+				Color = DesignConfig.Colors.ConveyorBase, Parent = stripFolder })
+		end
+
+		stripFolder.Parent = folder
+
+		-- Collect all pad parts for overlap checking
+		local padParts = {}
+		for _, part in ipairs(stripFolder:GetDescendants()) do
+			if part:IsA("BasePart") then
+				table.insert(padParts, part)
+			end
+		end
+
+		-- Helper: check if a root part is still touching any pad in this strip
+		local function stillOnPad(root)
+			for _, pp in ipairs(padParts) do
+				-- Check overlap via distance (more reliable than GetTouchingParts)
+				local dist = (root.Position - pp.Position)
+				local halfSize = pp.Size / 2 + Vector3.new(2, 2, 2) -- generous margin
+				if math.abs(dist.X) < halfSize.X
+					and math.abs(dist.Y) < halfSize.Y + 3
+					and math.abs(dist.Z) < halfSize.Z then
+					return true
+				end
+			end
+			return false
+		end
+
+		-- Wire push logic to ALL parts in the strip
+		for _, part in ipairs(padParts) do
+			part.Touched:Connect(function(hit)
+				local char = hit.Parent; if not char then return end
+				local hum = char:FindFirstChildOfClass("Humanoid")
+				local root = char:FindFirstChild("HumanoidRootPart")
+				if not hum or not root then return end
+				-- Update velocity if already has push, or create new
+				local existing = root:FindFirstChild("SpeedPush")
+				if existing then
+					existing.Velocity = Vector3.new(0, 0, pushZ)
+					return
+				end
+				local bv = Instance.new("BodyVelocity")
+				bv.Name = "SpeedPush"
+				bv.MaxForce = Vector3.new(0, 0, 50000)
+				bv.Velocity = Vector3.new(0, 0, pushZ)
+				bv.Parent = root
+			end)
+			part.TouchEnded:Connect(function(hit)
+				local char = hit.Parent; if not char then return end
+				local root = char:FindFirstChild("HumanoidRootPart")
+				if not root then return end
+				-- Wait a moment then check if still on ANY pad tile
+				task.delay(0.3, function()
+					if not stillOnPad(root) then
+						local psh = root:FindFirstChild("SpeedPush")
+						if psh then psh:Destroy() end
+					end
+				end)
+			end)
+		end
+		return stripFolder
+	end
+
+	-- Forward (+Z) on the left, Backward (-Z) on the right rotated 180
+	local fwd = placeStrip("SpeedPad_Forward",  -cfg.StripGap, 0,   speed)
+	local bwd = placeStrip("SpeedPad_Backward",  cfg.StripGap, 180, -speed)
+
+	-- Debug: log final positions
+	if fwd then
+		local fmin, fmax = getModelBounds(fwd)
+		print("[WorldBuilder] Forward pad: " .. tostring(fmin) .. " to " .. tostring(fmax))
+	end
+	if bwd then
+		local bmin, bmax = getModelBounds(bwd)
+		print("[WorldBuilder] Backward pad: " .. tostring(bmin) .. " to " .. tostring(bmax))
+	end
+
+	print("[WorldBuilder] Speed pads placed")
 end
 
 -------------------------------------------------
--- PALM TREES (taller, more tropical like reference)
+-- PLAYER BASES (asset 112269866373242)
+-- 4 bases: 2 left, 2 right of speed pads
+-- BaseService handles the per-player pad grid
+-------------------------------------------------
+
+local function buildBaseSlots()
+	local asset = loadAndPrepAsset(DesignConfig.BaseAsset.AssetId, "Base asset")
+
+	-- Find the actual base model
+	local baseTemplate = nil
+	if asset then
+		for _, child in ipairs(asset:GetChildren()) do
+			local pc = 0
+			for _, d in ipairs(child:GetDescendants()) do
+				if d:IsA("BasePart") then pc = pc + 1 end
+			end
+			if pc > 0 then baseTemplate = child; break end
+		end
+		if not baseTemplate then baseTemplate = asset end
+
+		-- Store template in ReplicatedStorage for BaseService pad grid
+		local stored = baseTemplate:Clone()
+		stored.Name = "BaseTemplate"
+		stored.Parent = ReplicatedStorage
+		print("[WorldBuilder] Base template stored (" .. #stored:GetDescendants() .. " descendants)")
+	end
+
+	-- Place ALL 4 base structures immediately (always visible)
+	local basesFolder = Workspace:FindFirstChild("PlayerBases")
+	if not basesFolder then
+		basesFolder = Instance.new("Folder")
+		basesFolder.Name = "PlayerBases"
+		basesFolder.Parent = Workspace
+	end
+
+	for i, slotInfo in ipairs(DesignConfig.BasePositions) do
+		local basePos = slotInfo.position
+		local rotation = slotInfo.rotation or 0
+
+		if baseTemplate then
+			local clone = baseTemplate:Clone()
+			clone.Name = "BaseSlot_" .. i
+
+			for _, part in ipairs(clone:GetDescendants()) do
+				if part:IsA("BasePart") then part.Anchored = true end
+			end
+			for _, hum in ipairs(clone:GetDescendants()) do
+				if hum:IsA("Humanoid") then
+					hum.WalkSpeed = 0; hum.JumpPower = 0
+					hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+				end
+			end
+
+			-- Remove yellow/glowing circular parts (spawn markers from asset)
+			for _, part in ipairs(clone:GetDescendants()) do
+				if part:IsA("BasePart") then
+					local r, g, b = part.Color.R, part.Color.G, part.Color.B
+					local isYellow = (r > 0.7 and g > 0.6 and b < 0.4)
+					local isSmallCircle = (part.Shape == Enum.PartType.Cylinder or part.Shape == Enum.PartType.Ball)
+						and math.max(part.Size.X, part.Size.Y, part.Size.Z) < 10
+					local isGlowing = part.Material == Enum.Material.Neon
+					-- Remove yellow parts, neon parts, or small cylinders/balls that look like markers
+					if (isYellow and (isSmallCircle or isGlowing))
+						or (isGlowing and isYellow) then
+						part:Destroy()
+					end
+				end
+				-- Also remove SpawnLocations
+				if part:IsA("SpawnLocation") then part:Destroy() end
+			end
+
+			positionModel(clone, basePos, rotation)
+			clone.Parent = basesFolder
+			print("[WorldBuilder] Placed base slot " .. i .. " at " .. tostring(basePos) .. " rot=" .. rotation)
+		else
+			-- Fallback: simple floor
+			p({ Name = "BaseSlot_" .. i,
+				Size = Vector3.new(60, 1, 60),
+				Position = basePos,
+				Color = DesignConfig.Colors.BaseFloor,
+				Parent = basesFolder })
+		end
+	end
+
+	print("[WorldBuilder] All " .. #DesignConfig.BasePositions .. " base structures placed!")
+end
+
+-------------------------------------------------
+-- PALM TREES
 -------------------------------------------------
 
 local function buildTree(pos, parent)
 	local m = Instance.new("Model")
 	m.Name = "PalmTree"
-
-	-- Trunk (slightly curved look with 2 segments)
-	part({ Name = "Trunk1", Size = Vector3.new(2, 10, 2),
+	p({ Name = "Trunk1", Size = Vector3.new(2, 10, 2),
 		Position = pos + Vector3.new(0, 5, 0),
 		Color = Color3.fromRGB(150, 105, 50), Parent = m })
-	part({ Name = "Trunk2", Size = Vector3.new(1.8, 8, 1.8),
+	p({ Name = "Trunk2", Size = Vector3.new(1.8, 8, 1.8),
 		Position = pos + Vector3.new(0.5, 13, 0.3),
 		Color = Color3.fromRGB(160, 115, 55), Parent = m })
-
-	-- Leaves radiating outward
 	local lc = Color3.fromRGB(55, 185, 65)
-	local leaves = {
+	for _, leaf in ipairs({
 		{Vector3.new(5, 16, 0), Vector3.new(7, 0.5, 3)},
 		{Vector3.new(-5, 16, 0), Vector3.new(7, 0.5, 3)},
 		{Vector3.new(0, 16, 5), Vector3.new(3, 0.5, 7)},
 		{Vector3.new(0, 16, -5), Vector3.new(3, 0.5, 7)},
-		{Vector3.new(4, 16.5, 4), Vector3.new(6, 0.5, 3)},
-		{Vector3.new(-4, 16.5, -4), Vector3.new(6, 0.5, 3)},
-		{Vector3.new(4, 16.5, -4), Vector3.new(6, 0.5, 3)},
-		{Vector3.new(-4, 16.5, 4), Vector3.new(6, 0.5, 3)},
-	}
-	for i, l in ipairs(leaves) do
-		part({ Name = "Leaf"..i, Size = l[2], Position = pos + l[1],
+	}) do
+		p({ Name = "Leaf", Size = leaf[2], Position = pos + leaf[1],
 			Color = lc, Parent = m })
 	end
-	-- Top ball
-	part({ Name = "Top", Size = Vector3.new(3, 2.5, 3),
+	p({ Name = "Top", Size = Vector3.new(3, 2.5, 3),
 		Position = pos + Vector3.new(0.5, 17, 0.3),
 		Color = Color3.fromRGB(45, 165, 55), Parent = m })
-
 	m.Parent = parent
-	return m
 end
 
 local function buildDecorations()
 	local deco = Instance.new("Folder")
 	deco.Name = "Decorations"
 	deco.Parent = Workspace
-
 	local halfW = DesignConfig.MapWidth / 2 - 20
-
-	-- Trees along map edges
-	for z = -60, 850, 80 do
+	for z = -60, 600, 120 do
 		buildTree(Vector3.new(-halfW, 0, z), deco)
 		buildTree(Vector3.new(halfW, 0, z), deco)
 	end
-
-	-- Trees between bases and edge
-	for z = 50, 800, 150 do
-		buildTree(Vector3.new(-halfW + 30, 0, z + 30), deco)
-		buildTree(Vector3.new(halfW - 30, 0, z + 30), deco)
-	end
-
-	-- Trees near hub
-	buildTree(Vector3.new(-70, 0, -120), deco)
-	buildTree(Vector3.new(70, 0, -120), deco)
-	buildTree(Vector3.new(-40, 0, -40), deco)
-	buildTree(Vector3.new(40, 0, -40), deco)
 end
 
 -------------------------------------------------
@@ -395,7 +659,7 @@ local function buildSpawn()
 	local sp = Instance.new("SpawnLocation")
 	sp.Name = "SpawnPoint"
 	sp.Anchored = true
-	sp.Size = Vector3.new(10, 1, 10)
+	sp.Size = Vector3.new(12, 1, 12)
 	sp.Position = Vector3.new(0, 0.5, -40)
 	sp.Color = Color3.fromRGB(140, 230, 175)
 	sp.Material = Enum.Material.SmoothPlastic
@@ -412,12 +676,8 @@ local function buildPaths()
 	local pf = Instance.new("Folder")
 	pf.Name = "Paths"
 	pf.Parent = Workspace
-
-	part({ Name = "PathToHub", Size = Vector3.new(10, 0.15, 40),
-		Position = Vector3.new(0, 0.1, -60),
-		Color = DesignConfig.Colors.PathColor, Parent = pf })
-	part({ Name = "PathToConv", Size = Vector3.new(10, 0.15, 50),
-		Position = Vector3.new(0, 0.1, -15),
+	p({ Name = "PathToHub", Size = Vector3.new(10, 0.15, 60),
+		Position = Vector3.new(0, 0.1, -70),
 		Color = DesignConfig.Colors.PathColor, Parent = pf })
 end
 
@@ -428,7 +688,7 @@ end
 function WorldBuilder.Build()
 	for _, name in ipairs({
 		"Baseplate", "Water", "Hub", "Decorations",
-		"SpawnPoint", "Paths", "PlayerBases", "Conveyors",
+		"SpawnPoint", "Paths", "PlayerBases", "PlayerBaseData", "SpeedPads", "Conveyors",
 	}) do
 		local e = Workspace:FindFirstChild(name)
 		if e then e:Destroy() end
@@ -437,14 +697,13 @@ function WorldBuilder.Build()
 	setupLighting()
 	buildBaseplate()
 	buildHub()
-	buildConveyor()
+	buildSpeedPads()
+	buildBaseSlots()
 	buildDecorations()
 	buildSpawn()
 	buildPaths()
 
-	print("[WorldBuilder] Map built — " ..
-		DesignConfig.MapWidth .. "x" .. DesignConfig.MapLength ..
-		" with single conveyor & 16 base slots")
+	print("[WorldBuilder] Built — shops + speed pads + 4 base structures placed")
 end
 
 return WorldBuilder

@@ -1,8 +1,8 @@
 --[[
 	BaseService.lua
-	Manages per-player bases: 8 bases on each side of the central
-	conveyor (16 total). Assigns positions, builds the physical base
-	(dark gray floor, yellow border, pads), cleans up on leave.
+	Manages per-player bases: 8 bases total (4 per side of the speed pads).
+	Base structures are placed by WorldBuilder; this service adds
+	player name signs, pad grids, and handles equip/unequip.
 ]]
 
 local Players = game:GetService("Players")
@@ -27,30 +27,10 @@ BaseService._occupiedSlots = {}  -- set of occupied slot indices
 local PlayerData
 
 -------------------------------------------------
--- POSITION CALCULATION
--- 2 columns (left + right of conveyor) x 8 rows = 16 base slots.
--- Fills alternating sides so players spread evenly.
+-- POSITION CALCULATION — 8 fixed positions
 -------------------------------------------------
 
-local BASE_POSITIONS = {} -- pre-calculated list of Vector3 positions
-
-do
-	local cfg = DesignConfig.Base
-	local cols = cfg.Columns   -- { LeftColumnX, RightColumnX }
-	local rowStart = cfg.RowStartZ
-	local rowSpace = cfg.RowSpacing
-	local perSide = cfg.BasesPerSide or 8
-
-	-- Fill positions: alternating left/right within each row
-	local idx = 0
-	for row = 0, perSide - 1 do
-		for _, colX in ipairs(cols) do
-			idx = idx + 1
-			local z = rowStart + row * rowSpace
-			BASE_POSITIONS[idx] = Vector3.new(colX, 0.5, z)
-		end
-	end
-end
+local BASE_POSITIONS = DesignConfig.BasePositions  -- array of {position, rotation}
 
 local function findAvailableSlot(): number
 	for i = 1, #BASE_POSITIONS do
@@ -58,24 +38,11 @@ local function findAvailableSlot(): number
 			return i
 		end
 	end
-	-- Overflow: stack more rows
-	return #BASE_POSITIONS + 1
-end
-
-local function getBasePosition(slotIndex: number): Vector3
-	if BASE_POSITIONS[slotIndex] then
-		return BASE_POSITIONS[slotIndex]
-	end
-	-- Overflow fallback: put extra bases further out
-	local cfg = DesignConfig.Base
-	local overflowRow = math.floor((slotIndex - 1) / #cfg.Columns)
-	local overflowCol = ((slotIndex - 1) % #cfg.Columns) + 1
-	local colX = cfg.Columns[overflowCol] or 0
-	return Vector3.new(colX, 0.5, cfg.RowStartZ + overflowRow * cfg.RowSpacing)
+	return nil  -- server full (8 max)
 end
 
 -------------------------------------------------
--- BUILD BASE
+-- HELPERS
 -------------------------------------------------
 
 local function createPart(props)
@@ -95,113 +62,90 @@ local function createPart(props)
 	return part
 end
 
-local function buildBase(player, basePosition: Vector3)
-	local cfg = DesignConfig.Base
+-------------------------------------------------
+-- BUILD BASE (structure placed by WorldBuilder;
+-- here we only add name sign + pad grid)
+-------------------------------------------------
+
+local function buildBase(player, slotIndex)
+	local slotInfo = BASE_POSITIONS[slotIndex]
+	local basePosition = slotInfo.position
+
+	-- Base STRUCTURE is already placed by WorldBuilder.
+	-- We add the player name to the asset's billboard + pad grid.
+
 	local model = Instance.new("Model")
 	model.Name = "Base_" .. player.UserId
 
-	-- BASE FLOOR
-	createPart({
-		Name = "BaseFloor",
-		Size = cfg.FloorSize,
-		Position = basePosition,
-		Color = DesignConfig.Colors.BaseFloor,
-		Material = Enum.Material.SmoothPlastic,
-		Reflectance = 0.05,
-		Parent = model,
-	})
-
-	-- YELLOW BORDER (4 edges)
-	local halfW = cfg.FloorWidth / 2
-	local halfD = cfg.FloorDepth / 2
-	local bh = cfg.BorderHeight
-	local bt = cfg.BorderThickness
-
-	createPart({
-		Name = "BorderFront",
-		Size = Vector3.new(cfg.FloorWidth + bt * 2, bh, bt),
-		Position = basePosition + Vector3.new(0, bh / 2, -halfD - bt / 2),
-		Color = DesignConfig.Colors.BaseBorder,
-		Material = Enum.Material.Neon,
-		Parent = model,
-	})
-	createPart({
-		Name = "BorderBack",
-		Size = Vector3.new(cfg.FloorWidth + bt * 2, bh, bt),
-		Position = basePosition + Vector3.new(0, bh / 2, halfD + bt / 2),
-		Color = DesignConfig.Colors.BaseBorder,
-		Material = Enum.Material.Neon,
-		Parent = model,
-	})
-	createPart({
-		Name = "BorderLeft",
-		Size = Vector3.new(bt, bh, cfg.FloorDepth),
-		Position = basePosition + Vector3.new(-halfW - bt / 2, bh / 2, 0),
-		Color = DesignConfig.Colors.BaseBorder,
-		Material = Enum.Material.Neon,
-		Parent = model,
-	})
-	createPart({
-		Name = "BorderRight",
-		Size = Vector3.new(bt, bh, cfg.FloorDepth),
-		Position = basePosition + Vector3.new(halfW + bt / 2, bh / 2, 0),
-		Color = DesignConfig.Colors.BaseBorder,
-		Material = Enum.Material.Neon,
-		Parent = model,
-	})
-
-	-- PLAYER NAME SIGN
-	local signPart = createPart({
+	-- PLAYER NAME — floating above the base, visible from anywhere
+	local signAnchor = createPart({
 		Name = "NameSign",
-		Size = Vector3.new(20, 4, 0.5),
-		Position = basePosition + Vector3.new(0, 5, -halfD - 1),
-		Color = DesignConfig.Colors.BaseFloor,
-		Material = Enum.Material.SmoothPlastic,
+		Size = Vector3.new(1, 1, 1),
+		Position = basePosition + Vector3.new(0, 40, 0),
+		Transparency = 1,
+		CanCollide = false,
 		Parent = model,
 	})
 
-	local billboard = Instance.new("BillboardGui")
-	billboard.Size = UDim2.new(10, 0, 2, 0)
-	billboard.AlwaysOnTop = false
-	billboard.Parent = signPart
+	local bb = Instance.new("BillboardGui")
+	bb.Name = "NameGui"
+	bb.Size = UDim2.new(0, 400, 0, 80)
+	bb.AlwaysOnTop = false
+	bb.MaxDistance = 200
+	bb.Parent = signAnchor
 
 	local nameLabel = Instance.new("TextLabel")
 	nameLabel.Size = UDim2.new(1, 0, 1, 0)
 	nameLabel.BackgroundTransparency = 1
-	nameLabel.TextColor3 = DesignConfig.Colors.White
-	nameLabel.Font = DesignConfig.Fonts.Primary
+	nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+	nameLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+	nameLabel.TextStrokeTransparency = 0.3
+	nameLabel.Font = Enum.Font.GothamBold
 	nameLabel.TextScaled = true
 	nameLabel.Text = player.Name .. "'s Base"
-	nameLabel.Parent = billboard
+	nameLabel.Parent = bb
 
-	-- PAD GRID
+	-- PAD GRID (placed on top of the base structure)
+	-- Pads are numbered COLUMN-FIRST starting from the entrance side.
+	-- The entrance faces the speed pad (toward X=0), so:
+	--   Left bases (rotation 90): entrance is on the +X side → start from rightmost col
+	--   Right bases (rotation -90): entrance is on the -X side → start from leftmost col
 	local padsFolder = Instance.new("Folder")
 	padsFolder.Name = "Pads"
 	padsFolder.Parent = model
 
+	local cfg = DesignConfig.Base
+	local rotation = slotInfo.rotation or 0
 	local gridWidth = (cfg.PadCols - 1) * cfg.PadSpacing
 	local gridDepth = (cfg.PadRows - 1) * cfg.PadSpacing
 	local gridStartX = basePosition.X - gridWidth / 2
 	local gridStartZ = basePosition.Z - gridDepth / 2
 
+	-- Build column order: entrance column first
+	local colOrder = {}
+	if rotation > 0 then
+		-- Left base → entrance on +X side → start from highest column
+		for c = cfg.PadCols - 1, 0, -1 do table.insert(colOrder, c) end
+	else
+		-- Right base → entrance on -X side → start from lowest column
+		for c = 0, cfg.PadCols - 1 do table.insert(colOrder, c) end
+	end
+
 	local padIndex = 0
-	for row = 0, cfg.PadRows - 1 do
-		for col = 0, cfg.PadCols - 1 do
+	for _, col in ipairs(colOrder) do
+		for row = 0, cfg.PadRows - 1 do
 			padIndex = padIndex + 1
 
 			local padX = gridStartX + col * cfg.PadSpacing
 			local padZ = gridStartZ + row * cfg.PadSpacing
-			local padPos = Vector3.new(padX, basePosition.Y + 0.1, padZ)
+			local padPos = Vector3.new(padX, basePosition.Y + 0.6, padZ)
 
 			local isPremium = padIndex == SlotsConfig.PremiumSlotIndex
-			local isStarter = padIndex == 1
+			local isStarter = padIndex <= SlotsConfig.StartingSlots
 
 			local padColor = DesignConfig.Colors.PadLocked
-			local padMaterial = Enum.Material.SmoothPlastic
-
 			if isStarter then
 				padColor = DesignConfig.Colors.PadStarter
-				padMaterial = Enum.Material.Neon
 			elseif isPremium then
 				padColor = DesignConfig.Colors.PadPremium
 			end
@@ -211,11 +155,10 @@ local function buildBase(player, basePosition: Vector3)
 				Size = cfg.PadSize,
 				Position = padPos,
 				Color = padColor,
-				Material = padMaterial,
+				Material = Enum.Material.SmoothPlastic,
 				Parent = padsFolder,
 			})
 
-			-- Pad border frame
 			createPart({
 				Name = "PadBorder",
 				Size = Vector3.new(cfg.PadSize.X + 0.5, cfg.PadSize.Y - 0.2, cfg.PadSize.Z + 0.5),
@@ -224,45 +167,20 @@ local function buildBase(player, basePosition: Vector3)
 				Material = Enum.Material.SmoothPlastic,
 				Parent = pad,
 			})
-
-			-- Light
-			local light = Instance.new("PointLight")
-			light.Color = padColor
-			light.Brightness = isStarter and 1 or 0.3
-			light.Range = 8
-			light.Parent = pad
-
-			-- Green diamond markers between pads
-			if col < cfg.PadCols - 1 and row < cfg.PadRows - 1 then
-				local markerPos = Vector3.new(
-					padX + cfg.PadSpacing / 2,
-					basePosition.Y + 0.15,
-					padZ + cfg.PadSpacing / 2
-				)
-				local marker = createPart({
-					Name = "Marker",
-					Size = Vector3.new(1.5, 0.15, 1.5),
-					Position = markerPos,
-					Color = DesignConfig.Colors.PadMarker,
-					Material = Enum.Material.Neon,
-					CanCollide = false,
-					Parent = model,
-				})
-				marker.CFrame = CFrame.new(markerPos) * CFrame.Angles(0, math.rad(45), 0)
-			end
 		end
 	end
 
-	-- Parent to bases folder
-	local basesFolder = Workspace:FindFirstChild("PlayerBases")
+	-- Parent to a player-specific folder
+	local basesFolder = Workspace:FindFirstChild("PlayerBaseData")
 	if not basesFolder then
 		basesFolder = Instance.new("Folder")
-		basesFolder.Name = "PlayerBases"
+		basesFolder.Name = "PlayerBaseData"
 		basesFolder.Parent = Workspace
 	end
 	model.Parent = basesFolder
 
-	return model
+	print("[BaseService] Assigned " .. player.Name .. " to base slot " .. slotIndex)
+	return model, basePosition
 end
 
 -------------------------------------------------
@@ -292,140 +210,24 @@ function BaseService.UpdateBasePads(player)
 
 		local isUnlocked = idx <= totalSlots
 		local isPremium = idx == SlotsConfig.PremiumSlotIndex
-		local isStarter = idx == 1
+		local isStarter = idx <= SlotsConfig.StartingSlots
 		local equippedStreamer = data.equippedPads[tostring(idx)]
 
-		-- Color / Material
 		if isUnlocked then
-			if isStarter then
-				pad.Color = DesignConfig.Colors.PadStarter
-			elseif isPremium then
+			if isPremium then
 				pad.Color = DesignConfig.Colors.PadPremium
+			elseif isStarter then
+				pad.Color = DesignConfig.Colors.PadStarter
 			else
 				pad.Color = DesignConfig.Colors.PadUnlocked
 			end
-			pad.Material = Enum.Material.Neon
 		else
 			pad.Color = DesignConfig.Colors.PadLocked
-			pad.Material = Enum.Material.SmoothPlastic
 		end
 
-		-- Light
-		local light = pad:FindFirstChildOfClass("PointLight")
-		if light then
-			light.Brightness = isUnlocked and 0.8 or 0.2
-			light.Color = pad.Color
-		end
-
-		-- Billboard
+		-- Remove any old billboard text
 		local oldBB = pad:FindFirstChildOfClass("BillboardGui")
 		if oldBB then oldBB:Destroy() end
-
-		if isUnlocked and equippedStreamer then
-			local streamerInfo = Streamers.ById[equippedStreamer]
-			local rarityColor = DesignConfig.RarityColors[
-				(streamerInfo or {}).rarity or "Common"
-			] or Color3.fromRGB(100, 100, 100)
-
-			local bb = Instance.new("BillboardGui")
-			bb.Size = UDim2.new(6, 0, 3, 0)
-			bb.StudsOffset = Vector3.new(0, 3, 0)
-			bb.AlwaysOnTop = false
-			bb.Parent = pad
-
-			local frame = Instance.new("Frame")
-			frame.Size = UDim2.new(1, 0, 1, 0)
-			frame.BackgroundColor3 = rarityColor
-			frame.BackgroundTransparency = 0.3
-			frame.BorderSizePixel = 0
-			frame.Parent = bb
-
-			local corner = Instance.new("UICorner")
-			corner.CornerRadius = UDim.new(0.15, 0)
-			corner.Parent = frame
-
-			local nameText = Instance.new("TextLabel")
-			nameText.Size = UDim2.new(1, 0, 0.6, 0)
-			nameText.BackgroundTransparency = 1
-			nameText.TextColor3 = DesignConfig.Colors.White
-			nameText.Font = DesignConfig.Fonts.Primary
-			nameText.TextScaled = true
-			nameText.Text = streamerInfo and streamerInfo.displayName or equippedStreamer
-			nameText.Parent = frame
-
-			local rarityText = Instance.new("TextLabel")
-			rarityText.Size = UDim2.new(1, 0, 0.4, 0)
-			rarityText.Position = UDim2.new(0, 0, 0.6, 0)
-			rarityText.BackgroundTransparency = 1
-			rarityText.TextColor3 = Color3.fromRGB(220, 220, 220)
-			rarityText.Font = DesignConfig.Fonts.Secondary
-			rarityText.TextScaled = true
-			rarityText.Text = streamerInfo and streamerInfo.rarity or "?"
-			rarityText.Parent = frame
-
-		elseif isUnlocked then
-			local bb = Instance.new("BillboardGui")
-			bb.Size = UDim2.new(5, 0, 1.5, 0)
-			bb.StudsOffset = Vector3.new(0, 2.5, 0)
-			bb.AlwaysOnTop = false
-			bb.Parent = pad
-
-			local label = Instance.new("TextLabel")
-			label.Size = UDim2.new(1, 0, 1, 0)
-			label.BackgroundTransparency = 1
-			label.TextColor3 = Color3.fromRGB(150, 255, 180)
-			label.Font = DesignConfig.Fonts.Secondary
-			label.TextScaled = true
-			label.Text = "EMPTY SLOT"
-			label.Parent = bb
-
-		elseif isPremium then
-			local bb = Instance.new("BillboardGui")
-			bb.Size = UDim2.new(6, 0, 2, 0)
-			bb.StudsOffset = Vector3.new(0, 3, 0)
-			bb.AlwaysOnTop = false
-			bb.Parent = pad
-
-			local label = Instance.new("TextLabel")
-			label.Size = UDim2.new(1, 0, 0.5, 0)
-			label.BackgroundTransparency = 1
-			label.TextColor3 = DesignConfig.Colors.PadPremium
-			label.Font = DesignConfig.Fonts.Primary
-			label.TextScaled = true
-			label.Text = "PREMIUM SLOT"
-			label.Parent = bb
-
-			local idxLabel = Instance.new("TextLabel")
-			idxLabel.Size = UDim2.new(1, 0, 0.5, 0)
-			idxLabel.Position = UDim2.new(0, 0, 0.5, 0)
-			idxLabel.BackgroundTransparency = 1
-			idxLabel.TextColor3 = DesignConfig.Colors.TextSecondary
-			idxLabel.Font = DesignConfig.Fonts.Secondary
-			idxLabel.TextScaled = true
-			idxLabel.Text = "© " .. tostring(idx)
-			idxLabel.Parent = bb
-		else
-			local rebirthNeeded = SlotsConfig.GetRebirthForSlot(idx)
-			local lockText = "LOCKED"
-			if rebirthNeeded >= 0 then
-				lockText = "LOCKED\n(Rebirth " .. rebirthNeeded .. ")"
-			end
-
-			local bb = Instance.new("BillboardGui")
-			bb.Size = UDim2.new(5, 0, 2, 0)
-			bb.StudsOffset = Vector3.new(0, 2.5, 0)
-			bb.AlwaysOnTop = false
-			bb.Parent = pad
-
-			local label = Instance.new("TextLabel")
-			label.Size = UDim2.new(1, 0, 1, 0)
-			label.BackgroundTransparency = 1
-			label.TextColor3 = Color3.fromRGB(255, 100, 100)
-			label.Font = DesignConfig.Fonts.Primary
-			label.TextScaled = true
-			label.Text = lockText
-			label.Parent = bb
-		end
 	end
 end
 
@@ -436,23 +238,20 @@ end
 function BaseService.Init(playerDataModule)
 	PlayerData = playerDataModule
 
-	-- Create bases folder
-	local existing = Workspace:FindFirstChild("PlayerBases")
-	if not existing then
-		local folder = Instance.new("Folder")
-		folder.Name = "PlayerBases"
-		folder.Parent = Workspace
-	end
+	-- PlayerBases folder (base structures) is created by WorldBuilder.
+	-- PlayerBaseData folder (per-player pads/signs) is created on demand.
 
-	-- Player join
 	Players.PlayerAdded:Connect(function(player)
 		task.wait(1)
 
 		local slot = findAvailableSlot()
-		local position = getBasePosition(slot)
+		if not slot then
+			warn("[BaseService] Server full (8 max), no slot for " .. player.Name)
+			return
+		end
 
 		BaseService._occupiedSlots[slot] = true
-		local model = buildBase(player, position)
+		local model, position = buildBase(player, slot)
 
 		BaseService._bases[player.UserId] = {
 			position = position,
@@ -468,23 +267,22 @@ function BaseService.Init(playerDataModule)
 		})
 	end)
 
-	-- Player leave
 	Players.PlayerRemoving:Connect(function(player)
 		local baseInfo = BaseService._bases[player.UserId]
 		if baseInfo then
+			-- Name sign is part of the player model, destroyed automatically
+
 			BaseService._occupiedSlots[baseInfo.slotIndex] = nil
 			if baseInfo.model then baseInfo.model:Destroy() end
 			BaseService._bases[player.UserId] = nil
 		end
 	end)
 
-	-- Equip request
 	EquipRequest.OnServerEvent:Connect(function(player, streamerId, padSlot)
 		if typeof(streamerId) ~= "string" or typeof(padSlot) ~= "number" then
 			EquipResult:FireClient(player, { success = false, reason = "Invalid request." })
 			return
 		end
-
 		local success = PlayerData.EquipToPad(player, streamerId, padSlot)
 		if success then
 			BaseService.UpdateBasePads(player)
@@ -494,13 +292,11 @@ function BaseService.Init(playerDataModule)
 		end
 	end)
 
-	-- Unequip request
 	UnequipRequest.OnServerEvent:Connect(function(player, padSlot)
 		if typeof(padSlot) ~= "number" then
 			UnequipResult:FireClient(player, { success = false, reason = "Invalid request." })
 			return
 		end
-
 		local success = PlayerData.UnequipFromPad(player, padSlot)
 		if success then
 			BaseService.UpdateBasePads(player)
@@ -515,10 +311,10 @@ function BaseService.Init(playerDataModule)
 		if not BaseService._bases[player.UserId] then
 			task.spawn(function()
 				local slot = findAvailableSlot()
-				local position = getBasePosition(slot)
+				if not slot then return end
 
 				BaseService._occupiedSlots[slot] = true
-				local baseModel = buildBase(player, position)
+				local baseModel, position = buildBase(player, slot)
 
 				BaseService._bases[player.UserId] = {
 					position = position,
@@ -527,7 +323,6 @@ function BaseService.Init(playerDataModule)
 				}
 
 				BaseService.UpdateBasePads(player)
-
 				BaseReady:FireClient(player, {
 					position = position,
 					floorSize = DesignConfig.Base.FloorSize,
