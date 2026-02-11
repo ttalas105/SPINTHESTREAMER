@@ -32,11 +32,11 @@ end
 
 local DEFAULT_DATA = {
 	cash = 1000000,
-	inventory = {},           -- { "Marlon", "XQC", "Ninja", ... } list of streamer IDs
-	equippedPads = {},        -- { ["1"] = "KaiCenat", ["2"] = "Speed" } pad slot -> streamer ID
+	inventory = {},           -- { {id="Marlon"}, {id="XQC", effect="Acid"}, ... } list of items
+	equippedPads = {},        -- { ["1"] = {id="KaiCenat"}, ["2"] = {id="Speed", effect="Acid"} }
 	collection = {},          -- { ["Marlon"] = true, ["XQC"] = true } discovered uniques
 	rebirthCount = 0,
-	luck = 0,                 -- personal luck stat; every 20 = +1% drop luck (stacked with crate luck)
+	luck = 2000,              -- personal luck stat; every 10 = +1% drop luck (stacked with crate luck)
 	premiumSlotUnlocked = false,
 	doubleCash = false,
 	spinCredits = 0,
@@ -93,6 +93,22 @@ local function loadData(player)
 		end
 		if data.luck == nil then
 			data.luck = 0
+		end
+		-- Migration: convert old string-based inventory to {id, effect} tables
+		if data.inventory and #data.inventory > 0 and type(data.inventory[1]) == "string" then
+			local newInv = {}
+			for _, id in ipairs(data.inventory) do
+				table.insert(newInv, { id = id })
+			end
+			data.inventory = newInv
+		end
+		-- Migration: convert old string-based equippedPads to {id, effect} tables
+		if data.equippedPads then
+			for key, val in pairs(data.equippedPads) do
+				if type(val) == "string" then
+					data.equippedPads[key] = { id = val }
+				end
+			end
 		end
 	else
 		data = deepCopy(DEFAULT_DATA)
@@ -203,35 +219,44 @@ function PlayerData.SpendCash(player, amount: number): boolean
 end
 
 -------------------------------------------------
--- INVENTORY (new system)
+-- INVENTORY (items are tables: {id = "Rakai", effect = "Acid" or nil})
+-- Helper to get the streamer ID from an item (supports old string format too)
 -------------------------------------------------
 
---- Add a streamer to the player's inventory
-function PlayerData.AddToInventory(player, streamerId: string)
+local function itemId(item)
+	if type(item) == "table" then return item.id end
+	if type(item) == "string" then return item end
+	return nil
+end
+
+--- Add a streamer to the player's inventory (with optional effect)
+function PlayerData.AddToInventory(player, streamerId: string, effect: string?)
 	local data = PlayerData.Get(player)
 	if not data then return end
-	table.insert(data.inventory, streamerId)
+	local item = { id = streamerId }
+	if effect then item.effect = effect end
+	table.insert(data.inventory, item)
 	-- Also mark as discovered in collection
 	data.collection[streamerId] = true
 	PlayerData.Replicate(player)
 end
 
 --- Remove a streamer from inventory by index
-function PlayerData.RemoveFromInventory(player, inventoryIndex: number): string?
+function PlayerData.RemoveFromInventory(player, inventoryIndex: number)
 	local data = PlayerData.Get(player)
 	if not data then return nil end
 	if inventoryIndex < 1 or inventoryIndex > #data.inventory then return nil end
-	local streamerId = table.remove(data.inventory, inventoryIndex)
+	local item = table.remove(data.inventory, inventoryIndex)
 	PlayerData.Replicate(player)
-	return streamerId
+	return item
 end
 
---- Remove the first occurrence of a streamer ID from inventory
+--- Remove the first occurrence of a streamer ID from inventory (matches id only, ignores effect)
 function PlayerData.RemoveStreamerFromInventory(player, streamerId: string): boolean
 	local data = PlayerData.Get(player)
 	if not data then return false end
-	for i, id in ipairs(data.inventory) do
-		if id == streamerId then
+	for i, item in ipairs(data.inventory) do
+		if itemId(item) == streamerId then
 			table.remove(data.inventory, i)
 			PlayerData.Replicate(player)
 			return true
@@ -252,14 +277,14 @@ function PlayerData.CountInInventory(player, streamerId: string): number
 	local data = PlayerData.Get(player)
 	if not data then return 0 end
 	local count = 0
-	for _, id in ipairs(data.inventory) do
-		if id == streamerId then count = count + 1 end
+	for _, item in ipairs(data.inventory) do
+		if itemId(item) == streamerId then count = count + 1 end
 	end
 	return count
 end
 
 -------------------------------------------------
--- EQUIP / UNEQUIP (pad slots)
+-- EQUIP / UNEQUIP (pad slots — items are {id, effect} tables)
 -------------------------------------------------
 
 --- Equip a streamer from inventory to a pad slot
@@ -276,16 +301,18 @@ function PlayerData.EquipToPad(player, streamerId: string, padSlot: number): boo
 		return false
 	end
 
-	-- Find and remove from inventory
-	local found = false
-	for i, id in ipairs(data.inventory) do
-		if id == streamerId then
-			table.remove(data.inventory, i)
-			found = true
+	-- Find and remove from inventory (match by id)
+	local foundItem = nil
+	local foundIndex = nil
+	for i, item in ipairs(data.inventory) do
+		if itemId(item) == streamerId then
+			foundItem = item
+			foundIndex = i
 			break
 		end
 	end
-	if not found then return false end
+	if not foundItem then return false end
+	table.remove(data.inventory, foundIndex)
 
 	-- If something is already on this pad, put it back in inventory
 	local existing = data.equippedPads[tostring(padSlot)]
@@ -293,7 +320,7 @@ function PlayerData.EquipToPad(player, streamerId: string, padSlot: number): boo
 		table.insert(data.inventory, existing)
 	end
 
-	data.equippedPads[tostring(padSlot)] = streamerId
+	data.equippedPads[tostring(padSlot)] = foundItem
 	PlayerData.Replicate(player)
 	return true
 end
@@ -304,11 +331,11 @@ function PlayerData.UnequipFromPad(player, padSlot: number): boolean
 	if not data then return false end
 
 	local key = tostring(padSlot)
-	local streamerId = data.equippedPads[key]
-	if not streamerId then return false end
+	local item = data.equippedPads[key]
+	if not item then return false end
 
 	-- Move back to inventory
-	table.insert(data.inventory, streamerId)
+	table.insert(data.inventory, item)
 	data.equippedPads[key] = nil
 	PlayerData.Replicate(player)
 	return true
@@ -352,8 +379,8 @@ function PlayerData.ResetForRebirth(player)
 	if not data then return end
 	data.cash = 0
 	-- Clear equipped pads, put equipped streamers back into inventory
-	for key, streamerId in pairs(data.equippedPads) do
-		table.insert(data.inventory, streamerId)
+	for key, item in pairs(data.equippedPads) do
+		table.insert(data.inventory, item)
 	end
 	data.equippedPads = {}
 	-- Inventory and collection are kept

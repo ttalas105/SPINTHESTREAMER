@@ -14,6 +14,7 @@ local DesignConfig = require(ReplicatedStorage.Shared.Config.DesignConfig)
 local Rarities = require(ReplicatedStorage.Shared.Config.Rarities)
 local Streamers = require(ReplicatedStorage.Shared.Config.Streamers)
 local Economy = require(ReplicatedStorage.Shared.Config.Economy)
+local Effects = require(ReplicatedStorage.Shared.Config.Effects)
 local UIHelper = require(script.Parent.UIHelper)
 
 local SpinController = {}
@@ -86,43 +87,82 @@ local function buildCarousel(parent)
 	carouselContainer.Parent = carouselFrame
 
 	-- Create items from streamers list - include ALL streamers, repeat 3 times for smooth scrolling
+	-- Some items randomly get an effect (like Acid) for visual variety during the spin
 	local allStreamers = {}
-	local repeatCount = 3 -- Repeat all streamers 3 times for smooth infinite scrolling effect
+	local allEffects = {} -- parallel array: effect name or nil per item
+	local repeatCount = 3
 	for repeatNum = 1, repeatCount do
 		for _, streamer in ipairs(Streamers.List) do
 			table.insert(allStreamers, streamer)
+			-- Random ~15% of carousel items show the Acid effect label (cosmetic during spin)
+			local eff = nil
+			for _, e in ipairs(Effects.List) do
+				if math.random() < (e.rollChance or 0) then
+					eff = e
+					break
+				end
+			end
+			table.insert(allEffects, eff)
 		end
 	end
 
 	-- Create item frames
 	for i, streamer in ipairs(allStreamers) do
+		local eff = allEffects[i]
+		local bgColor = Rarities.ByName[streamer.rarity] and Rarities.ByName[streamer.rarity].color or Color3.fromRGB(100, 100, 100)
+		-- If item has effect, tint the background slightly with effect color
+		if eff then
+			bgColor = Color3.fromRGB(
+				math.floor(bgColor.R * 255 * 0.5 + eff.color.R * 255 * 0.5),
+				math.floor(bgColor.G * 255 * 0.5 + eff.color.G * 255 * 0.5),
+				math.floor(bgColor.B * 255 * 0.5 + eff.color.B * 255 * 0.5)
+			)
+		end
+
 		local itemFrame = UIHelper.CreateRoundedFrame({
 			Name = "Item_" .. i .. "_" .. streamer.id,
 			Size = UDim2.new(0, ITEM_WIDTH, 0, ITEM_WIDTH),
 			Position = UDim2.new(0, (i - 1) * (ITEM_WIDTH + ITEM_SPACING), 0.5, 0),
 			AnchorPoint = Vector2.new(0, 0.5),
-			Color = Rarities.ByName[streamer.rarity] and Rarities.ByName[streamer.rarity].color or Color3.fromRGB(100, 100, 100),
+			Color = bgColor,
 			CornerRadius = DesignConfig.Layout.ButtonCorner,
 			Parent = carouselContainer,
 		})
 
 		-- Glow effect (will be animated)
 		local glowStroke = Instance.new("UIStroke")
-		glowStroke.Color = Rarities.ByName[streamer.rarity] and Rarities.ByName[streamer.rarity].color or Color3.fromRGB(100, 100, 100)
+		glowStroke.Color = eff and eff.glowColor or (Rarities.ByName[streamer.rarity] and Rarities.ByName[streamer.rarity].color or Color3.fromRGB(100, 100, 100))
 		glowStroke.Thickness = 0
 		glowStroke.Transparency = 0.5
 		glowStroke.Parent = itemFrame
 
+		-- Effect tag (e.g. "ACID") — bright green label at the top
+		if eff then
+			UIHelper.CreateLabel({
+				Name = "EffectTag",
+				Size = UDim2.new(1, -8, 0, 18),
+				Position = UDim2.new(0.5, 0, 0, 3),
+				AnchorPoint = Vector2.new(0.5, 0),
+				Text = eff.prefix:upper(),
+				TextColor = eff.color,
+				Font = DesignConfig.Fonts.Accent,
+				TextSize = 14,
+				TextScaled = false,
+				Parent = itemFrame,
+			})
+		end
+
 		-- Streamer name (full name for clarity) - larger and more visible
+		local nameYPos = eff and 0.16 or 0.12
 		local nameLabel = UIHelper.CreateLabel({
 			Name = "StreamerName",
-			Size = UDim2.new(1, -12, 0, 60),
-			Position = UDim2.new(0.5, 0, 0.12, 0),
+			Size = UDim2.new(1, -12, 0, 50),
+			Position = UDim2.new(0.5, 0, nameYPos, 0),
 			AnchorPoint = Vector2.new(0.5, 0),
-			Text = streamer.displayName,
-			TextColor = DesignConfig.Colors.White,
+			Text = eff and (eff.prefix .. " " .. streamer.displayName) or streamer.displayName,
+			TextColor = eff and eff.color or DesignConfig.Colors.White,
 			Font = DesignConfig.Fonts.Primary,
-			TextSize = 20,
+			TextSize = 18,
 			TextScaled = false,
 			Parent = itemFrame,
 		})
@@ -146,6 +186,7 @@ local function buildCarousel(parent)
 		items[i] = {
 			frame = itemFrame,
 			streamer = streamer,
+			effect = eff,
 			glowStroke = glowStroke,
 			baseX = (i - 1) * (ITEM_WIDTH + ITEM_SPACING),
 		}
@@ -345,11 +386,15 @@ local function updateItemVisuals()
 		-- Text transparency - keep text readable
 		local nameLabel = item.frame:FindFirstChild("StreamerName")
 		local rarityLabel = item.frame:FindFirstChild("RarityTag")
+		local effectTag = item.frame:FindFirstChild("EffectTag")
 		if nameLabel then
 			nameLabel.TextTransparency = transparency * 0.3 -- Keep text very visible
 		end
 		if rarityLabel then
 			rarityLabel.TextTransparency = transparency * 0.3 -- Keep rarity visible
+		end
+		if effectTag then
+			effectTag.TextTransparency = transparency * 0.3
 		end
 	end
 	end)
@@ -523,6 +568,10 @@ local function showResult(data)
 	local rarityInfo = Rarities.ByName[data.rarity]
 	local rarityColor = rarityInfo and rarityInfo.color or Color3.fromRGB(170, 170, 170)
 
+	-- If the streamer has an effect, use the effect color for glow
+	local effectInfo = data.effect and Effects.ByName[data.effect] or nil
+	local displayColor = effectInfo and effectInfo.color or rarityColor
+
 	-- Update result display
 	local nameLabel = resultFrame:FindFirstChild("StreamerName")
 	local rarityLabel = resultFrame:FindFirstChild("RarityLabel")
@@ -530,22 +579,26 @@ local function showResult(data)
 
 	if resultLabel then
 		resultLabel.Text = "YOU RECEIVED:"
-		resultLabel.TextColor3 = rarityColor
+		resultLabel.TextColor3 = displayColor
 	end
 	if nameLabel then
 		nameLabel.Text = data.displayName or "Unknown"
-		nameLabel.TextColor3 = rarityColor
+		nameLabel.TextColor3 = displayColor
 	end
 	if rarityLabel then
-		rarityLabel.Text = (data.rarity or "Common"):upper()
-		rarityLabel.TextColor3 = rarityColor
+		local rarityText = (data.rarity or "Common"):upper()
+		if effectInfo then
+			rarityText = effectInfo.prefix:upper() .. " " .. rarityText
+		end
+		rarityLabel.Text = rarityText
+		rarityLabel.TextColor3 = displayColor
 	end
 
 	local oddsText = data.odds and formatOdds(data.odds) or ""
 	local oddsLabel = resultFrame:FindFirstChild("OddsLabel")
 	if oddsLabel and oddsText ~= "" then
 		oddsLabel.Text = oddsText
-		oddsLabel.TextColor3 = rarityColor
+		oddsLabel.TextColor3 = displayColor
 		oddsLabel.Visible = true
 	elseif oddsLabel then
 		oddsLabel.Visible = false
@@ -557,17 +610,20 @@ local function showResult(data)
 	-- Show a prominent "You received..." message with odds
 	local receivedMessage = UIHelper.CreateRoundedFrame({
 		Name = "ReceivedMessage",
-		Size = UDim2.new(0.6, 0, 0, 120),
+		Size = UDim2.new(0.6, 0, 0, 140),
 		Position = UDim2.new(0.5, 0, 0.25, 0),
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Color = DesignConfig.Colors.BackgroundLight,
 		CornerRadius = DesignConfig.Layout.PanelCorner,
-		StrokeColor = rarityColor,
+		StrokeColor = displayColor,
 		Parent = spinContainer,
 	})
 	receivedMessage.ZIndex = 20
 	
 	local messageLines = { "YOU RECEIVED:", data.displayName or "Unknown", (data.rarity or "Common"):upper() }
+	if effectInfo then
+		table.insert(messageLines, effectInfo.prefix:upper() .. " EFFECT (x" .. effectInfo.cashMultiplier .. " CASH)")
+	end
 	if oddsText ~= "" then
 		table.insert(messageLines, oddsText)
 	end
@@ -577,7 +633,7 @@ local function showResult(data)
 		Position = UDim2.new(0.5, 0, 0.5, 0),
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Text = table.concat(messageLines, "\n"),
-		TextColor = rarityColor,
+		TextColor = displayColor,
 		Font = DesignConfig.Fonts.Accent,
 		TextSize = 22,
 		Parent = receivedMessage,
@@ -590,7 +646,7 @@ local function showResult(data)
 	local stroke = carouselFrame:FindFirstChildOfClass("UIStroke")
 	if stroke then
 		TweenService:Create(stroke, TweenInfo.new(0.3), {
-			Color = rarityColor,
+			Color = displayColor,
 			Thickness = 4,
 		}):Play()
 		task.delay(2, function()
@@ -607,7 +663,7 @@ local function showResult(data)
 		local winningGlow = winningItem:FindFirstChildOfClass("UIStroke")
 		if winningGlow then
 			TweenService:Create(winningGlow, TweenInfo.new(0.3), {
-				Color = rarityColor,
+				Color = displayColor,
 				Thickness = 6,
 				Transparency = 0,
 			}):Play()
@@ -620,12 +676,12 @@ local function showResult(data)
 		UIHelper.CameraShake(shakeIntensity * 0.1, 0.4)
 	end
 
-	-- Flash for legendary/mythic
-	if data.rarity == "Legendary" or data.rarity == "Mythic" then
+	-- Flash for legendary/mythic or effect items
+	if data.rarity == "Legendary" or data.rarity == "Mythic" or effectInfo then
 		local flash = Instance.new("Frame")
 		flash.Name = "Flash"
 		flash.Size = UDim2.new(1, 0, 1, 0)
-		flash.BackgroundColor3 = rarityColor
+		flash.BackgroundColor3 = displayColor
 		flash.BackgroundTransparency = 0.5
 		flash.ZIndex = 100
 		flash.Parent = screenGui

@@ -35,7 +35,7 @@ local CARTOON_FONT = Enum.Font.Cartoon
 local function refreshModal()
 	if not luckLabelRef or not costLabelRef or not upgradeBtnRef then return end
 	local luck = HUDController.Data.luck or 0
-	local percent = math.floor(luck / 20)
+	local percent = math.floor(luck / 10)
 	local cost = Economy.GetLuckUpgradeCost(luck)
 	luckLabelRef.Text = ("Luck: %d  (+%d%% drop luck)"):format(luck, percent)
 	costLabelRef.Text = ("$%s"):format(tostring(cost))

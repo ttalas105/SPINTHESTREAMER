@@ -114,6 +114,46 @@ do
 	end
 end
 
+-- Sell stand: open sell UI when player interacts
+do
+	local stallSell = hub:FindFirstChild("Stall_Sell")
+	local basePart = nil
+	if stallSell and stallSell:IsA("Model") then
+		basePart = stallSell:FindFirstChildWhichIsA("BasePart") or stallSell.PrimaryPart
+	end
+	if not basePart then
+		local signSell = hub:FindFirstChild("Sign_Sell")
+		if signSell and signSell:IsA("BasePart") then
+			basePart = signSell
+		end
+	end
+	if basePart then
+		local frontAnchor = Instance.new("Part")
+		frontAnchor.Name = "SellPromptAnchor"
+		frontAnchor.Size = Vector3.new(1, 2, 1)
+		frontAnchor.Transparency = 1
+		frontAnchor.CanCollide = false
+		frontAnchor.Anchored = true
+		local pos = basePart.Position
+		frontAnchor.Position = pos + Vector3.new(0, 2, -3)
+		frontAnchor.Parent = hub
+		local prompt = Instance.new("ProximityPrompt")
+		prompt.ActionText = "Open"
+		prompt.ObjectText = "Sell Stand"
+		prompt.KeyboardKeyCode = Enum.KeyCode.E
+		prompt.MaxActivationDistance = 14
+		prompt.HoldDuration = 0
+		prompt.Parent = frontAnchor
+		local OpenSellStandGui = ReplicatedStorage.RemoteEvents:WaitForChild("OpenSellStandGui")
+		prompt.Triggered:Connect(function(player)
+			OpenSellStandGui:FireClient(player)
+		end)
+		print("[Server] Sell stand ProximityPrompt added")
+	else
+		warn("[Server] Could not find a part to attach Sell stand ProximityPrompt")
+	end
+end
+
 -- Initialize services (order matters: PlayerData first, then BaseService)
 PlayerData.Init()
 BaseService.Init(PlayerData)

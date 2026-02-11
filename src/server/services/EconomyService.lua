@@ -9,10 +9,13 @@ local Players = game:GetService("Players")
 
 local Economy = require(ReplicatedStorage.Shared.Config.Economy)
 local Streamers = require(ReplicatedStorage.Shared.Config.Streamers)
+local Effects = require(ReplicatedStorage.Shared.Config.Effects)
 
 local RemoteEvents = ReplicatedStorage:WaitForChild("RemoteEvents")
 local SellRequest = RemoteEvents:WaitForChild("SellRequest")
 local SellResult = RemoteEvents:WaitForChild("SellResult")
+local SellByIndexRequest = RemoteEvents:WaitForChild("SellByIndexRequest")
+local SellAllRequest = RemoteEvents:WaitForChild("SellAllRequest")
 local UpgradeLuckRequest = RemoteEvents:WaitForChild("UpgradeLuckRequest")
 local UpgradeLuckResult = RemoteEvents:WaitForChild("UpgradeLuckResult")
 
@@ -21,7 +24,28 @@ local EconomyService = {}
 local PlayerData
 
 -------------------------------------------------
--- SELL FROM INVENTORY
+-- SELL HELPERS
+-------------------------------------------------
+
+-- Calculate sell price for an inventory item (cashPerSecond * effect multiplier)
+local function getSellPrice(item)
+	local streamerId = type(item) == "table" and item.id or item
+	local effect = type(item) == "table" and item.effect or nil
+	local info = Streamers.ById[streamerId]
+	if not info then return 0 end
+
+	local price = info.cashPerSecond or 0
+	if effect then
+		local effectInfo = Effects.ByName[effect]
+		if effectInfo and effectInfo.cashMultiplier then
+			price = price * effectInfo.cashMultiplier
+		end
+	end
+	return math.floor(price)
+end
+
+-------------------------------------------------
+-- SELL FROM INVENTORY (legacy: by streamer ID)
 -------------------------------------------------
 
 local function handleSell(player, streamerId: string)
@@ -34,15 +58,24 @@ local function handleSell(player, streamerId: string)
 		return
 	end
 
-	-- Remove from inventory (first occurrence)
+	-- Find item in inventory to calculate price before removing
+	local data = PlayerData.Get(player)
+	if not data then return end
+	local price = 0
+	for i, item in ipairs(data.inventory) do
+		local id = type(item) == "table" and item.id or item
+		if id == streamerId then
+			price = getSellPrice(item)
+			break
+		end
+	end
+
 	local removed = PlayerData.RemoveStreamerFromInventory(player, streamerId)
 	if not removed then
 		SellResult:FireClient(player, { success = false, reason = "Not in your inventory!" })
 		return
 	end
 
-	-- Calculate sell price
-	local price = Economy.SellPrices[streamerInfo.rarity] or Economy.SellPrices.Common
 	if PlayerData.HasDoubleCash(player) then
 		price = price * Economy.DoubleCashMultiplier
 	end
@@ -56,7 +89,78 @@ local function handleSell(player, streamerId: string)
 end
 
 -------------------------------------------------
--- LUCK UPGRADE (spend cash for +1 luck; every 20 luck = +1% drop luck)
+-- SELL BY INDEX (sell a specific item at a given inventory index)
+-------------------------------------------------
+
+local function handleSellByIndex(player, inventoryIndex: number)
+	if not PlayerData then return end
+	if typeof(inventoryIndex) ~= "number" then return end
+
+	local data = PlayerData.Get(player)
+	if not data then return end
+	if inventoryIndex < 1 or inventoryIndex > #data.inventory then
+		SellResult:FireClient(player, { success = false, reason = "Invalid index." })
+		return
+	end
+
+	local item = data.inventory[inventoryIndex]
+	local price = getSellPrice(item)
+
+	local removed = PlayerData.RemoveFromInventory(player, inventoryIndex)
+	if not removed then
+		SellResult:FireClient(player, { success = false, reason = "Not in your inventory!" })
+		return
+	end
+
+	if PlayerData.HasDoubleCash(player) then
+		price = price * Economy.DoubleCashMultiplier
+	end
+
+	PlayerData.AddCash(player, price)
+	SellResult:FireClient(player, {
+		success = true,
+		streamerId = type(item) == "table" and item.id or item,
+		cashEarned = price,
+	})
+end
+
+-------------------------------------------------
+-- SELL ALL (sell every item in inventory)
+-------------------------------------------------
+
+local function handleSellAll(player)
+	if not PlayerData then return end
+	local data = PlayerData.Get(player)
+	if not data or #data.inventory == 0 then
+		SellResult:FireClient(player, { success = false, reason = "Inventory is empty!" })
+		return
+	end
+
+	local totalCash = 0
+	local count = #data.inventory
+	for _, item in ipairs(data.inventory) do
+		totalCash = totalCash + getSellPrice(item)
+	end
+
+	if PlayerData.HasDoubleCash(player) then
+		totalCash = totalCash * Economy.DoubleCashMultiplier
+	end
+
+	-- Clear inventory
+	data.inventory = {}
+	PlayerData.AddCash(player, math.floor(totalCash))
+	PlayerData.Replicate(player)
+
+	SellResult:FireClient(player, {
+		success = true,
+		cashEarned = math.floor(totalCash),
+		soldCount = count,
+		sellAll = true,
+	})
+end
+
+-------------------------------------------------
+-- LUCK UPGRADE (spend cash for +1 luck; every 10 luck = +1% drop luck)
 -------------------------------------------------
 
 local function handleUpgradeLuck(player)
@@ -72,20 +176,51 @@ local function handleUpgradeLuck(player)
 end
 
 -------------------------------------------------
--- PASSIVE INCOME
+-- BASE INCOME (equipped streamers generate cashPerSecond)
+-- Ticks every 1 second. Total income = sum of cashPerSecond for all equipped pad streamers.
+-- Adds Economy.PassiveIncomeRate as a flat base on top.
 -------------------------------------------------
 
-local function startPassiveIncome()
+local function getPlayerBaseIncome(player): number
+	local data = PlayerData.Get(player)
+	if not data then return 0 end
+	local total = 0
+	for _, item in pairs(data.equippedPads) do
+		-- item is {id = "Rakai", effect = "Acid" or nil}
+		local streamerId = type(item) == "table" and item.id or item
+		local effect = type(item) == "table" and item.effect or nil
+		local info = Streamers.ById[streamerId]
+		if info and info.cashPerSecond then
+			local income = info.cashPerSecond
+			-- Apply effect multiplier (e.g. Acid = 2x)
+			if effect then
+				local effectInfo = Effects.ByName[effect]
+				if effectInfo and effectInfo.cashMultiplier then
+					income = income * effectInfo.cashMultiplier
+				end
+			end
+			total = total + income
+		end
+	end
+	return total
+end
+
+local function startBaseIncome()
 	task.spawn(function()
 		while true do
-			task.wait(Economy.PassiveIncomeInterval)
+			task.wait(1) -- tick every 1 second
 			for _, player in ipairs(Players:GetPlayers()) do
-				if PlayerData.Get(player) then
-					local amount = Economy.PassiveIncomeRate
-					if PlayerData.HasDoubleCash(player) then
-						amount = amount * Economy.DoubleCashMultiplier
+				local data = PlayerData.Get(player)
+				if data then
+					local baseIncome = getPlayerBaseIncome(player)
+					local flatIncome = Economy.PassiveIncomeRate / Economy.PassiveIncomeInterval -- per-second flat rate
+					local total = baseIncome + flatIncome
+					if total > 0 then
+						if PlayerData.HasDoubleCash(player) then
+							total = total * Economy.DoubleCashMultiplier
+						end
+						PlayerData.AddCash(player, math.floor(total))
 					end
-					PlayerData.AddCash(player, amount)
 				end
 			end
 		end
@@ -103,11 +238,24 @@ function EconomyService.Init(playerDataModule)
 		handleSell(player, streamerId)
 	end)
 
+	SellByIndexRequest.OnServerEvent:Connect(function(player, inventoryIndex)
+		handleSellByIndex(player, inventoryIndex)
+	end)
+
+	SellAllRequest.OnServerEvent:Connect(function(player)
+		handleSellAll(player)
+	end)
+
 	UpgradeLuckRequest.OnServerEvent:Connect(function(player)
 		handleUpgradeLuck(player)
 	end)
 
-	startPassiveIncome()
+	startBaseIncome()
+end
+
+-- Expose income calculation for UI or other services
+function EconomyService.GetPlayerBaseIncome(player): number
+	return getPlayerBaseIncome(player)
 end
 
 return EconomyService

@@ -74,7 +74,7 @@ function HUDController.Init()
 	cashLabel.TextXAlignment = Enum.TextXAlignment.Left
 	cashLabel.Parent = hudContainer
 
-	-- Luck (every 20 = +1% drop luck; upgrade at the Upgrade stand)
+	-- Luck (every 10 = +1% drop luck; upgrade at the Upgrade stand)
 	luckLabel = Instance.new("TextLabel")
 	luckLabel.Name = "LuckLabel"
 	luckLabel.Size = UDim2.new(1, 0, 0, 20)
@@ -125,10 +125,10 @@ function HUDController.UpdateData(payload)
 		end
 	end
 
-	-- Update luck display (every 20 luck = +1%)
+	-- Update luck display (every 10 luck = +1%)
 	if luckLabel then
 		local luck = HUDController.Data.luck or 0
-		local percent = math.floor(luck / 20)
+		local percent = math.floor(luck / 10)
 		luckLabel.Text = ("Luck: %d (+%d%%)"):format(luck, percent)
 	end
 

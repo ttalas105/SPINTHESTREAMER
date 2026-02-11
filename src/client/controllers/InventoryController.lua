@@ -12,7 +12,19 @@ local TweenService = game:GetService("TweenService")
 
 local DesignConfig = require(ReplicatedStorage.Shared.Config.DesignConfig)
 local Streamers = require(ReplicatedStorage.Shared.Config.Streamers)
+local Effects = require(ReplicatedStorage.Shared.Config.Effects)
 local UIHelper = require(script.Parent.UIHelper)
+
+-- Helper: get streamer ID from an inventory item (supports old string or new {id, effect} format)
+local function getItemId(item)
+	if type(item) == "table" then return item.id end
+	if type(item) == "string" then return item end
+	return nil
+end
+local function getItemEffect(item)
+	if type(item) == "table" then return item.effect end
+	return nil
+end
 
 local InventoryController = {}
 
@@ -142,25 +154,55 @@ local function updateSlotVisuals()
 		local slotData = slots[i]
 		if not slotData then continue end
 
-		local streamerId = inventory[i]
+		local item = inventory[i]
+		local streamerId = getItemId(item)
+		local effect = getItemEffect(item)
 		local stroke = slotData.frame:FindFirstChildOfClass("UIStroke")
+
+		-- Remove old effect tag if present
+		local oldEffectTag = slotData.frame:FindFirstChild("EffectTag")
+		if oldEffectTag then oldEffectTag:Destroy() end
 
 		if streamerId then
 			local info = Streamers.ById[streamerId]
 			local rarityColor = DesignConfig.RarityColors[info and info.rarity or "Common"]
 				or Color3.fromRGB(170, 170, 170)
 
-			slotData.iconLabel.Text = info and string.sub(info.displayName, 1, 3) or "?"
-			slotData.iconLabel.TextColor3 = rarityColor
-			slotData.rarityLabel.Text = info and info.rarity or ""
-			slotData.rarityLabel.TextColor3 = rarityColor
+			-- Effect: override display color with effect color
+			local effectInfo = effect and Effects.ByName[effect] or nil
+			local displayColor = effectInfo and effectInfo.color or rarityColor
 
-			-- Tint the slot background slightly with rarity color
+			local displayName = info and info.displayName or "?"
+			if effectInfo then
+				displayName = effectInfo.prefix .. " " .. displayName
+			end
+
+			slotData.iconLabel.Text = string.sub(displayName, 1, 5)
+			slotData.iconLabel.TextColor3 = displayColor
+			slotData.rarityLabel.Text = info and info.rarity or ""
+			slotData.rarityLabel.TextColor3 = displayColor
+
+			-- Show small effect tag at top of slot
+			if effectInfo then
+				local effectTag = Instance.new("TextLabel")
+				effectTag.Name = "EffectTag"
+				effectTag.Size = UDim2.new(1, 0, 0, 12)
+				effectTag.Position = UDim2.new(0, 0, 0, 1)
+				effectTag.BackgroundTransparency = 1
+				effectTag.Text = effectInfo.prefix:upper()
+				effectTag.TextColor3 = effectInfo.color
+				effectTag.Font = Enum.Font.GothamBold
+				effectTag.TextSize = 10
+				effectTag.TextScaled = false
+				effectTag.Parent = slotData.frame
+			end
+
+			-- Tint the slot background slightly with display color
 			if i == selectedIndex then
 				slotData.frame.BackgroundColor3 = Color3.fromRGB(
-					math.floor(rarityColor.R * 255 * 0.3 + 50 * 0.7),
-					math.floor(rarityColor.G * 255 * 0.3 + 50 * 0.7),
-					math.floor(rarityColor.B * 255 * 0.3 + 70 * 0.7)
+					math.floor(displayColor.R * 255 * 0.3 + 50 * 0.7),
+					math.floor(displayColor.G * 255 * 0.3 + 50 * 0.7),
+					math.floor(displayColor.B * 255 * 0.3 + 70 * 0.7)
 				)
 			else
 				slotData.frame.BackgroundColor3 = DesignConfig.Colors.InventorySlot
@@ -186,8 +228,16 @@ local function updateSlotVisuals()
 	-- Update selected item label
 	if selectedLabel then
 		if selectedIndex and inventory[selectedIndex] then
-			local info = Streamers.ById[inventory[selectedIndex]]
-			selectedLabel.Text = "Selected: " .. (info and info.displayName or inventory[selectedIndex])
+			local item = inventory[selectedIndex]
+			local streamerId = getItemId(item)
+			local effect = getItemEffect(item)
+			local info = Streamers.ById[streamerId]
+			local displayName = info and info.displayName or (streamerId or "?")
+			if effect then
+				local effectInfo = Effects.ByName[effect]
+				if effectInfo then displayName = effectInfo.prefix .. " " .. displayName end
+			end
+			selectedLabel.Text = "Selected: " .. displayName
 			selectedLabel.Visible = true
 		else
 			selectedLabel.Text = ""
@@ -328,7 +378,7 @@ end
 
 function InventoryController.GetSelectedItem(): (number?, string?)
 	if selectedIndex and inventory[selectedIndex] then
-		return selectedIndex, inventory[selectedIndex]
+		return selectedIndex, getItemId(inventory[selectedIndex])
 	end
 	return nil, nil
 end
@@ -370,12 +420,16 @@ end
 function InventoryController.FlashNewItem(streamerId: string)
 	-- Find the slot with this item (usually the last one)
 	for i = #inventory, 1, -1 do
-		if inventory[i] == streamerId and i <= VISIBLE_SLOTS then
+		local itemId = getItemId(inventory[i])
+		if itemId == streamerId and i <= VISIBLE_SLOTS then
 			local slotData = slots[i]
 			if slotData then
 				-- Flash animation
+				local effect = getItemEffect(inventory[i])
+				local effectInfo = effect and Effects.ByName[effect] or nil
 				local info = Streamers.ById[streamerId]
-				local color = DesignConfig.RarityColors[info and info.rarity or "Common"]
+				local color = effectInfo and effectInfo.color
+					or DesignConfig.RarityColors[info and info.rarity or "Common"]
 					or Color3.fromRGB(170, 170, 170)
 
 				TweenService:Create(slotData.frame, TweenInfo.new(0.15), {
@@ -398,10 +452,11 @@ end
 
 function InventoryController.EquipSelectedToPad(padSlot: number)
 	if not selectedIndex then return false end
-	local streamerId = inventory[selectedIndex]
+	local item = inventory[selectedIndex]
+	local streamerId = getItemId(item)
 	if not streamerId then return false end
 
-	-- Fire equip request
+	-- Fire equip request (server matches by streamer id)
 	EquipRequest:FireServer(streamerId, padSlot)
 	selectedIndex = nil
 	updateSlotVisuals()
@@ -411,7 +466,8 @@ end
 --- Sell the selected item
 function InventoryController.SellSelected(): boolean
 	if not selectedIndex then return false end
-	local streamerId = inventory[selectedIndex]
+	local item = inventory[selectedIndex]
+	local streamerId = getItemId(item)
 	if not streamerId then return false end
 
 	SellRequest:FireServer(streamerId)
