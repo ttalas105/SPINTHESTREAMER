@@ -6,17 +6,18 @@
 
 local services = script.Parent.services
 
--- Services
+-- Load WorldBuilder first and build world immediately so map/stalls/bases exist
+-- even if a later service fails to load
+local WorldBuilder = require(services.WorldBuilder)
+WorldBuilder.Build()
+
+-- Now load services that depend on config (Streamers, etc.)
 local PlayerData     = require(services.PlayerData)
 local SpinService    = require(services.SpinService)
 local EconomyService = require(services.EconomyService)
 local RebirthService = require(services.RebirthService)
 local StoreService   = require(services.StoreService)
-local WorldBuilder   = require(services.WorldBuilder)
 local BaseService    = require(services.BaseService)
-
--- Build the shared world (hub, stalls, decorations)
-WorldBuilder.Build()
 
 -- Spin stand: add ProximityPrompt so players can open the crate shop
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -70,6 +71,46 @@ do
 		print("[Server] Spin stand ProximityPrompt added at front of stall")
 	else
 		warn("[Server] Could not find a part to attach Spin stand ProximityPrompt")
+	end
+end
+
+-- Upgrade stand (beside Spin): open luck upgrade UI
+do
+	local stallUpgrades = hub:FindFirstChild("Stall_Upgrades")
+	local basePart = nil
+	if stallUpgrades and stallUpgrades:IsA("Model") then
+		basePart = stallUpgrades:FindFirstChildWhichIsA("BasePart") or stallUpgrades.PrimaryPart
+	end
+	if not basePart then
+		local signUpgrades = hub:FindFirstChild("Sign_Upgrades")
+		if signUpgrades and signUpgrades:IsA("BasePart") then
+			basePart = signUpgrades
+		end
+	end
+	if basePart then
+		local frontAnchor = Instance.new("Part")
+		frontAnchor.Name = "UpgradePromptAnchor"
+		frontAnchor.Size = Vector3.new(1, 2, 1)
+		frontAnchor.Transparency = 1
+		frontAnchor.CanCollide = false
+		frontAnchor.Anchored = true
+		local pos = basePart.Position
+		frontAnchor.Position = pos + Vector3.new(0, 2, -3)
+		frontAnchor.Parent = hub
+		local prompt = Instance.new("ProximityPrompt")
+		prompt.ActionText = "Open"
+		prompt.ObjectText = "Upgrades"
+		prompt.KeyboardKeyCode = Enum.KeyCode.E
+		prompt.MaxActivationDistance = 14
+		prompt.HoldDuration = 0
+		prompt.Parent = frontAnchor
+		local OpenUpgradeStandGui = ReplicatedStorage.RemoteEvents:WaitForChild("OpenUpgradeStandGui")
+		prompt.Triggered:Connect(function(player)
+			OpenUpgradeStandGui:FireClient(player)
+		end)
+		print("[Server] Upgrade stand ProximityPrompt added")
+	else
+		warn("[Server] Could not find a part to attach Upgrade stand ProximityPrompt")
 	end
 end
 

@@ -1,13 +1,14 @@
 --[[
 	SpinController.lua
-	Full spin wheel UI with animation, rarity-based VFX,
-	screen shake, glow, and result display.
+	CS:GO-style horizontal scrolling case opening animation.
+	Items scroll horizontally with blur effects and smooth easing.
 	Spin results now go to INVENTORY — shown with "Added to inventory!" text.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
 
 local DesignConfig = require(ReplicatedStorage.Shared.Config.DesignConfig)
 local Rarities = require(ReplicatedStorage.Shared.Config.Rarities)
@@ -28,7 +29,8 @@ local MythicAlert = RemoteEvents:WaitForChild("MythicAlert")
 -- UI references
 local screenGui
 local spinContainer
-local wheelFrame
+local carouselFrame
+local carouselContainer
 local resultFrame
 local spinButton
 local isSpinning = false
@@ -36,118 +38,189 @@ local isSpinning = false
 -- Callback for when a spin result arrives
 local onSpinResult = nil
 
--- Wheel segments
-local SEGMENT_COUNT = 12
-local segments = {}
+-- Carousel items
+local ITEM_WIDTH = 180 -- Larger items for better visibility
+local ITEM_SPACING = 40 -- More spacing so items are clearly separated
+local items = {}
+local currentTargetIndex = 1
 
 -------------------------------------------------
--- BUILD WHEEL
+-- BUILD CAROUSEL (CS:GO Style)
 -------------------------------------------------
 
-local function buildWheel(parent)
-	wheelFrame = UIHelper.CreateRoundedFrame({
-		Name = "WheelFrame",
-		Size = UDim2.new(0, 340, 0, 340),
+local function buildCarousel(parent)
+	-- Main carousel frame with circular viewport - larger for better visibility
+	carouselFrame = UIHelper.CreateRoundedFrame({
+		Name = "CarouselFrame",
+		Size = UDim2.new(0, 600, 0, 320),
 		Position = UDim2.new(0.5, 0, 0.45, 0),
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		Color = DesignConfig.Colors.Background,
-		CornerRadius = UDim.new(1, 0),
-		StrokeColor = Color3.fromRGB(150, 120, 255),
+		Color = Color3.fromRGB(20, 20, 30),
+		CornerRadius = UDim.new(0, 0),
+		StrokeColor = Color3.fromRGB(60, 60, 80),
 		Parent = parent,
 	})
 
-	local innerWheel = Instance.new("Frame")
-	innerWheel.Name = "InnerWheel"
-	innerWheel.Size = UDim2.new(0.9, 0, 0.9, 0)
-	innerWheel.Position = UDim2.new(0.5, 0, 0.5, 0)
-	innerWheel.AnchorPoint = Vector2.new(0.5, 0.5)
-	innerWheel.BackgroundTransparency = 1
-	innerWheel.Parent = wheelFrame
-
-	local displayStreamers = {}
-	for i = 1, math.min(SEGMENT_COUNT, #Streamers.List) do
-		table.insert(displayStreamers, Streamers.List[i])
-	end
-
-	for i, streamer in ipairs(displayStreamers) do
-		local angle = (i - 1) * (360 / #displayStreamers)
-		local rad = math.rad(angle)
-		local radius = 0.35
-
-		local segFrame = UIHelper.CreateRoundedFrame({
-			Name = "Seg_" .. streamer.id,
-			Size = UDim2.new(0, 60, 0, 60),
-			Position = UDim2.new(
-				0.5 + math.sin(rad) * radius, 0,
-				0.5 - math.cos(rad) * radius, 0
-			),
-			AnchorPoint = Vector2.new(0.5, 0.5),
-			Color = Rarities.ByName[streamer.rarity] and Rarities.ByName[streamer.rarity].color or Color3.fromRGB(100, 100, 100),
-			CornerRadius = DesignConfig.Layout.ButtonCorner,
-			Parent = innerWheel,
-		})
-
-		UIHelper.CreateLabel({
-			Name = "Initial",
-			Size = UDim2.new(1, 0, 0.65, 0),
-			Text = string.sub(streamer.displayName, 1, 2),
-			TextColor = DesignConfig.Colors.White,
-			Font = DesignConfig.Fonts.Primary,
-			TextScaled = true,
-			Parent = segFrame,
-		})
-
-		UIHelper.CreateLabel({
-			Name = "RarityTag",
-			Size = UDim2.new(1, 0, 0.35, 0),
-			Position = UDim2.new(0, 0, 0.65, 0),
-			Text = streamer.rarity,
-			TextColor = DesignConfig.Colors.TextSecondary,
-			Font = DesignConfig.Fonts.Secondary,
-			TextScaled = true,
-			Parent = segFrame,
-		})
-
-		segments[i] = {
-			frame = segFrame,
-			streamer = streamer,
-		}
-	end
-
-	-- Pointer
-	UIHelper.CreateRoundedFrame({
-		Name = "Pointer",
-		Size = UDim2.new(0, 20, 0, 30),
-		Position = UDim2.new(0.5, 0, 0, -5),
-		AnchorPoint = Vector2.new(0.5, 0),
-		Color = DesignConfig.Colors.Danger,
-		CornerRadius = UDim.new(0.3, 0),
-		Parent = wheelFrame,
-	})
-
-	-- Center circle
-	UIHelper.CreateRoundedFrame({
-		Name = "CenterDot",
-		Size = UDim2.new(0, 50, 0, 50),
+	-- Circular mask/viewport overlay (dark translucent circle) - larger for better visibility
+	local viewportMask = UIHelper.CreateRoundedFrame({
+		Name = "ViewportMask",
+		Size = UDim2.new(0, 500, 0, 500),
 		Position = UDim2.new(0.5, 0, 0.5, 0),
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		Color = Color3.fromRGB(60, 50, 90),
+		Color = Color3.fromRGB(0, 0, 0),
 		CornerRadius = UDim.new(1, 0),
-		StrokeColor = Color3.fromRGB(200, 180, 255),
-		Parent = wheelFrame,
+		Transparency = 0.6, -- Less transparent so items are more visible
+		Parent = carouselFrame,
 	})
+	viewportMask.ZIndex = 5
 
-	return wheelFrame
+	-- Inner container that will scroll horizontally
+	-- Make it wide enough to hold all items (will be calculated after we know how many items)
+	carouselContainer = Instance.new("Frame")
+	carouselContainer.Name = "CarouselContainer"
+	carouselContainer.Size = UDim2.new(1, 0, 1, 0) -- Will be resized after items are created
+	carouselContainer.Position = UDim2.new(0, 0, 0, 0)
+	carouselContainer.AnchorPoint = Vector2.new(0, 0)
+	carouselContainer.BackgroundTransparency = 1
+	carouselContainer.ClipsDescendants = true
+	carouselContainer.Parent = carouselFrame
+
+	-- Create items from streamers list - include ALL streamers, repeat 3 times for smooth scrolling
+	local allStreamers = {}
+	local repeatCount = 3 -- Repeat all streamers 3 times for smooth infinite scrolling effect
+	for repeatNum = 1, repeatCount do
+		for _, streamer in ipairs(Streamers.List) do
+			table.insert(allStreamers, streamer)
+		end
+	end
+
+	-- Create item frames
+	for i, streamer in ipairs(allStreamers) do
+		local itemFrame = UIHelper.CreateRoundedFrame({
+			Name = "Item_" .. i .. "_" .. streamer.id,
+			Size = UDim2.new(0, ITEM_WIDTH, 0, ITEM_WIDTH),
+			Position = UDim2.new(0, (i - 1) * (ITEM_WIDTH + ITEM_SPACING), 0.5, 0),
+			AnchorPoint = Vector2.new(0, 0.5),
+			Color = Rarities.ByName[streamer.rarity] and Rarities.ByName[streamer.rarity].color or Color3.fromRGB(100, 100, 100),
+			CornerRadius = DesignConfig.Layout.ButtonCorner,
+			Parent = carouselContainer,
+		})
+
+		-- Glow effect (will be animated)
+		local glowStroke = Instance.new("UIStroke")
+		glowStroke.Color = Rarities.ByName[streamer.rarity] and Rarities.ByName[streamer.rarity].color or Color3.fromRGB(100, 100, 100)
+		glowStroke.Thickness = 0
+		glowStroke.Transparency = 0.5
+		glowStroke.Parent = itemFrame
+
+		-- Streamer name (full name for clarity) - larger and more visible
+		local nameLabel = UIHelper.CreateLabel({
+			Name = "StreamerName",
+			Size = UDim2.new(1, -12, 0, 60),
+			Position = UDim2.new(0.5, 0, 0.12, 0),
+			AnchorPoint = Vector2.new(0.5, 0),
+			Text = streamer.displayName,
+			TextColor = DesignConfig.Colors.White,
+			Font = DesignConfig.Fonts.Primary,
+			TextSize = 20,
+			TextScaled = false,
+			Parent = itemFrame,
+		})
+		nameLabel.TextWrapped = true
+
+		-- Rarity tag (larger and more visible) - bold and clear
+		local rarityColor = Rarities.ByName[streamer.rarity] and Rarities.ByName[streamer.rarity].color or Color3.fromRGB(170, 170, 170)
+		UIHelper.CreateLabel({
+			Name = "RarityTag",
+			Size = UDim2.new(1, -12, 0, 35),
+			Position = UDim2.new(0.5, 0, 0.75, 0),
+			AnchorPoint = Vector2.new(0.5, 0),
+			Text = streamer.rarity:upper(),
+			TextColor = rarityColor,
+			Font = DesignConfig.Fonts.Accent,
+			TextSize = 18,
+			TextScaled = false,
+			Parent = itemFrame,
+		})
+
+		items[i] = {
+			frame = itemFrame,
+			streamer = streamer,
+			glowStroke = glowStroke,
+			baseX = (i - 1) * (ITEM_WIDTH + ITEM_SPACING),
+		}
+	end
+	
+	-- Resize container to fit all items
+	local totalWidth = #items * (ITEM_WIDTH + ITEM_SPACING) + ITEM_SPACING
+	carouselContainer.Size = UDim2.new(0, totalWidth, 1, 0)
+
+	-- Pointer indicator (inverted triangle at top center)
+	local pointer = Instance.new("Frame")
+	pointer.Name = "Pointer"
+	pointer.Size = UDim2.new(0, 30, 0, 20)
+	pointer.Position = UDim2.new(0.5, 0, 0, -8)
+	pointer.AnchorPoint = Vector2.new(0.5, 0)
+	pointer.BackgroundTransparency = 1
+	pointer.ZIndex = 10
+	pointer.Parent = carouselFrame
+
+	-- Create triangle shape
+	local triangleLabel = Instance.new("TextLabel")
+	triangleLabel.Size = UDim2.new(1, 0, 1, 0)
+	triangleLabel.BackgroundTransparency = 1
+	triangleLabel.Text = "▼"
+	triangleLabel.TextColor3 = DesignConfig.Colors.Danger
+	triangleLabel.Font = Enum.Font.GothamBold
+	triangleLabel.TextSize = 24
+	triangleLabel.TextScaled = false
+	triangleLabel.Parent = pointer
+
+	-- Center highlight glow (blue glow beneath center items) - larger and more visible
+	local centerGlow = UIHelper.CreateRoundedFrame({
+		Name = "CenterGlow",
+		Size = UDim2.new(0, ITEM_WIDTH + 40, 0, ITEM_WIDTH + 40),
+		Position = UDim2.new(0.5, 0, 0.5, 0),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Color = Color3.fromRGB(60, 130, 255),
+		CornerRadius = DesignConfig.Layout.ButtonCorner,
+		Transparency = 0.7, -- More visible
+		Parent = carouselFrame,
+	})
+	centerGlow.ZIndex = 1
+
+	local glowStroke = Instance.new("UIStroke")
+	glowStroke.Color = Color3.fromRGB(60, 130, 255)
+	glowStroke.Thickness = 4 -- Thicker for better visibility
+	glowStroke.Transparency = 0.2
+	glowStroke.Parent = centerGlow
+
+	return carouselFrame
 end
 
 -------------------------------------------------
 -- RESULT DISPLAY
 -------------------------------------------------
 
+-- Format odds for display: 1000000 -> "1 in 1,000,000"
+local function formatOdds(odds)
+	if not odds or odds < 1 then return "" end
+	local s = tostring(math.floor(odds))
+	local formatted = ""
+	local len = #s
+	for i = 1, len do
+		formatted = formatted .. string.sub(s, i, i)
+		if (len - i) % 3 == 0 and i < len then
+			formatted = formatted .. ","
+		end
+	end
+	return "1 in " .. formatted
+end
+
 local function buildResultDisplay(parent)
 	resultFrame = UIHelper.CreateRoundedFrame({
 		Name = "ResultFrame",
-		Size = UDim2.new(0.7, 0, 0, 110),
+		Size = UDim2.new(0.7, 0, 0, 125),
 		Position = UDim2.new(0.5, 0, 0.78, 0),
 		AnchorPoint = Vector2.new(0.5, 0),
 		Color = DesignConfig.Colors.BackgroundLight,
@@ -184,7 +257,7 @@ local function buildResultDisplay(parent)
 	UIHelper.CreateLabel({
 		Name = "RarityLabel",
 		Size = UDim2.new(1, -20, 0, 18),
-		Position = UDim2.new(0.5, 0, 0, 65),
+		Position = UDim2.new(0.5, 0, 0, 58),
 		AnchorPoint = Vector2.new(0.5, 0),
 		Text = "",
 		TextColor = Color3.fromRGB(170, 170, 170),
@@ -193,11 +266,23 @@ local function buildResultDisplay(parent)
 		Parent = resultFrame,
 	})
 
+	UIHelper.CreateLabel({
+		Name = "OddsLabel",
+		Size = UDim2.new(1, -20, 0, 18),
+		Position = UDim2.new(0.5, 0, 0, 76),
+		AnchorPoint = Vector2.new(0.5, 0),
+		Text = "",
+		TextColor = DesignConfig.Colors.Accent,
+		Font = DesignConfig.Fonts.Secondary,
+		TextSize = DesignConfig.FontSizes.Caption,
+		Parent = resultFrame,
+	})
+
 	-- "Added to inventory!" text
 	UIHelper.CreateLabel({
 		Name = "InventoryNotice",
 		Size = UDim2.new(1, -20, 0, 16),
-		Position = UDim2.new(0.5, 0, 0, 86),
+		Position = UDim2.new(0.5, 0, 0, 96),
 		AnchorPoint = Vector2.new(0.5, 0),
 		Text = "Added to inventory!",
 		TextColor = DesignConfig.Colors.Accent,
@@ -210,36 +295,227 @@ local function buildResultDisplay(parent)
 end
 
 -------------------------------------------------
--- SPIN ANIMATION
+-- SPIN ANIMATION (Horizontal CS:GO Style)
 -------------------------------------------------
 
-local function playSpinAnimation(callback)
-	local innerWheel = wheelFrame:FindFirstChild("InnerWheel")
-	if not innerWheel then return end
+local function updateItemVisuals()
+	if not carouselContainer or not carouselFrame then return end
+	local ok, err = pcall(function()
+	-- Calculate center position relative to carousel container
+	local containerWidth = carouselFrame.AbsoluteSize.X
+	if containerWidth == 0 then return end -- UI not rendered yet
+	
+	local centerX = containerWidth / 2
+	
+	for i, item in ipairs(items) do
+		if not item.frame or not item.frame.Parent then continue end
+		
+		-- Calculate item's center position
+		local itemAbsSize = item.frame.AbsoluteSize.X
+		if itemAbsSize == 0 then continue end -- Item not rendered yet
+		
+		local itemX = item.frame.AbsolutePosition.X + itemAbsSize / 2
+		local distanceFromCenter = math.abs(itemX - centerX)
+		local maxDistance = containerWidth / 2 + ITEM_WIDTH
+		local normalizedDistance = math.min(distanceFromCenter / maxDistance, 1)
+		
+		-- Scale: smaller when further from center (CS:GO style) - but keep center items large
+		local scale = 1 - (normalizedDistance * 0.4) -- Less scaling so items stay more visible
+		scale = math.max(scale, 0.5) -- Minimum scale of 50% so items are always readable
+		item.frame.Size = UDim2.new(0, ITEM_WIDTH * scale, 0, ITEM_WIDTH * scale)
+		
+		-- Transparency: more transparent when further from center (blur effect) - but keep readable
+		local transparency = normalizedDistance * 0.5 -- Less transparency so items stay visible
+		item.frame.BackgroundTransparency = transparency
+		
+		-- Glow: brighter when closer to center - make it more visible
+		if item.glowStroke then
+			local glowIntensity = 1 - normalizedDistance
+			if normalizedDistance < 0.3 then
+				-- Strong glow for center items - more visible
+				local rarityColor = Rarities.ByName[item.streamer.rarity] and Rarities.ByName[item.streamer.rarity].color or Color3.fromRGB(100, 100, 100)
+				item.glowStroke.Color = rarityColor
+				item.glowStroke.Thickness = 6 * glowIntensity -- Thicker glow
+				item.glowStroke.Transparency = 0.2 - (glowIntensity * 0.15) -- More visible
+			else
+				item.glowStroke.Thickness = 0
+			end
+		end
+		
+		-- Text transparency - keep text readable
+		local nameLabel = item.frame:FindFirstChild("StreamerName")
+		local rarityLabel = item.frame:FindFirstChild("RarityTag")
+		if nameLabel then
+			nameLabel.TextTransparency = transparency * 0.3 -- Keep text very visible
+		end
+		if rarityLabel then
+			rarityLabel.TextTransparency = transparency * 0.3 -- Keep rarity visible
+		end
+	end
+	end)
+	if not ok and err then
+		-- Don't spam; visuals will retry next frame
+	end
+end
 
-	local totalRotation = 360 * 5 + math.random(0, 360)
-	local duration = 3.5
-
+local function playSpinAnimation(resultData, callback)
+	if not carouselContainer then return end
+	
+	-- Find target streamer index in items array using streamerId from server
+	-- Prefer the second occurrence (middle of the 3 repeats) for better animation feel
+	local targetIndex = nil
+	local occurrences = {}
+	local targetStreamerId = resultData.streamerId or resultData.id -- Support both formats
+	
+	for i, item in ipairs(items) do
+		if item.streamer.id == targetStreamerId then
+			table.insert(occurrences, i)
+		end
+	end
+	
+	-- Use the second occurrence if available, otherwise first, otherwise fallback
+	if #occurrences >= 2 then
+		targetIndex = occurrences[2] -- Use second occurrence (middle set)
+	elseif #occurrences >= 1 then
+		targetIndex = occurrences[1] -- Use first occurrence
+	else
+		-- Fallback: try to find by displayName if id doesn't match
+		for i, item in ipairs(items) do
+			if item.streamer.displayName == resultData.displayName then
+				table.insert(occurrences, i)
+			end
+		end
+		if #occurrences >= 1 then
+			targetIndex = occurrences[1]
+		else
+			targetIndex = 1 -- Final fallback
+		end
+	end
+	
+	currentTargetIndex = targetIndex
+	
+	-- Calculate target position (center the target item properly)
+	local carouselWidth = carouselFrame.AbsoluteSize.X
+	if carouselWidth == 0 then
+		-- Fallback to known size from buildCarousel
+		carouselWidth = 600
+	end
+	
+	local carouselCenter = carouselWidth / 2
+	-- Item position relative to container: (targetIndex - 1) * (ITEM_WIDTH + ITEM_SPACING)
+	-- Item center relative to container: (targetIndex - 1) * (ITEM_WIDTH + ITEM_SPACING) + ITEM_WIDTH/2
+	-- To center the item: containerX = carouselCenter - itemCenterX
+	local itemCenterX = (targetIndex - 1) * (ITEM_WIDTH + ITEM_SPACING) + (ITEM_WIDTH / 2)
+	local finalTargetX = carouselCenter - itemCenterX
+	
+	-- Add extra distance for multiple spins (make it feel like multiple rotations)
+	-- Use one full set of streamers as the rotation distance
+	local extraSpins = 2.5 -- Number of full rotations
+	local fullRotationDistance = #Streamers.List * (ITEM_WIDTH + ITEM_SPACING) -- One full set of all streamers
+	
+	-- Store the final target position for use at the end
+	local finalPosition = finalTargetX
+	
+	-- CS:GO style duration - fast start, slow end
+	local duration = 5.0 -- Total duration
 	local startTime = tick()
-	local startRotation = innerWheel.Rotation
-
-	task.spawn(function()
-		while true do
-			local elapsed = tick() - startTime
-			if elapsed >= duration then break end
-
-			local progress = elapsed / duration
-			local eased = 1 - (1 - progress) ^ 3
-			innerWheel.Rotation = startRotation + totalRotation * eased
-
-			task.wait()
+	local startX = carouselContainer.Position.X.Offset
+	
+	-- Calculate where we need to start from to end up at finalPosition after extraSpins
+	-- We want to start further back so that after spinning extraSpins times, we land at finalPosition
+	local startPosition = finalPosition - (extraSpins * fullRotationDistance)
+	
+	-- Calculate the total distance to travel
+	local totalDistance = finalPosition - startPosition
+	
+	-- Set the starting position immediately so animation is smooth
+	carouselContainer.Position = UDim2.new(0, startPosition, 0, 0)
+	local actualStartX = startPosition
+	
+	-- Animation loop with smooth easing
+	local connection
+	local hasCompleted = false
+	connection = RunService.RenderStepped:Connect(function()
+		local elapsed = tick() - startTime
+		if elapsed >= duration then
+			if not hasCompleted then
+				hasCompleted = true
+				connection:Disconnect()
+				-- Snap to final position - use the pre-calculated finalPosition
+				carouselContainer.Position = UDim2.new(0, finalPosition, 0, 0)
+				updateItemVisuals()
+				
+				-- Ensure the winning item is clearly visible immediately
+				task.spawn(function()
+					task.wait(0.1) -- Brief wait for UI to update
+					updateItemVisuals()
+					
+					-- Ensure the winning item is clearly visible
+					if items[targetIndex] and items[targetIndex].frame then
+						local winningItem = items[targetIndex].frame
+						if winningItem then
+							winningItem.Size = UDim2.new(0, ITEM_WIDTH, 0, ITEM_WIDTH)
+							winningItem.BackgroundTransparency = 0
+							local winningGlow = winningItem:FindFirstChildOfClass("UIStroke")
+							if winningGlow then
+								local rarityColor = Rarities.ByName[items[targetIndex].streamer.rarity] and Rarities.ByName[items[targetIndex].streamer.rarity].color or Color3.fromRGB(100, 100, 100)
+								winningGlow.Color = rarityColor
+								winningGlow.Thickness = 8
+								winningGlow.Transparency = 0
+							end
+							
+							-- Make sure text is visible
+							local nameLabel = winningItem:FindFirstChild("StreamerName")
+							local rarityLabel = winningItem:FindFirstChild("RarityTag")
+							if nameLabel then
+								nameLabel.TextTransparency = 0
+								nameLabel.TextColor3 = DesignConfig.Colors.White
+							end
+							if rarityLabel then
+								rarityLabel.TextTransparency = 0
+								local rarityColor = Rarities.ByName[items[targetIndex].streamer.rarity] and Rarities.ByName[items[targetIndex].streamer.rarity].color or Color3.fromRGB(170, 170, 170)
+								rarityLabel.TextColor3 = rarityColor
+							end
+						end
+					end
+					
+					-- Brief pause to show the result clearly before callback
+					task.wait(1.0) -- Give time to see the result
+					if callback then
+						callback()
+					end
+				end)
+			end
+			return
 		end
-
-		innerWheel.Rotation = startRotation + totalRotation
-
-		if callback then
-			callback()
+		
+		local progress = elapsed / duration
+		
+		-- CS:GO style easing: VERY fast start, dramatic slowdown at end
+		-- First 75% of time covers 90% of distance (very fast)
+		-- Last 25% of time covers 10% of distance (very slow, visible)
+		local eased
+		if progress < 0.75 then
+			-- Fast phase - very quick scrolling (first 75% of time covers 90% of distance)
+			local fastProgress = progress / 0.75
+			-- Ease in cubic for accelerating start
+			local fastEased = fastProgress ^ 3
+			eased = fastEased * 0.9
+		else
+			-- Slow phase - dramatic slowdown for visibility (last 25% of time covers 10% of distance)
+			local slowProgress = (progress - 0.75) / 0.25
+			-- Ease out exponential for very smooth, dramatic deceleration
+			local slowEased = 1 - (2 ^ (-10 * slowProgress)) -- Exponential ease out
+			eased = 0.9 + (slowEased * 0.1) -- Final 10% of distance in last 25% of time
 		end
+		
+		-- Calculate current position using eased progress
+		-- Use actualStartX instead of startX to ensure consistency
+		local currentX = actualStartX + totalDistance * eased
+		carouselContainer.Position = UDim2.new(0, currentX, 0, 0)
+		
+		-- Update visual effects in real-time to keep items visible
+		updateItemVisuals()
 	end)
 end
 
@@ -247,23 +523,71 @@ local function showResult(data)
 	local rarityInfo = Rarities.ByName[data.rarity]
 	local rarityColor = rarityInfo and rarityInfo.color or Color3.fromRGB(170, 170, 170)
 
+	-- Update result display
 	local nameLabel = resultFrame:FindFirstChild("StreamerName")
 	local rarityLabel = resultFrame:FindFirstChild("RarityLabel")
+	local resultLabel = resultFrame:FindFirstChild("ResultLabel")
 
+	if resultLabel then
+		resultLabel.Text = "YOU RECEIVED:"
+		resultLabel.TextColor3 = rarityColor
+	end
 	if nameLabel then
-		nameLabel.Text = data.displayName
+		nameLabel.Text = data.displayName or "Unknown"
 		nameLabel.TextColor3 = rarityColor
 	end
 	if rarityLabel then
-		rarityLabel.Text = data.rarity
+		rarityLabel.Text = (data.rarity or "Common"):upper()
 		rarityLabel.TextColor3 = rarityColor
+	end
+
+	local oddsText = data.odds and formatOdds(data.odds) or ""
+	local oddsLabel = resultFrame:FindFirstChild("OddsLabel")
+	if oddsLabel and oddsText ~= "" then
+		oddsLabel.Text = oddsText
+		oddsLabel.TextColor3 = rarityColor
+		oddsLabel.Visible = true
+	elseif oddsLabel then
+		oddsLabel.Visible = false
 	end
 
 	resultFrame.Visible = true
 	UIHelper.ScaleIn(resultFrame, 0.3)
+	
+	-- Show a prominent "You received..." message with odds
+	local receivedMessage = UIHelper.CreateRoundedFrame({
+		Name = "ReceivedMessage",
+		Size = UDim2.new(0.6, 0, 0, 120),
+		Position = UDim2.new(0.5, 0, 0.25, 0),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Color = DesignConfig.Colors.BackgroundLight,
+		CornerRadius = DesignConfig.Layout.PanelCorner,
+		StrokeColor = rarityColor,
+		Parent = spinContainer,
+	})
+	receivedMessage.ZIndex = 20
+	
+	local messageLines = { "YOU RECEIVED:", data.displayName or "Unknown", (data.rarity or "Common"):upper() }
+	if oddsText ~= "" then
+		table.insert(messageLines, oddsText)
+	end
+	local messageText = UIHelper.CreateLabel({
+		Name = "MessageText",
+		Size = UDim2.new(1, -20, 1, -20),
+		Position = UDim2.new(0.5, 0, 0.5, 0),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Text = table.concat(messageLines, "\n"),
+		TextColor = rarityColor,
+		Font = DesignConfig.Fonts.Accent,
+		TextSize = 22,
+		Parent = receivedMessage,
+	})
+	messageText.TextScaled = false
+	
+	UIHelper.ScaleIn(receivedMessage, 0.3)
 
-	-- Glow wheel border
-	local stroke = wheelFrame:FindFirstChildOfClass("UIStroke")
+	-- Glow carousel border
+	local stroke = carouselFrame:FindFirstChildOfClass("UIStroke")
 	if stroke then
 		TweenService:Create(stroke, TweenInfo.new(0.3), {
 			Color = rarityColor,
@@ -271,10 +595,23 @@ local function showResult(data)
 		}):Play()
 		task.delay(2, function()
 			TweenService:Create(stroke, TweenInfo.new(0.5), {
-				Color = Color3.fromRGB(150, 120, 255),
+				Color = Color3.fromRGB(60, 60, 80),
 				Thickness = 2,
 			}):Play()
 		end)
+	end
+	
+	-- Highlight the winning item
+	if items[currentTargetIndex] and items[currentTargetIndex].frame then
+		local winningItem = items[currentTargetIndex].frame
+		local winningGlow = winningItem:FindFirstChildOfClass("UIStroke")
+		if winningGlow then
+			TweenService:Create(winningGlow, TweenInfo.new(0.3), {
+				Color = rarityColor,
+				Thickness = 6,
+				Transparency = 0,
+			}):Play()
+		end
 	end
 
 	-- Camera shake for high rarities
@@ -305,6 +642,32 @@ local function showResult(data)
 	if onSpinResult then
 		task.spawn(onSpinResult, data)
 	end
+	
+	-- Auto-close the window after showing the result
+	task.spawn(function()
+		task.wait(3.5) -- Show result for 3.5 seconds
+		
+		-- Fade out the received message
+		if receivedMessage and receivedMessage.Parent then
+			TweenService:Create(receivedMessage, TweenInfo.new(0.3), {
+				BackgroundTransparency = 1,
+			}):Play()
+			local messageStroke = receivedMessage:FindFirstChildOfClass("UIStroke")
+			if messageStroke then
+				TweenService:Create(messageStroke, TweenInfo.new(0.3), {
+					Transparency = 1,
+				}):Play()
+			end
+			task.wait(0.3)
+			if receivedMessage then
+				receivedMessage:Destroy()
+			end
+		end
+		
+		-- Close the spin window
+		task.wait(0.2)
+		SpinController.Hide()
+	end)
 end
 
 -------------------------------------------------
@@ -380,7 +743,7 @@ function SpinController.Init()
 		Parent = spinContainer,
 	})
 
-	buildWheel(spinContainer)
+	buildCarousel(spinContainer)
 	buildResultDisplay(spinContainer)
 
 	spinButton = UIHelper.CreateButton({
@@ -406,7 +769,7 @@ function SpinController.Init()
 	-- Listen for spin results
 	SpinResult.OnClientEvent:Connect(function(data)
 		if data.success then
-			playSpinAnimation(function()
+			playSpinAnimation(data, function()
 				showResult(data)
 				isSpinning = false
 				spinButton.Text = "SPIN  ($" .. Economy.SpinCost .. ")"
@@ -434,6 +797,13 @@ function SpinController.RequestSpin()
 	if isSpinning then return end
 	isSpinning = true
 	resultFrame.Visible = false
+	
+	-- Reset carousel position for new spin (no blocking wait)
+	if carouselContainer then
+		carouselContainer.Position = UDim2.new(0, 0, 0, 0)
+		updateItemVisuals()
+	end
+	
 	spinButton.Text = "SPINNING..."
 	SpinRequest:FireServer()
 end

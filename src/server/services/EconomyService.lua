@@ -13,6 +13,8 @@ local Streamers = require(ReplicatedStorage.Shared.Config.Streamers)
 local RemoteEvents = ReplicatedStorage:WaitForChild("RemoteEvents")
 local SellRequest = RemoteEvents:WaitForChild("SellRequest")
 local SellResult = RemoteEvents:WaitForChild("SellResult")
+local UpgradeLuckRequest = RemoteEvents:WaitForChild("UpgradeLuckRequest")
+local UpgradeLuckResult = RemoteEvents:WaitForChild("UpgradeLuckResult")
 
 local EconomyService = {}
 
@@ -54,6 +56,22 @@ local function handleSell(player, streamerId: string)
 end
 
 -------------------------------------------------
+-- LUCK UPGRADE (spend cash for +1 luck; every 20 luck = +1% drop luck)
+-------------------------------------------------
+
+local function handleUpgradeLuck(player)
+	if not PlayerData then return end
+	local currentLuck = PlayerData.GetLuck(player)
+	local cost = Economy.GetLuckUpgradeCost(currentLuck)
+	if not PlayerData.SpendCash(player, cost) then
+		UpgradeLuckResult:FireClient(player, { success = false, reason = "Not enough cash!" })
+		return
+	end
+	PlayerData.AddLuck(player, 1)
+	UpgradeLuckResult:FireClient(player, { success = true, newLuck = PlayerData.GetLuck(player) })
+end
+
+-------------------------------------------------
 -- PASSIVE INCOME
 -------------------------------------------------
 
@@ -83,6 +101,10 @@ function EconomyService.Init(playerDataModule)
 
 	SellRequest.OnServerEvent:Connect(function(player, streamerId)
 		handleSell(player, streamerId)
+	end)
+
+	UpgradeLuckRequest.OnServerEvent:Connect(function(player)
+		handleUpgradeLuck(player)
 	end)
 
 	startPassiveIncome()

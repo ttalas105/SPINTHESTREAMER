@@ -21,7 +21,8 @@ local ok, err = pcall(function()
 	dataStore = DataStoreService:GetDataStore("SpinTheStreamer_v2")
 end)
 if not ok then
-	warn("[PlayerData] DataStore unavailable (Studio?): " .. tostring(err))
+	-- Normal in Studio until the place is published to the web
+	print("[PlayerData] DataStore unavailable (normal in Studio); using local data. " .. tostring(err))
 	-- Create a mock so the game still runs without persistence
 	dataStore = {
 		GetAsync = function() return nil end,
@@ -30,11 +31,12 @@ if not ok then
 end
 
 local DEFAULT_DATA = {
-	cash = 500,
+	cash = 1000000,
 	inventory = {},           -- { "Marlon", "XQC", "Ninja", ... } list of streamer IDs
 	equippedPads = {},        -- { ["1"] = "KaiCenat", ["2"] = "Speed" } pad slot -> streamer ID
 	collection = {},          -- { ["Marlon"] = true, ["XQC"] = true } discovered uniques
 	rebirthCount = 0,
+	luck = 0,                 -- personal luck stat; every 20 = +1% drop luck (stacked with crate luck)
 	premiumSlotUnlocked = false,
 	doubleCash = false,
 	spinCredits = 0,
@@ -89,6 +91,9 @@ local function loadData(player)
 			data.equippedPads = data.equippedStreamers
 			data.equippedStreamers = nil
 		end
+		if data.luck == nil then
+			data.luck = 0
+		end
 	else
 		data = deepCopy(DEFAULT_DATA)
 	end
@@ -123,6 +128,7 @@ function PlayerData.Replicate(player)
 		equippedPads = data.equippedPads,
 		collection = data.collection,
 		rebirthCount = data.rebirthCount,
+		luck = data.luck or 0,
 		premiumSlotUnlocked = data.premiumSlotUnlocked,
 		doubleCash = data.doubleCash,
 		spinCredits = data.spinCredits,
@@ -351,6 +357,29 @@ function PlayerData.ResetForRebirth(player)
 	end
 	data.equippedPads = {}
 	-- Inventory and collection are kept
+	PlayerData.Replicate(player)
+end
+
+-------------------------------------------------
+-- LUCK (personal stat: every 20 = +1% drop luck, stacks with crate luck)
+-------------------------------------------------
+
+function PlayerData.GetLuck(player): number
+	local data = PlayerData.Get(player)
+	return data and (data.luck or 0) or 0
+end
+
+function PlayerData.SetLuck(player, amount: number)
+	local data = PlayerData.Get(player)
+	if not data then return end
+	data.luck = math.max(0, amount)
+	PlayerData.Replicate(player)
+end
+
+function PlayerData.AddLuck(player, amount: number)
+	local data = PlayerData.Get(player)
+	if not data then return end
+	data.luck = math.max(0, (data.luck or 0) + amount)
 	PlayerData.Replicate(player)
 end
 

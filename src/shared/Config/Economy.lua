@@ -18,8 +18,19 @@ Economy.SpinCost10 = 800      -- discounted 10-pack
 -------------------------------------------------
 Economy.Crate1Cost = 50
 Economy.Crate2Cost = 200
+Economy.Crate3Cost = 400
+Economy.Crate4Cost = 800
+Economy.Crate5Cost = 1500
+Economy.Crate6Cost = 3000
+Economy.Crate7Cost = 6000
+
 Economy.Crate1LuckBonus = 0.10   -- +10% luck
-Economy.Crate2LuckBonus = 0.30  -- +30% luck
+Economy.Crate2LuckBonus = 0.30   -- +30% luck
+Economy.Crate3LuckBonus = 0.60   -- +60% luck (case 3)
+Economy.Crate4LuckBonus = 1.00  -- +100% luck (case 4)
+Economy.Crate5LuckBonus = 2.00  -- +200% luck (case 5)
+Economy.Crate6LuckBonus = 1.50  -- +150% luck
+Economy.Crate7LuckBonus = 2.50  -- +250% luck
 
 -------------------------------------------------
 -- REBIRTH
@@ -54,6 +65,20 @@ Economy.PassiveIncomeInterval = 60 -- seconds
 -------------------------------------------------
 Economy.DefaultLuckMultiplier = 1  -- 1x normal
 Economy.BoostedLuckMultiplier = 2  -- 2x with boost
+
+-------------------------------------------------
+-- PERSONAL LUCK UPGRADE (at Upgrade stand; every 20 luck = +1% drop luck)
+-------------------------------------------------
+Economy.LuckUpgradeCostFirst  = 1000   -- first upgrade (+1 luck)
+Economy.LuckUpgradeCostSecond = 5000   -- second upgrade (+1 more luck); 3rd+ use this for now
+Economy.LuckUpgradeCostPerPoint = 5000 -- fallback for 3rd+ upgrades
+
+--- Cost to buy the next +1 luck (based on current luck stat)
+function Economy.GetLuckUpgradeCost(currentLuck: number): number
+	if currentLuck == 0 then return Economy.LuckUpgradeCostFirst end
+	if currentLuck == 1 then return Economy.LuckUpgradeCostSecond end
+	return Economy.LuckUpgradeCostPerPoint or Economy.LuckUpgradeCostSecond
+end
 
 -------------------------------------------------
 -- ROBUX PRODUCT IDS (placeholder — set real ids in Studio)

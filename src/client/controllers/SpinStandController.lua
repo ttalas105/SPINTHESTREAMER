@@ -38,26 +38,13 @@ local CARTOON_FONT = Enum.Font.Cartoon
 -- CRATE DEFINITIONS
 -------------------------------------------------
 local crates = {
-	{
-		id = 1,
-		name = "Crate 1",
-		emoji = "📦",
-		cost = Economy.Crate1Cost,
-		luckPercent = 10,
-		desc = "Luck: +10%",
-		color = Color3.fromRGB(100, 200, 255),
-		strokeColor = Color3.fromRGB(40, 120, 180),
-	},
-	{
-		id = 2,
-		name = "Crate 2",
-		emoji = "🎁",
-		cost = Economy.Crate2Cost,
-		luckPercent = 30,
-		desc = "Luck: +30%",
-		color = Color3.fromRGB(255, 140, 180),
-		strokeColor = Color3.fromRGB(180, 60, 100),
-	},
+	{ id = 1, name = "Crate 1", emoji = "📦", cost = Economy.Crate1Cost, luckPercent = 10,  desc = "Luck: +10%",  color = Color3.fromRGB(100, 200, 255), strokeColor = Color3.fromRGB(40, 120, 180) },
+	{ id = 2, name = "Crate 2", emoji = "🎁", cost = Economy.Crate2Cost, luckPercent = 30,  desc = "Luck: +30%",  color = Color3.fromRGB(255, 140, 180), strokeColor = Color3.fromRGB(180, 60, 100) },
+	{ id = 3, name = "Crate 3", emoji = "📫", cost = Economy.Crate3Cost, luckPercent = 60,  desc = "Luck: +60%",  color = Color3.fromRGB(160, 255, 160), strokeColor = Color3.fromRGB(40, 160, 60) },
+	{ id = 4, name = "Crate 4", emoji = "🎀", cost = Economy.Crate4Cost, luckPercent = 100, desc = "Luck: +100%", color = Color3.fromRGB(255, 200, 100), strokeColor = Color3.fromRGB(200, 140, 40) },
+	{ id = 5, name = "Crate 5", emoji = "✨", cost = Economy.Crate5Cost, luckPercent = 200, desc = "Luck: +200%", color = Color3.fromRGB(200, 150, 255), strokeColor = Color3.fromRGB(120, 60, 200) },
+	{ id = 6, name = "Crate 6", emoji = "🌟", cost = Economy.Crate6Cost, luckPercent = 150, desc = "Luck: +150%", color = Color3.fromRGB(255, 220, 140), strokeColor = Color3.fromRGB(200, 120, 30) },
+	{ id = 7, name = "Crate 7", emoji = "💎", cost = Economy.Crate7Cost, luckPercent = 250, desc = "Luck: +250%", color = Color3.fromRGB(180, 220, 255), strokeColor = Color3.fromRGB(60, 120, 200) },
 }
 
 -------------------------------------------------
@@ -249,20 +236,32 @@ function SpinStandController.Init()
 		Parent = modalFrame,
 	})
 
-	-- Cards container
+	-- Cards container (scrollable for 7 crates)
+	local scroll = Instance.new("ScrollingFrame")
+	scroll.Name = "CardsScroll"
+	scroll.Size = UDim2.new(1, -40, 0, 250)
+	scroll.Position = UDim2.new(0, 20, 0, 90)
+	scroll.BackgroundTransparency = 1
+	scroll.BorderSizePixel = 0
+	scroll.ScrollBarThickness = 8
+	scroll.ScrollBarImageColor3 = Color3.fromRGB(100, 100, 140)
+	scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+	scroll.AutomaticCanvasSize = Enum.AutomaticSize.X
+	scroll.ZIndex = 2
+	scroll.Parent = modalFrame
+
 	local cardsFrame = Instance.new("Frame")
 	cardsFrame.Name = "CardsFrame"
-	cardsFrame.Size = UDim2.new(1, -40, 0, 230)
-	cardsFrame.Position = UDim2.new(0, 20, 0, 90)
+	cardsFrame.Size = UDim2.new(0, 0, 1, 0)
+	cardsFrame.AutomaticSize = Enum.AutomaticSize.X
 	cardsFrame.BackgroundTransparency = 1
-	cardsFrame.ZIndex = 2
-	cardsFrame.Parent = modalFrame
+	cardsFrame.Parent = scroll
 
 	local listLayout = Instance.new("UIListLayout")
 	listLayout.FillDirection = Enum.FillDirection.Horizontal
-	listLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	listLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
 	listLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-	listLayout.Padding = UDim.new(0, 24)
+	listLayout.Padding = UDim.new(0, 20)
 	listLayout.Parent = cardsFrame
 
 	for _, crate in ipairs(crates) do

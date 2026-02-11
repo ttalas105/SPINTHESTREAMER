@@ -97,7 +97,8 @@ local function loadAndPrepAsset(assetId, label)
 		return InsertService:LoadAsset(assetId)
 	end)
 	if not ok or not asset then
-		warn("[WorldBuilder] Failed to load " .. label .. ": " .. tostring(asset))
+		-- Expected in Studio if place doesn't own the asset; fallback builds still work
+		print("[WorldBuilder] Could not load " .. label .. " (use fallback); " .. tostring(asset or "error"))
 		return nil
 	end
 	print("[WorldBuilder] Loaded " .. label)
@@ -232,7 +233,7 @@ local function buildNPC(cfg, pos, parent)
 end
 
 -------------------------------------------------
--- SHOP HUB (asset 95566802299515)
+-- SHOP HUB (asset 95566802299515 — use stand asset when it loads)
 -------------------------------------------------
 
 local SHOP_ASSET_ID = 95566802299515
@@ -251,7 +252,6 @@ local function buildHub()
 	local shopLoaded = false
 
 	if asset then
-		-- Find best stall template (widest Model at depth >= 2)
 		local best, bestParts = nil, 0
 		local function search(obj, depth)
 			if obj:IsA("Model") and depth >= 2 then
@@ -262,7 +262,8 @@ local function buildHub()
 				local bmin, bmax = getModelBounds(obj)
 				local sz = bmax - bmin
 				if pc > bestParts and sz.X > 4 and sz.Z > 4 then
-					best = obj; bestParts = pc
+					best = obj
+					bestParts = pc
 				end
 			end
 			for _, child in ipairs(obj:GetChildren()) do
@@ -292,7 +293,6 @@ local function buildHub()
 			local clone = stallTemplate:Clone()
 			clone.Name = "Stall_" .. stallCfg.name
 
-			-- Remove old GUIs and NPCs
 			for _, gui in ipairs(clone:GetDescendants()) do
 				if gui:IsA("BillboardGui") or gui:IsA("SurfaceGui") then gui:Destroy() end
 			end
@@ -314,7 +314,6 @@ local function buildHub()
 			positionModel(clone, targetPos)
 			clone.Parent = hub
 
-			-- Sign
 			local bmin, bmax = getModelBounds(clone)
 			local signAnchor = p({ Name = "Sign_" .. stallCfg.name,
 				Size = Vector3.new(1, 1, 1),
@@ -322,10 +321,9 @@ local function buildHub()
 				Transparency = 1, CanCollide = false, Parent = hub })
 			billboard(signAnchor, stallCfg.name,
 				DesignConfig.Colors.White,
-				stallCfg.color or Color3.fromRGB(100,100,200),
+				stallCfg.color or Color3.fromRGB(100, 100, 200),
 				UDim2.new(10, 0, 3, 0), Vector3.new(0, 0, 0))
 
-			-- Our NPC
 			if stallCfg.npc then
 				local npcCfg = stallCfg.npc
 				npcCfg.name = stallCfg.name
@@ -339,23 +337,25 @@ local function buildHub()
 			Position = ctr + Vector3.new(0, 0.1, 0),
 			Color = Color3.fromRGB(60, 75, 120),
 			Material = Enum.Material.Cobblestone, Parent = hub })
+		print("[WorldBuilder] Hub built with shop stand asset")
 	end
 
 	if not shopLoaded then
-		warn("[WorldBuilder] Using fallback stalls")
+		print("[WorldBuilder] Using fallback stalls (Shop asset not available)")
 		local SP = 26
 		local totalW = (#stalls - 1) * SP
 		local startX = ctr.X - totalW / 2
 		for i, cfg in ipairs(stalls) do
-			local pos = Vector3.new(startX + (i-1)*SP, ctr.Y, ctr.Z)
-			local signPart = p({ Name = "Sign_"..cfg.name,
+			local pos = Vector3.new(startX + (i - 1) * SP, ctr.Y, ctr.Z)
+			local signPart = p({ Name = "Sign_" .. cfg.name,
 				Size = Vector3.new(12, 3.5, 0.4),
 				Position = pos + Vector3.new(0, 13, 0),
 				Color = cfg.color, Transparency = 0.1, Parent = hub })
 			billboard(signPart, cfg.name, DesignConfig.Colors.White, nil,
-				UDim2.new(10,0,3,0), Vector3.new(0,0,0))
+				UDim2.new(10, 0, 3, 0), Vector3.new(0, 0, 0))
 			if cfg.npc then
-				local npcCfg = cfg.npc; npcCfg.name = cfg.name
+				local npcCfg = cfg.npc
+				npcCfg.name = cfg.name
 				buildNPC(npcCfg, pos, hub)
 			end
 		end
@@ -529,11 +529,45 @@ end
 -- BaseService handles the per-player pad grid
 -------------------------------------------------
 
+-- Build a simple procedural base (raised platform + border) for when asset is not used
+local function buildProceduralBaseSlot(name, basePos, parent)
+	local h = 1
+	local w, d = 50, 45
+	-- Floor
+	p({ Name = name .. "_Floor",
+		Size = Vector3.new(w, h, d),
+		Position = basePos + Vector3.new(0, h / 2, 0),
+		Color = DesignConfig.Colors.BaseFloor,
+		Parent = parent })
+	-- Border (yellow outline like reference)
+	local borderH = 1.5
+	local borderT = 1.2
+	p({ Name = name .. "_BorderFront",
+		Size = Vector3.new(w + borderT * 2, borderH, borderT),
+		Position = basePos + Vector3.new(0, borderH / 2, d / 2 + borderT / 2),
+		Color = DesignConfig.Colors.BaseBorder,
+		Parent = parent })
+	p({ Name = name .. "_BorderBack",
+		Size = Vector3.new(w + borderT * 2, borderH, borderT),
+		Position = basePos + Vector3.new(0, borderH / 2, -d / 2 - borderT / 2),
+		Color = DesignConfig.Colors.BaseBorder,
+		Parent = parent })
+	p({ Name = name .. "_BorderLeft",
+		Size = Vector3.new(borderT, borderH, d + borderT * 2),
+		Position = basePos + Vector3.new(-w / 2 - borderT / 2, borderH / 2, 0),
+		Color = DesignConfig.Colors.BaseBorder,
+		Parent = parent })
+	p({ Name = name .. "_BorderRight",
+		Size = Vector3.new(borderT, borderH, d + borderT * 2),
+		Position = basePos + Vector3.new(w / 2 + borderT / 2, borderH / 2, 0),
+		Color = DesignConfig.Colors.BaseBorder,
+		Parent = parent })
+end
+
 local function buildBaseSlots()
 	local asset = loadAndPrepAsset(DesignConfig.BaseAsset.AssetId, "Base asset")
-
-	-- Find the actual base model
 	local baseTemplate = nil
+
 	if asset then
 		for _, child in ipairs(asset:GetChildren()) do
 			local pc = 0
@@ -544,14 +578,14 @@ local function buildBaseSlots()
 		end
 		if not baseTemplate then baseTemplate = asset end
 
-		-- Store template in ReplicatedStorage for BaseService pad grid
-		local stored = baseTemplate:Clone()
-		stored.Name = "BaseTemplate"
-		stored.Parent = ReplicatedStorage
-		print("[WorldBuilder] Base template stored (" .. #stored:GetDescendants() .. " descendants)")
+		if baseTemplate then
+			local stored = baseTemplate:Clone()
+			stored.Name = "BaseTemplate"
+			stored.Parent = ReplicatedStorage
+			print("[WorldBuilder] Base template stored (" .. #stored:GetDescendants() .. " descendants)")
+		end
 	end
 
-	-- Place ALL 4 base structures immediately (always visible)
 	local basesFolder = Workspace:FindFirstChild("PlayerBases")
 	if not basesFolder then
 		basesFolder = Instance.new("Folder")
@@ -562,22 +596,23 @@ local function buildBaseSlots()
 	for i, slotInfo in ipairs(DesignConfig.BasePositions) do
 		local basePos = slotInfo.position
 		local rotation = slotInfo.rotation or 0
+		local name = "BaseSlot_" .. i
 
 		if baseTemplate then
 			local clone = baseTemplate:Clone()
-			clone.Name = "BaseSlot_" .. i
+			clone.Name = name
 
 			for _, part in ipairs(clone:GetDescendants()) do
 				if part:IsA("BasePart") then part.Anchored = true end
 			end
 			for _, hum in ipairs(clone:GetDescendants()) do
 				if hum:IsA("Humanoid") then
-					hum.WalkSpeed = 0; hum.JumpPower = 0
+					hum.WalkSpeed = 0
+					hum.JumpPower = 0
 					hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
 				end
 			end
 
-			-- Remove yellow/glowing circular parts (spawn markers from asset)
 			for _, part in ipairs(clone:GetDescendants()) do
 				if part:IsA("BasePart") then
 					local r, g, b = part.Color.R, part.Color.G, part.Color.B
@@ -585,26 +620,20 @@ local function buildBaseSlots()
 					local isSmallCircle = (part.Shape == Enum.PartType.Cylinder or part.Shape == Enum.PartType.Ball)
 						and math.max(part.Size.X, part.Size.Y, part.Size.Z) < 10
 					local isGlowing = part.Material == Enum.Material.Neon
-					-- Remove yellow parts, neon parts, or small cylinders/balls that look like markers
-					if (isYellow and (isSmallCircle or isGlowing))
-						or (isGlowing and isYellow) then
+					if (isYellow and (isSmallCircle or isGlowing)) or (isGlowing and isYellow) then
 						part:Destroy()
 					end
 				end
-				-- Also remove SpawnLocations
 				if part:IsA("SpawnLocation") then part:Destroy() end
 			end
 
 			positionModel(clone, basePos, rotation)
 			clone.Parent = basesFolder
-			print("[WorldBuilder] Placed base slot " .. i .. " at " .. tostring(basePos) .. " rot=" .. rotation)
+			print("[WorldBuilder] Placed base slot " .. i .. " (asset) at " .. tostring(basePos))
 		else
-			-- Fallback: simple floor
-			p({ Name = "BaseSlot_" .. i,
-				Size = Vector3.new(60, 1, 60),
-				Position = basePos,
-				Color = DesignConfig.Colors.BaseFloor,
-				Parent = basesFolder })
+			-- Always-visible procedural base (old style): raised platform with border
+			buildProceduralBaseSlot(name, basePos, basesFolder)
+			print("[WorldBuilder] Placed base slot " .. i .. " (procedural) at " .. tostring(basePos))
 		end
 	end
 

@@ -20,6 +20,7 @@ local playerGui = player:WaitForChild("PlayerGui")
 
 -- Cached references
 local cashLabel
+local luckLabel
 
 -- Local data mirror
 HUDController.Data = {
@@ -28,6 +29,7 @@ HUDController.Data = {
 	equippedPads = {},
 	collection = {},
 	rebirthCount = 0,
+	luck = 0,
 	totalSlots = 1,
 	premiumSlotUnlocked = false,
 	doubleCash = false,
@@ -49,10 +51,10 @@ function HUDController.Init()
 	local screenGui = UIHelper.CreateScreenGui("HUDGui", 3)
 	screenGui.Parent = playerGui
 
-	-- Bottom-left currency display (cash only)
+	-- Bottom-left currency display (cash + luck)
 	local hudContainer = Instance.new("Frame")
 	hudContainer.Name = "HUDContainer"
-	hudContainer.Size = UDim2.new(0, 160, 0, 32)
+	hudContainer.Size = UDim2.new(0, 180, 0, 52)
 	hudContainer.Position = UDim2.new(0, 12, 1, -12)
 	hudContainer.AnchorPoint = Vector2.new(0, 1)
 	hudContainer.BackgroundTransparency = 1
@@ -62,14 +64,28 @@ function HUDController.Init()
 	-- Cash
 	cashLabel = Instance.new("TextLabel")
 	cashLabel.Name = "CashLabel"
-	cashLabel.Size = UDim2.new(1, 0, 0, 26)
+	cashLabel.Size = UDim2.new(1, 0, 0, 24)
+	cashLabel.Position = UDim2.new(0, 0, 0, 0)
 	cashLabel.BackgroundTransparency = 1
 	cashLabel.TextColor3 = DesignConfig.Colors.Accent
 	cashLabel.Font = DesignConfig.Fonts.Primary
 	cashLabel.TextSize = DesignConfig.FontSizes.Header
-	cashLabel.Text = "$100"
+	cashLabel.Text = "$0"
 	cashLabel.TextXAlignment = Enum.TextXAlignment.Left
 	cashLabel.Parent = hudContainer
+
+	-- Luck (every 20 = +1% drop luck; upgrade at the Upgrade stand)
+	luckLabel = Instance.new("TextLabel")
+	luckLabel.Name = "LuckLabel"
+	luckLabel.Size = UDim2.new(1, 0, 0, 20)
+	luckLabel.Position = UDim2.new(0, 0, 0, 26)
+	luckLabel.BackgroundTransparency = 1
+	luckLabel.TextColor3 = Color3.fromRGB(200, 180, 255)
+	luckLabel.Font = DesignConfig.Fonts.Primary
+	luckLabel.TextSize = 16
+	luckLabel.Text = "Luck: 0 (+0%)"
+	luckLabel.TextXAlignment = Enum.TextXAlignment.Left
+	luckLabel.Parent = hudContainer
 
 	-- Listen for data updates from server
 	local RemoteEvents = ReplicatedStorage:WaitForChild("RemoteEvents")
@@ -107,6 +123,13 @@ function HUDController.UpdateData(payload)
 				}):Play()
 			end)
 		end
+	end
+
+	-- Update luck display (every 20 luck = +1%)
+	if luckLabel then
+		local luck = HUDController.Data.luck or 0
+		local percent = math.floor(luck / 20)
+		luckLabel.Text = ("Luck: %d (+%d%%)"):format(luck, percent)
 	end
 
 	-- Fire data update callbacks

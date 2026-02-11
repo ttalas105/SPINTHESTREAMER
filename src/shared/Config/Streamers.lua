@@ -1,47 +1,47 @@
 --[[
 	Streamers.lua
-	All 24 streamers with rarity assignments.
+	All streamers with rarity and custom odds (1 in N).
 	id = unique key (matches model name in ReplicatedStorage.StreamerModels)
 	displayName = shown in UI
 	rarity = must match a key in Rarities.lua
+	odds = N for "1 in N" pull chance (used for weighted roll)
 ]]
 
 local Streamers = {}
 
 Streamers.List = {
-	-- COMMON (8 streamers)
-	{ id = "Marlon",         displayName = "Marlon",          rarity = "Common" },
-	{ id = "Adapt",          displayName = "Adapt",           rarity = "Common" },
-	{ id = "Silky",          displayName = "Silky",           rarity = "Common" },
-	{ id = "Fanum",          displayName = "Fanum",           rarity = "Common" },
-	{ id = "Agent00",        displayName = "Agent 00",        rarity = "Common" },
-	{ id = "Yourrage",       displayName = "YourRAGE",        rarity = "Common" },
-	{ id = "Ludwig",         displayName = "Ludwig",          rarity = "Common" },
-	{ id = "Rakai",          displayName = "Rakai",           rarity = "Common" },
+	-- COMMON
+	{ id = "Rakai",          displayName = "Rakai",           rarity = "Common",  odds = 2 },
+	{ id = "Fanum",          displayName = "Fanum",          rarity = "Common",   odds = 5 },
+	{ id = "Silky",          displayName = "Silky",          rarity = "Common",   odds = 7 },
+	{ id = "Emiru",          displayName = "Emiru",          rarity = "Common",   odds = 12 },
+	{ id = "DukeDennis",     displayName = "Duke Dennis",    rarity = "Common",  odds = 20 },
+	{ id = "Marlon",         displayName = "Marlon",         rarity = "Common",   odds = 22 },
 
-	-- RARE (6 streamers)
-	{ id = "Jynxy",          displayName = "Jynxy",           rarity = "Rare" },
-	{ id = "Lacy",           displayName = "Lacy",            rarity = "Rare" },
-	{ id = "Tfue",           displayName = "Tfue",            rarity = "Rare" },
-	{ id = "Ninja",          displayName = "Ninja",           rarity = "Rare" },
-	{ id = "Shroud",         displayName = "Shroud",          rarity = "Rare" },
-	{ id = "StableRonaldo",  displayName = "Stable Ronaldo",  rarity = "Rare" },
+	-- RARE
+	{ id = "KreekCraft",     displayName = "Kreek Craft",    rarity = "Rare",     odds = 40 },
+	{ id = "Valkerie",       displayName = "Valkerie",       rarity = "Rare",     odds = 50 },
+	{ id = "Shroud",         displayName = "Shroud",        rarity = "Rare",     odds = 100 },
+	{ id = "StableRonaldo",  displayName = "Stable Ronaldo", rarity = "Rare",    odds = 200 },
+	{ id = "Trainwrecks",    displayName = "Trainwrecks",    rarity = "Rare",     odds = 500 },
+	{ id = "Lacy",           displayName = "Lacy",           rarity = "Rare",     odds = 1000 },
 
-	-- EPIC (5 streamers)
-	{ id = "Casoh",          displayName = "Casoh",           rarity = "Epic" },
-	{ id = "Cinna",          displayName = "Cinna",           rarity = "Epic" },
-	{ id = "Emiru",          displayName = "Emiru",           rarity = "Epic" },
-	{ id = "Pokimane",       displayName = "Pokimane",        rarity = "Epic" },
-	{ id = "OhnePixel",      displayName = "ohnePixel",       rarity = "Epic" },
+	-- EPIC
+	{ id = "Cinna",          displayName = "Cinna",          rarity = "Epic",     odds = 2000 },
+	{ id = "Casoh",          displayName = "Casoh",          rarity = "Epic",     odds = 5000 },
+	{ id = "Pokimane",       displayName = "Pokimane",       rarity = "Epic",     odds = 8500 },
+	{ id = "Adapt",          displayName = "Adapt",          rarity = "Epic",     odds = 13000 },
+	{ id = "OhnePixel",      displayName = "ohnePixel",      rarity = "Epic",    odds = 23000 },
+	{ id = "JasondaWeen",    displayName = "JasondaWeen",    rarity = "Epic",     odds = 36000 },
 
-	-- LEGENDARY (3 streamers)
-	{ id = "XQC",            displayName = "xQc",             rarity = "Legendary" },
-	{ id = "Speed",          displayName = "IShowSpeed",      rarity = "Legendary" },
-	{ id = "KaiCenat",       displayName = "Kai Cenat",       rarity = "Legendary" },
+	-- LEGENDARY
+	{ id = "Ninja",          displayName = "Ninja",          rarity = "Legendary", odds = 100000 },
+	{ id = "KaiCenat",       displayName = "Kai Cenat",      rarity = "Legendary", odds = 500000 },
+	{ id = "Jynxy",          displayName = "Jynxy",          rarity = "Legendary", odds = 1000000 },
 
-	-- MYTHIC (2 streamers)
-	{ id = "JasondaWeen",    displayName = "JasondaWeen",     rarity = "Mythic" },
-	{ id = "Valkerie",       displayName = "Valkerie",        rarity = "Mythic" },
+	-- MYTHIC
+	{ id = "Speed",          displayName = "IShowSpeed",    rarity = "Mythic",   odds = 5000000 },
+	{ id = "XQC",            displayName = "xQc",            rarity = "Mythic",   odds = 10000000 },
 }
 
 -- Build lookup by id for quick access
