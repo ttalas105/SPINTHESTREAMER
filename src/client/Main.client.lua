@@ -22,6 +22,7 @@ local SpinController         = require(controllers.SpinController)
 local SpinStandController    = require(controllers.SpinStandController)
 local UpgradeStandController = require(controllers.UpgradeStandController)
 local SellStandController    = require(controllers.SellStandController)
+local HoldController         = require(controllers.HoldController)
 local SlotPadController      = require(controllers.SlotPadController)
 local InventoryController    = require(controllers.InventoryController)
 local UIHelper               = require(controllers.UIHelper)
@@ -41,6 +42,7 @@ SpinController.Init()
 SpinStandController.Init()
 UpgradeStandController.Init()
 SellStandController.Init()
+HoldController.Init()
 InventoryController.Init()
 SlotPadController.Init(InventoryController)
 
@@ -147,6 +149,20 @@ HUDController.OnDataUpdated(function(data)
 	InventoryController.UpdateInventory(data.inventory)
 	-- Update pad controller cache
 	SlotPadController.Refresh(data)
+end)
+
+-------------------------------------------------
+-- INVENTORY SELECTION -> HOLD MODEL
+-------------------------------------------------
+
+InventoryController.OnSelectionChanged(function(slotIndex, item)
+	if slotIndex and item then
+		-- Player selected an inventory item — hold it in hand
+		HoldController.Hold(item)
+	else
+		-- Player deselected — drop the held model
+		HoldController.Drop()
+	end
 end)
 
 -------------------------------------------------

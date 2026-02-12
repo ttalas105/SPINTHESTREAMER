@@ -386,6 +386,9 @@ end
 function InventoryController.ClearSelection()
 	selectedIndex = nil
 	updateSlotVisuals()
+	for _, cb in ipairs(onSelectionChanged) do
+		task.spawn(cb, nil, nil)
+	end
 end
 
 function InventoryController.OnSelectionChanged(callback)
@@ -460,6 +463,10 @@ function InventoryController.EquipSelectedToPad(padSlot: number)
 	EquipRequest:FireServer(streamerId, padSlot)
 	selectedIndex = nil
 	updateSlotVisuals()
+	-- Notify listeners (drop held model, etc.)
+	for _, cb in ipairs(onSelectionChanged) do
+		task.spawn(cb, nil, nil)
+	end
 	return true
 end
 
@@ -473,6 +480,10 @@ function InventoryController.SellSelected(): boolean
 	SellRequest:FireServer(streamerId)
 	selectedIndex = nil
 	updateSlotVisuals()
+	-- Notify listeners (drop held model, etc.)
+	for _, cb in ipairs(onSelectionChanged) do
+		task.spawn(cb, nil, nil)
+	end
 	return true
 end
 

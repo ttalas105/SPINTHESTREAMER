@@ -31,6 +31,24 @@ Effects.List = {
 		rarityMult     = 3,                                -- three times as hard to get
 		rollChance     = 0.12,                             -- 12% base chance (before rarity penalty → 4%)
 	},
+	{
+		name           = "Lava",
+		prefix         = "Lava",
+		color          = Color3.fromRGB(255, 100, 20),   -- hot orange
+		glowColor      = Color3.fromRGB(220, 60, 10),    -- deep red-orange glow
+		cashMultiplier = 4,                                -- 4x base cashPerSecond
+		rarityMult     = 4,                                -- four times as hard to get
+		rollChance     = 0.10,                             -- 10% base chance (before rarity penalty → 2.5%)
+	},
+	{
+		name           = "Lightning",
+		prefix         = "Lightning",
+		color          = Color3.fromRGB(255, 255, 80),   -- electric yellow
+		glowColor      = Color3.fromRGB(200, 200, 40),   -- golden yellow glow
+		cashMultiplier = 5,                                -- 5x base cashPerSecond
+		rarityMult     = 5,                                -- five times as hard to get
+		rollChance     = 0.08,                             -- 8% base chance (before rarity penalty → 1.6%)
+	},
 }
 
 -- Lookup by name
