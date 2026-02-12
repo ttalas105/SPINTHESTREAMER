@@ -10,31 +10,46 @@
 local Players = game:GetService("Players")
 local DataStoreService = game:GetService("DataStoreService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 
 local SlotsConfig = require(ReplicatedStorage.Shared.Config.SlotsConfig)
 
 local PlayerData = {}
 PlayerData._cache = {} -- userId -> data table
 
+-- In Studio, DataStore API is blocked by default (StudioAccessToApisNotAllowed).
+-- Use an in-memory mock so we never call the real API and no error is shown.
+local studioMemoryStore = {} -- key -> saved data (only when RunService:IsStudio())
+
 local dataStore
-local ok, err = pcall(function()
-	dataStore = DataStoreService:GetDataStore("SpinTheStreamer_v2")
-end)
-if not ok then
-	-- Normal in Studio until the place is published to the web
-	print("[PlayerData] DataStore unavailable (normal in Studio); using local data. " .. tostring(err))
-	-- Create a mock so the game still runs without persistence
+if RunService:IsStudio() then
+	-- Avoid calling GetDataStore/GetAsync/SetAsync at all in Studio
 	dataStore = {
-		GetAsync = function() return nil end,
-		SetAsync = function() end,
+		GetAsync = function(key)
+			return studioMemoryStore[key]
+		end,
+		SetAsync = function(key, value)
+			studioMemoryStore[key] = value
+		end,
 	}
+else
+	local ok, err = pcall(function()
+		dataStore = DataStoreService:GetDataStore("SpinTheStreamer_v2")
+	end)
+	if not ok then
+		print("[PlayerData] DataStore unavailable; using local data. " .. tostring(err))
+		dataStore = {
+			GetAsync = function() return nil end,
+			SetAsync = function() end,
+		}
+	end
 end
 
 local DEFAULT_DATA = {
 	cash = 1000000,
-	inventory = {},           -- { {id="Marlon"}, {id="XQC", effect="Acid"}, ... } list of items
+	inventory = { {id = "Adapt"} },  -- { {id="Marlon"}, {id="XQC", effect="Acid"}, ... } list of items
 	equippedPads = {},        -- { ["1"] = {id="KaiCenat"}, ["2"] = {id="Speed", effect="Acid"} }
-	collection = {},          -- { ["Marlon"] = true, ["XQC"] = true } discovered uniques
+	collection = { ["Adapt"] = true },  -- { ["Marlon"] = true, ["XQC"] = true } discovered uniques
 	rebirthCount = 0,
 	luck = 2000,              -- personal luck stat; every 10 = +1% drop luck (stacked with crate luck)
 	premiumSlotUnlocked = false,
