@@ -47,9 +47,13 @@ end
 
 local DEFAULT_DATA = {
 	cash = 1000000,
-	inventory = { {id = "Adapt"} },  -- { {id="Marlon"}, {id="XQC", effect="Acid"}, ... } list of items
-	equippedPads = {},        -- { ["1"] = {id="KaiCenat"}, ["2"] = {id="Speed", effect="Acid"} }
-	collection = { ["Adapt"] = true },  -- { ["Marlon"] = true, ["XQC"] = true } discovered uniques
+	inventory = {
+		{ id = "XQC", effect = "Glitchy" },
+		{ id = "Jynxzi", effect = "Solar" },
+		{ id = "Kai Cenat", effect = "Void" },
+	},
+	equippedPads = {},
+	collection = { ["XQC"] = true, ["Jynxzi"] = true, ["Kai Cenat"] = true },
 	rebirthCount = 0,
 	luck = 2000,              -- personal luck stat; every 10 = +1% drop luck (stacked with crate luck)
 	premiumSlotUnlocked = false,

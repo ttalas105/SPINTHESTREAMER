@@ -49,6 +49,51 @@ Effects.List = {
 		rarityMult     = 5,                                -- five times as hard to get
 		rollChance     = 0.08,                             -- 8% base chance (before rarity penalty → 1.6%)
 	},
+	{
+		name           = "Shadow",
+		prefix         = "Shadow",
+		color          = Color3.fromRGB(100, 60, 140),   -- dark purple
+		glowColor      = Color3.fromRGB(60, 30, 100),    -- deeper shadow purple
+		cashMultiplier = 6,                                -- 6x base cashPerSecond
+		rarityMult     = 6,                                -- six times as hard to get
+		rollChance     = 0.06,                             -- 6% base (→ 1% after penalty)
+	},
+	{
+		name           = "Glitchy",
+		prefix         = "Glitchy",
+		color          = Color3.fromRGB(0, 255, 255),    -- cyan
+		glowColor      = Color3.fromRGB(255, 0, 255),   -- magenta glow (glitch vibe)
+		cashMultiplier = 7,                                -- 7x base cashPerSecond
+		rarityMult     = 7,                                -- seven times as hard to get
+		rollChance     = 0.05,                             -- 5% base
+	},
+	{
+		name           = "Lunar",
+		prefix         = "Lunar",
+		color          = Color3.fromRGB(200, 220, 255),  -- pale moon blue
+		glowColor      = Color3.fromRGB(160, 180, 220),  -- silver-blue glow
+		cashMultiplier = 8,                                -- 8x base cashPerSecond
+		rarityMult     = 8,                                -- eight times as hard to get
+		rollChance     = 0.04,                             -- 4% base
+	},
+	{
+		name           = "Solar",
+		prefix         = "Solar",
+		color          = Color3.fromRGB(255, 220, 60),    -- bright gold
+		glowColor      = Color3.fromRGB(255, 160, 20),  -- orange-gold glow
+		cashMultiplier = 9,                                -- 9x base cashPerSecond
+		rarityMult     = 9,                                -- nine times as hard to get
+		rollChance     = 0.035,                            -- 3.5% base
+	},
+	{
+		name           = "Void",
+		prefix         = "Void",
+		color          = Color3.fromRGB(80, 40, 120),    -- deep void purple
+		glowColor      = Color3.fromRGB(40, 20, 80),    -- near-black purple
+		cashMultiplier = 10,                               -- 10x base cashPerSecond
+		rarityMult     = 10,                               -- ten times as hard to get
+		rollChance     = 0.03,                             -- 3% base
+	},
 }
 
 -- Lookup by name
