@@ -29,7 +29,7 @@ Streamers.List = {
 
 	-- EPIC
 	{ id = "Cinna",          displayName = "Cinna",           rarity = "Epic",      odds = 2000,     cashPerSecond = 3000 },
-	{ id = "Casoh",          displayName = "Casoh",           rarity = "Epic",      odds = 5000,     cashPerSecond = 6500 },
+	{ id = "CaseOh",         displayName = "CaseOh",          rarity = "Epic",      odds = 5000,     cashPerSecond = 6500 },
 	{ id = "Pokimane",       displayName = "Pokimane",        rarity = "Epic",      odds = 8500,     cashPerSecond = 10000 },
 	{ id = "Adapt",          displayName = "Adapt",           rarity = "Epic",      odds = 13000,    cashPerSecond = 18000 },
 	{ id = "OhnePixel",      displayName = "ohnePixel",       rarity = "Epic",      odds = 23000,    cashPerSecond = 30000 },
