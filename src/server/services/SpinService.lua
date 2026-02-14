@@ -24,15 +24,16 @@ local BuyCrateRequest = RemoteEvents:WaitForChild("BuyCrateRequest")
 
 local PlayerData
 local BaseService
+local PotionService
 
 -------------------------------------------------
 -- RNG: TWO-PHASE RARITY-FIRST SYSTEM
 -- Phase 1: Roll a RARITY TIER (luck crushes Common, boosts Rare+)
 -- Phase 2: Roll a specific streamer within that tier (weighted by 1/odds)
 --
--- Luck formula: every 10 luck = 1%. Total luckPercent is passed as luckMultiplier.
--- luckMultiplier = 1 + (playerLuck/10/100) + crateLuckBonus
--- So 2000 luck + Case7(250%) => luckMultiplier = 1 + 2.0 + 2.5 = 5.5
+-- Luck formula: 1 luck = 1%. Total luckPercent is passed as luckMultiplier.
+-- luckMultiplier = 1 + (playerLuck/100) + crateLuckBonus
+-- So 200 luck + Case7(250%) => luckMultiplier = 1 + 2.0 + 2.5 = 5.5
 --
 -- Rarity scaling (L = luckMultiplier):
 --   Common:    baseWeight / L^3   (gets CRUSHED by luck)
@@ -167,11 +168,12 @@ local function handleSpin(player)
 		end
 	end
 
-	-- Rebirth + personal luck (every 10 luck = +1%)
+	-- Rebirth + personal luck (1 luck = +1%) + potion multiplier
 	local rebirthLuck = 1 + (data.rebirthCount * 0.02)
 	local playerLuck = data.luck or 0
-	local playerLuckPercent = math.floor(playerLuck / 10) / 100
-	local totalLuck = SpinService.ServerLuckMultiplier * rebirthLuck * (1 + playerLuckPercent)
+	local playerLuckPercent = (playerLuck / 100)  -- 1 luck = 1%
+	local potionLuckMult = PotionService and PotionService.GetLuckMultiplier(player) or 1
+	local totalLuck = SpinService.ServerLuckMultiplier * rebirthLuck * (1 + playerLuckPercent) * potionLuckMult
 
 	-- Roll using two-phase rarity-first system
 	local streamer = pickStreamerByOdds(totalLuck)
@@ -225,6 +227,16 @@ local function handleCrateSpin(player, crateId: number)
 	local data = PlayerData.Get(player)
 	if not data then return end
 
+	-- Check rebirth requirement
+	local rebirthReq = Economy.GetCrateRebirthRequirement(crateId)
+	if (data.rebirthCount or 0) < rebirthReq then
+		SpinResult:FireClient(player, {
+			success = false,
+			reason = "You must be Rebirth " .. rebirthReq .. " to use this case!",
+		})
+		return
+	end
+
 	local crateCosts = {
 		[1] = Economy.Crate1Cost,
 		[2] = Economy.Crate2Cost,
@@ -255,11 +267,12 @@ local function handleCrateSpin(player, crateId: number)
 		return
 	end
 
-	-- Rebirth + personal luck (every 10 = +1%) + crate luck (additive)
+	-- Rebirth + personal luck (1 luck = +1%) + crate luck (additive) + potion multiplier
 	local rebirthLuck = 1 + (data.rebirthCount * 0.02)
 	local playerLuck = data.luck or 0
-	local playerLuckPercent = math.floor(playerLuck / 10) / 100
-	local totalLuck = SpinService.ServerLuckMultiplier * rebirthLuck * (1 + playerLuckPercent + luckBonus)
+	local playerLuckPercent = (playerLuck / 100)  -- 1 luck = 1%
+	local potionLuckMult = PotionService and PotionService.GetLuckMultiplier(player) or 1
+	local totalLuck = SpinService.ServerLuckMultiplier * rebirthLuck * (1 + playerLuckPercent + luckBonus) * potionLuckMult
 
 	local streamer = pickStreamerByOdds(totalLuck)
 	if not streamer then
@@ -301,9 +314,10 @@ end
 -- PUBLIC
 -------------------------------------------------
 
-function SpinService.Init(playerDataModule, baseServiceModule)
+function SpinService.Init(playerDataModule, baseServiceModule, potionServiceModule)
 	PlayerData = playerDataModule
 	BaseService = baseServiceModule
+	PotionService = potionServiceModule
 
 	SpinRequest.OnServerEvent:Connect(function(player)
 		handleSpin(player)

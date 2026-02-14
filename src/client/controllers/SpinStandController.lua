@@ -47,6 +47,17 @@ local crates = {
 	{ id = 7, name = "Crate 7", emoji = "💎", cost = Economy.Crate7Cost, luckPercent = 250, desc = "Luck: +250%", color = Color3.fromRGB(180, 220, 255), strokeColor = Color3.fromRGB(60, 120, 200) },
 }
 
+-- Cached card refs for dynamic lock/unlock updates
+local cardRefs = {} -- crateId -> { card, buyBtn, lockOverlay }
+
+-------------------------------------------------
+-- Helper: get current rebirth count from HUDController
+-------------------------------------------------
+local function getRebirthCount()
+	local HUDController = require(script.Parent.HUDController)
+	return HUDController.Data.rebirthCount or 0
+end
+
 -------------------------------------------------
 -- BUILD CRATE CARD (one card per crate)
 -------------------------------------------------
@@ -137,15 +148,103 @@ local function buildCrateCard(crate, parent)
 		Parent = card,
 	})
 
+	-- Lock overlay (semi-transparent dark cover with lock icon)
+	local lockOverlay = Instance.new("Frame")
+	lockOverlay.Name = "LockOverlay"
+	lockOverlay.Size = UDim2.new(1, 0, 1, 0)
+	lockOverlay.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+	lockOverlay.BackgroundTransparency = 0.4
+	lockOverlay.BorderSizePixel = 0
+	lockOverlay.ZIndex = 5
+	lockOverlay.Visible = false
+	lockOverlay.Parent = card
+	local lockCorner = Instance.new("UICorner")
+	lockCorner.CornerRadius = UDim.new(0, CARD_CORNER)
+	lockCorner.Parent = lockOverlay
+
+	local lockIcon = Instance.new("TextLabel")
+	lockIcon.Name = "LockIcon"
+	lockIcon.Size = UDim2.new(1, 0, 0, 50)
+	lockIcon.Position = UDim2.new(0.5, 0, 0.3, 0)
+	lockIcon.AnchorPoint = Vector2.new(0.5, 0.5)
+	lockIcon.BackgroundTransparency = 1
+	lockIcon.Text = "🔒"
+	lockIcon.TextSize = 40
+	lockIcon.Font = Enum.Font.SourceSans
+	lockIcon.ZIndex = 6
+	lockIcon.Parent = lockOverlay
+
+	local lockText = Instance.new("TextLabel")
+	lockText.Name = "LockText"
+	lockText.Size = UDim2.new(1, -10, 0, 40)
+	lockText.Position = UDim2.new(0.5, 0, 0.6, 0)
+	lockText.AnchorPoint = Vector2.new(0.5, 0.5)
+	lockText.BackgroundTransparency = 1
+	lockText.Text = "Rebirth " .. Economy.GetCrateRebirthRequirement(crate.id) .. "\nRequired"
+	lockText.TextColor3 = Color3.fromRGB(255, 180, 80)
+	lockText.Font = Enum.Font.FredokaOne
+	lockText.TextSize = 15
+	lockText.TextWrapped = true
+	lockText.ZIndex = 6
+	lockText.Parent = lockOverlay
+	local ltStroke = Instance.new("UIStroke")
+	ltStroke.Color = Color3.fromRGB(0, 0, 0)
+	ltStroke.Thickness = 1.5
+	ltStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+	ltStroke.Parent = lockText
+
 	buyBtn.MouseButton1Click:Connect(function()
-		BuyCrateRequest:FireServer(crate.id)
+		-- Check rebirth requirement
+		local rebirthReq = Economy.GetCrateRebirthRequirement(crate.id)
+		local currentRebirth = getRebirthCount()
+		if currentRebirth < rebirthReq then
+			-- Show error message on the button
+			buyBtn.Text = "Rebirth " .. rebirthReq .. " needed!"
+			task.delay(1.5, function()
+				buyBtn.Text = "🔒 LOCKED"
+			end)
+			return
+		end
+
 		SpinStandController.Close()
-		-- Show spin wheel so player sees the result (SpinResult will fire from server)
+		-- Tell SpinController the cost and crate ID for this spin
 		local SpinController = require(script.Parent.SpinController)
+		SpinController.SetCurrentCost(crate.cost)
+		SpinController.SetCurrentCrateId(crate.id)
 		SpinController.Show()
+		-- Fire crate request via SpinController.RequestSpin (handles queue too)
+		SpinController.RequestSpin()
 	end)
 
+	-- Store refs for dynamic updates
+	cardRefs[crate.id] = {
+		card = card,
+		buyBtn = buyBtn,
+		lockOverlay = lockOverlay,
+	}
+
 	return card
+end
+
+-------------------------------------------------
+-- UPDATE LOCK STATUS on all cards
+-------------------------------------------------
+local function updateLockStatus()
+	local currentRebirth = getRebirthCount()
+	for crateId, refs in pairs(cardRefs) do
+		local rebirthReq = Economy.GetCrateRebirthRequirement(crateId)
+		if currentRebirth >= rebirthReq then
+			-- Unlocked
+			refs.lockOverlay.Visible = false
+			refs.buyBtn.Text = "BUY"
+			refs.buyBtn.BackgroundColor3 = Color3.fromRGB(60, 220, 100)
+		else
+			-- Locked
+			refs.lockOverlay.Visible = true
+			refs.buyBtn.Text = "🔒 LOCKED"
+			refs.buyBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+		end
+	end
 end
 
 -------------------------------------------------
@@ -155,6 +254,7 @@ end
 function SpinStandController.Open()
 	if isOpen then return end
 	isOpen = true
+	updateLockStatus() -- Refresh which crates are locked/unlocked
 	overlay.Visible = true
 	modalFrame.Visible = true
 	UIHelper.ScaleIn(modalFrame, 0.35)

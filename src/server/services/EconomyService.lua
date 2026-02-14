@@ -18,10 +18,13 @@ local SellByIndexRequest = RemoteEvents:WaitForChild("SellByIndexRequest")
 local SellAllRequest = RemoteEvents:WaitForChild("SellAllRequest")
 local UpgradeLuckRequest = RemoteEvents:WaitForChild("UpgradeLuckRequest")
 local UpgradeLuckResult = RemoteEvents:WaitForChild("UpgradeLuckResult")
+local UpgradeCashRequest = RemoteEvents:WaitForChild("UpgradeCashRequest")
+local UpgradeCashResult = RemoteEvents:WaitForChild("UpgradeCashResult")
 
 local EconomyService = {}
 
 local PlayerData
+local PotionService
 
 -------------------------------------------------
 -- SELL HELPERS
@@ -160,8 +163,10 @@ local function handleSellAll(player)
 end
 
 -------------------------------------------------
--- LUCK UPGRADE (spend cash for +1 luck; every 10 luck = +1% drop luck)
+-- LUCK UPGRADE (spend cash for +5 luck; 1 luck = +1% drop luck)
 -------------------------------------------------
+
+local LUCK_PER_UPGRADE = 5
 
 local function handleUpgradeLuck(player)
 	if not PlayerData then return end
@@ -171,8 +176,24 @@ local function handleUpgradeLuck(player)
 		UpgradeLuckResult:FireClient(player, { success = false, reason = "Not enough cash!" })
 		return
 	end
-	PlayerData.AddLuck(player, 1)
+	PlayerData.AddLuck(player, LUCK_PER_UPGRADE)
 	UpgradeLuckResult:FireClient(player, { success = true, newLuck = PlayerData.GetLuck(player) })
+end
+
+-------------------------------------------------
+-- CASH MULTIPLIER UPGRADE (spend cash for +2% cash production)
+-------------------------------------------------
+
+local function handleUpgradeCash(player)
+	if not PlayerData then return end
+	local currentLevel = PlayerData.GetCashUpgrade(player)
+	local cost = Economy.GetCashUpgradeCost(currentLevel)
+	if not PlayerData.SpendCash(player, cost) then
+		UpgradeCashResult:FireClient(player, { success = false, reason = "Not enough cash!" })
+		return
+	end
+	PlayerData.AddCashUpgrade(player, 1)
+	UpgradeCashResult:FireClient(player, { success = true, newLevel = PlayerData.GetCashUpgrade(player) })
 end
 
 -------------------------------------------------
@@ -216,9 +237,18 @@ local function startBaseIncome()
 					local flatIncome = Economy.PassiveIncomeRate / Economy.PassiveIncomeInterval -- per-second flat rate
 					local total = baseIncome + flatIncome
 					if total > 0 then
-						if PlayerData.HasDoubleCash(player) then
-							total = total * Economy.DoubleCashMultiplier
-						end
+					if PlayerData.HasDoubleCash(player) then
+						total = total * Economy.DoubleCashMultiplier
+					end
+					-- Apply rebirth coin multiplier (+5% per rebirth)
+					local rebirthMult = Economy.GetRebirthCoinMultiplier(PlayerData.GetRebirthCount(player))
+					total = total * rebirthMult
+					-- Apply cash upgrade multiplier (+2% per upgrade)
+					local cashUpgradeMult = PlayerData.GetCashUpgradeMultiplier(player)
+					total = total * cashUpgradeMult
+					-- Apply cash potion multiplier
+					local potionCashMult = PotionService and PotionService.GetCashMultiplier(player) or 1
+					total = total * potionCashMult
 						PlayerData.AddCash(player, math.floor(total))
 					end
 				end
@@ -231,8 +261,9 @@ end
 -- PUBLIC
 -------------------------------------------------
 
-function EconomyService.Init(playerDataModule)
+function EconomyService.Init(playerDataModule, potionServiceModule)
 	PlayerData = playerDataModule
+	PotionService = potionServiceModule
 
 	SellRequest.OnServerEvent:Connect(function(player, streamerId)
 		handleSell(player, streamerId)
@@ -248,6 +279,10 @@ function EconomyService.Init(playerDataModule)
 
 	UpgradeLuckRequest.OnServerEvent:Connect(function(player)
 		handleUpgradeLuck(player)
+	end)
+
+	UpgradeCashRequest.OnServerEvent:Connect(function(player)
+		handleUpgradeCash(player)
 	end)
 
 	startBaseIncome()

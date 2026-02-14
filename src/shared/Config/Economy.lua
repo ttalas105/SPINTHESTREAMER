@@ -33,14 +33,50 @@ Economy.Crate6LuckBonus = 1.50  -- +150% luck
 Economy.Crate7LuckBonus = 2.50  -- +250% luck
 
 -------------------------------------------------
--- REBIRTH
+-- REBIRTH (7 levels: $1, $2, $3, $4, $5, $6, $7)
+-- Each rebirth gives +5% coin bonus and unlocks the next case.
+-- Rebirth resets: cash + active potions.
 -------------------------------------------------
-Economy.RebirthBaseCost = 1000
-Economy.RebirthCostMultiplier = 1.8 -- each rebirth costs more
+Economy.MaxRebirths = 7
 
---- Get the cost of the next rebirth
+-- Cost for each rebirth level (1-indexed)
+Economy.RebirthCosts = { 1, 2, 3, 4, 5, 6, 7 }
+
+-- Coin bonus per rebirth: cumulative +5% each
+Economy.RebirthCoinBonusPercent = 5 -- per rebirth
+
+--- Get the cost of the next rebirth (0-indexed rebirthCount)
 function Economy.GetRebirthCost(currentRebirths: number): number
-	return math.floor(Economy.RebirthBaseCost * (Economy.RebirthCostMultiplier ^ currentRebirths))
+	local next = currentRebirths + 1
+	if next > Economy.MaxRebirths then return math.huge end
+	return Economy.RebirthCosts[next] or math.huge
+end
+
+--- Get the coin multiplier from rebirths (1.0 + rebirthCount * 0.05)
+function Economy.GetRebirthCoinMultiplier(rebirthCount: number): number
+	return 1 + (rebirthCount * Economy.RebirthCoinBonusPercent / 100)
+end
+
+--- Get the minimum rebirth level required to use a crate (1-indexed crate id)
+--- Case 1 = always available (rebirth 0), Case 2 = rebirth 1, etc.
+function Economy.GetCrateRebirthRequirement(crateId: number): number
+	if crateId <= 1 then return 0 end
+	return crateId - 1
+end
+
+--- Info for a specific rebirth level (1-indexed)
+function Economy.GetRebirthInfo(rebirthLevel: number)
+	if rebirthLevel < 1 or rebirthLevel > Economy.MaxRebirths then return nil end
+	local cost = Economy.RebirthCosts[rebirthLevel]
+	local coinBonus = rebirthLevel * Economy.RebirthCoinBonusPercent
+	local unlocksCase = rebirthLevel + 1 -- rebirth 1 unlocks case 2, etc.
+	if unlocksCase > 7 then unlocksCase = nil end -- rebirth 7 doesn't unlock a new case
+	return {
+		level = rebirthLevel,
+		cost = cost,
+		coinBonus = coinBonus,
+		unlocksCase = unlocksCase,
+	}
 end
 
 -------------------------------------------------
@@ -67,17 +103,27 @@ Economy.DefaultLuckMultiplier = 1  -- 1x normal
 Economy.BoostedLuckMultiplier = 2  -- 2x with boost
 
 -------------------------------------------------
--- PERSONAL LUCK UPGRADE (at Upgrade stand; every 20 luck = +1% drop luck)
+-- PERSONAL LUCK UPGRADE (at Upgrade stand; 1 luck = +1% drop luck)
 -------------------------------------------------
-Economy.LuckUpgradeCostFirst  = 1000   -- first upgrade (+1 luck)
-Economy.LuckUpgradeCostSecond = 5000   -- second upgrade (+1 more luck); 3rd+ use this for now
+Economy.LuckUpgradeCostFirst  = 1000   -- first upgrade (+5 luck)
+Economy.LuckUpgradeCostSecond = 5000   -- second upgrade (+5 more luck); 3rd+ use this for now
 Economy.LuckUpgradeCostPerPoint = 5000 -- fallback for 3rd+ upgrades
 
---- Cost to buy the next +1 luck (based on current luck stat)
+--- Cost to buy the next +5 luck (based on current luck stat)
 function Economy.GetLuckUpgradeCost(currentLuck: number): number
-	if currentLuck == 0 then return Economy.LuckUpgradeCostFirst end
-	if currentLuck == 1 then return Economy.LuckUpgradeCostSecond end
+	if currentLuck <= 200 then return Economy.LuckUpgradeCostFirst end
+	if currentLuck <= 205 then return Economy.LuckUpgradeCostSecond end
 	return Economy.LuckUpgradeCostPerPoint or Economy.LuckUpgradeCostSecond
+end
+
+-------------------------------------------------
+-- CASH UPGRADE (coin multiplier at Upgrade stand; +2% cash per upgrade)
+-------------------------------------------------
+Economy.CashUpgradeCost = 1   -- $1 per upgrade (placeholder)
+
+--- Cost for the next cash multiplier upgrade
+function Economy.GetCashUpgradeCost(currentLevel: number): number
+	return Economy.CashUpgradeCost
 end
 
 -------------------------------------------------

@@ -1,7 +1,7 @@
 --[[
 	LuckChances.lua
 	Computes rarity drop chances using the two-phase rarity-first system (same as SpinService).
-	Every 10 luck = +1% drop luck. Crate luck stacks additively.
+	1 luck = +1% drop luck. Crate luck stacks additively.
 ]]
 
 local LuckChances = {}
@@ -42,9 +42,9 @@ function LuckChances.GetRarityChances(luckMultiplier: number): { [string]: numbe
 	return chances
 end
 
--- Total luck multiplier from: 1 + (playerLuck/10/100) + (crateLuckBonus)
+-- Total luck multiplier from: 1 + (playerLuck/100) + (crateLuckBonus); 1 luck = 1%
 function LuckChances.LuckMultFromPlayerAndCrate(playerLuck: number, crateLuckBonus: number): number
-	local playerPercent = math.floor(playerLuck / 10) / 100
+	local playerPercent = (playerLuck or 0) / 100
 	return 1 + playerPercent + (crateLuckBonus or 0)
 end
 

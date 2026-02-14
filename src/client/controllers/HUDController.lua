@@ -12,6 +12,7 @@ local StarterGui = game:GetService("StarterGui")
 
 local DesignConfig = require(ReplicatedStorage.Shared.Config.DesignConfig)
 local UIHelper = require(script.Parent.UIHelper)
+local PotionController -- lazy require to avoid circular deps
 
 local HUDController = {}
 
@@ -30,6 +31,7 @@ HUDController.Data = {
 	collection = {},
 	rebirthCount = 0,
 	luck = 0,
+	cashUpgrade = 0,
 	totalSlots = 1,
 	premiumSlotUnlocked = false,
 	doubleCash = false,
@@ -74,7 +76,7 @@ function HUDController.Init()
 	cashLabel.TextXAlignment = Enum.TextXAlignment.Left
 	cashLabel.Parent = hudContainer
 
-	-- Luck (every 10 = +1% drop luck; upgrade at the Upgrade stand)
+	-- Luck (1 luck = +1% drop luck; upgrade at the Upgrade stand)
 	luckLabel = Instance.new("TextLabel")
 	luckLabel.Name = "LuckLabel"
 	luckLabel.Size = UDim2.new(1, 0, 0, 20)
@@ -93,6 +95,15 @@ function HUDController.Init()
 
 	PlayerDataUpdate.OnClientEvent:Connect(function(payload)
 		HUDController.UpdateData(payload)
+	end)
+
+	-- Also refresh luck display when potions change
+	local PotionUpdate = RemoteEvents:WaitForChild("PotionUpdate")
+	PotionUpdate.OnClientEvent:Connect(function()
+		-- Re-run the luck label update with current data
+		if luckLabel then
+			HUDController.UpdateData({}) -- triggers the luck display refresh with 0 changes
+		end
 	end)
 end
 
@@ -125,11 +136,26 @@ function HUDController.UpdateData(payload)
 		end
 	end
 
-	-- Update luck display (every 10 luck = +1%)
+	-- Update luck display (1 luck = +1%) with potion boost shown
 	if luckLabel then
 		local luck = HUDController.Data.luck or 0
-		local percent = math.floor(luck / 10)
-		luckLabel.Text = ("Luck: %d (+%d%%)"):format(luck, percent)
+		local percent = luck  -- 1 luck = 1%
+		-- Check for active luck potion
+		if not PotionController then
+			local ok, mod = pcall(function() return require(script.Parent.PotionController) end)
+			if ok then PotionController = mod end
+		end
+		local potionMult = 1
+		if PotionController and PotionController.ActivePotions and PotionController.ActivePotions.Luck then
+			potionMult = PotionController.ActivePotions.Luck.multiplier or 1
+		end
+		if potionMult > 1 then
+			luckLabel.Text = ("Luck: %d (+%d%%)  |  Potion: x%.1f"):format(luck, percent, potionMult)
+			luckLabel.TextColor3 = Color3.fromRGB(80, 255, 100) -- green when potion active
+		else
+			luckLabel.Text = ("Luck: %d (+%d%%)"):format(luck, percent)
+			luckLabel.TextColor3 = Color3.fromRGB(200, 180, 255) -- default purple
+		end
 	end
 
 	-- Fire data update callbacks

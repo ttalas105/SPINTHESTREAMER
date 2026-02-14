@@ -55,7 +55,8 @@ local DEFAULT_DATA = {
 	equippedPads = {},
 	collection = { ["XQC"] = true, ["Jynxzi"] = true, ["Kai Cenat"] = true },
 	rebirthCount = 0,
-	luck = 2000,              -- personal luck stat; every 10 = +1% drop luck (stacked with crate luck)
+	luck = 200,               -- personal luck stat; 1 luck = +1% drop luck (stacked with crate luck)
+	cashUpgrade = 0,          -- coin multiplier upgrade count; each +1 = +2% cash production
 	premiumSlotUnlocked = false,
 	doubleCash = false,
 	spinCredits = 0,
@@ -164,6 +165,7 @@ function PlayerData.Replicate(player)
 		collection = data.collection,
 		rebirthCount = data.rebirthCount,
 		luck = data.luck or 0,
+		cashUpgrade = data.cashUpgrade or 0,
 		premiumSlotUnlocked = data.premiumSlotUnlocked,
 		doubleCash = data.doubleCash,
 		spinCredits = data.spinCredits,
@@ -402,12 +404,12 @@ function PlayerData.ResetForRebirth(player)
 		table.insert(data.inventory, item)
 	end
 	data.equippedPads = {}
-	-- Inventory and collection are kept
+	-- Inventory and collection are kept; potions are cleared by PotionService
 	PlayerData.Replicate(player)
 end
 
 -------------------------------------------------
--- LUCK (personal stat: every 20 = +1% drop luck, stacks with crate luck)
+-- LUCK (personal stat: 1 luck = +1% drop luck, stacks with crate luck)
 -------------------------------------------------
 
 function PlayerData.GetLuck(player): number
@@ -427,6 +429,28 @@ function PlayerData.AddLuck(player, amount: number)
 	if not data then return end
 	data.luck = math.max(0, (data.luck or 0) + amount)
 	PlayerData.Replicate(player)
+end
+
+-------------------------------------------------
+-- CASH UPGRADE (coin multiplier: each level = +2% cash production)
+-------------------------------------------------
+
+function PlayerData.GetCashUpgrade(player): number
+	local data = PlayerData.Get(player)
+	return data and (data.cashUpgrade or 0) or 0
+end
+
+function PlayerData.AddCashUpgrade(player, amount: number)
+	local data = PlayerData.Get(player)
+	if not data then return end
+	data.cashUpgrade = math.max(0, (data.cashUpgrade or 0) + amount)
+	PlayerData.Replicate(player)
+end
+
+--- Get the cash upgrade multiplier (1.0 + cashUpgrade * 0.02)
+function PlayerData.GetCashUpgradeMultiplier(player): number
+	local upgrades = PlayerData.GetCashUpgrade(player)
+	return 1 + (upgrades * 0.02)
 end
 
 -------------------------------------------------

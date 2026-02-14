@@ -180,6 +180,16 @@ DesignConfig.Stalls = {
 			pantsColor  = Color3.fromRGB(50, 45, 30),
 		},
 	},
+	{
+		name      = "Rebirth",
+		color     = Color3.fromRGB(255, 120, 50),   -- orange canopy
+		roofColor = Color3.fromRGB(255, 120, 50),
+		npc = {
+			skinColor   = Color3.fromRGB(255, 220, 185),
+			outfitColor = Color3.fromRGB(230, 100, 40),
+			pantsColor  = Color3.fromRGB(50, 30, 20),
+		},
+	},
 }
 
 -------------------------------------------------

@@ -34,15 +34,33 @@ local carouselFrame
 local carouselContainer
 local resultFrame
 local spinButton
+local skipButton
 local isSpinning = false
+local animationDone = false -- true after animation finishes and result is shown
+
+-- Current spin cost & crate ID (set by SpinStandController or default)
+local currentSpinCost = Economy.SpinCost
+local currentCrateId = nil -- nil = regular spin, number = crate spin
+
+-- Skip animation state
+local skipRequested = false
+local currentAnimConnection = nil -- RenderStepped connection for current animation
+
+-- Queue: if player clicks spin during animation, queue next spin
+local queuedSpinResult = nil -- server result data waiting for current anim to finish
+local queuedSpinPending = false -- true if we sent a spin request but haven't got result yet
+
+-- Spin generation: incremented each time a new spin starts.
+-- Auto-close timers check this to avoid closing a newer spin.
+local spinGeneration = 0
 
 -- Callback for when a spin result arrives
 local onSpinResult = nil
 
 -- Carousel items
-local ITEM_WIDTH = 120
-local ITEM_HEIGHT = 140
-local ITEM_GAP = 6 -- thin gap between items (CS:GO style)
+local ITEM_WIDTH = 130
+local ITEM_HEIGHT = 155
+local ITEM_GAP = 8 -- slightly wider gap for cleaner look
 local ITEM_STEP = ITEM_WIDTH + ITEM_GAP
 local items = {}
 local currentTargetIndex = 1
@@ -55,33 +73,42 @@ local function buildCarousel(parent)
 	-- Outer frame — the visible window, clips the strip
 	carouselFrame = Instance.new("Frame")
 	carouselFrame.Name = "CarouselFrame"
-	carouselFrame.Size = UDim2.new(0.85, 0, 0, ITEM_HEIGHT + 24) -- slightly taller than items
+	carouselFrame.Size = UDim2.new(0.9, 0, 0, ITEM_HEIGHT + 30) -- slightly taller than items
 	carouselFrame.Position = UDim2.new(0.5, 0, 0.44, 0)
 	carouselFrame.AnchorPoint = Vector2.new(0.5, 0.5)
-	carouselFrame.BackgroundColor3 = Color3.fromRGB(18, 18, 28)
+	carouselFrame.BackgroundColor3 = Color3.fromRGB(12, 12, 22)
 	carouselFrame.BorderSizePixel = 0
 	carouselFrame.ClipsDescendants = true
 	carouselFrame.Parent = parent
 
 	local frameCorner = Instance.new("UICorner")
-	frameCorner.CornerRadius = UDim.new(0, 8)
+	frameCorner.CornerRadius = UDim.new(0, 12)
 	frameCorner.Parent = carouselFrame
 
 	local frameStroke = Instance.new("UIStroke")
 	frameStroke.Name = "BorderStroke"
-	frameStroke.Color = Color3.fromRGB(55, 55, 75)
-	frameStroke.Thickness = 2
+	frameStroke.Color = Color3.fromRGB(80, 60, 150)
+	frameStroke.Thickness = 3
 	frameStroke.Parent = carouselFrame
 
-	-- Thin coloured line across the top (CS:GO gold line)
+	-- Bright gradient line across the top (rainbow-ish, eye-catching)
 	local topLine = Instance.new("Frame")
 	topLine.Name = "TopLine"
-	topLine.Size = UDim2.new(1, 0, 0, 3)
+	topLine.Size = UDim2.new(1, 0, 0, 4)
 	topLine.Position = UDim2.new(0, 0, 0, 0)
-	topLine.BackgroundColor3 = Color3.fromRGB(220, 180, 50)
+	topLine.BackgroundColor3 = Color3.fromRGB(255, 200, 50)
 	topLine.BorderSizePixel = 0
 	topLine.ZIndex = 6
 	topLine.Parent = carouselFrame
+	local topGrad = Instance.new("UIGradient")
+	topGrad.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 80, 120)),
+		ColorSequenceKeypoint.new(0.25, Color3.fromRGB(255, 200, 50)),
+		ColorSequenceKeypoint.new(0.5, Color3.fromRGB(80, 255, 150)),
+		ColorSequenceKeypoint.new(0.75, Color3.fromRGB(80, 150, 255)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(200, 80, 255)),
+	})
+	topGrad.Parent = topLine
 
 	-- Inner container (very wide strip that slides left/right)
 	carouselContainer = Instance.new("Frame")
@@ -146,14 +173,35 @@ local function buildCarousel(parent)
 		card.Parent = carouselContainer
 
 		local cardCorner = Instance.new("UICorner")
-		cardCorner.CornerRadius = UDim.new(0, 6)
+		cardCorner.CornerRadius = UDim.new(0, 10)
 		cardCorner.Parent = card
 
-		-- Thin bottom colour strip (rarity)
+		-- Card glow stroke (rarity-colored)
+		local cardStroke = Instance.new("UIStroke")
+		cardStroke.Name = "CardStroke"
+		cardStroke.Color = rarityColor
+		cardStroke.Thickness = 2
+		cardStroke.Transparency = 0.5
+		cardStroke.Parent = card
+
+		-- Gradient overlay for depth (top lighter, bottom darker)
+		local cardGrad = Instance.new("UIGradient")
+		cardGrad.Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, Color3.new(1, 1, 1)),
+			ColorSequenceKeypoint.new(1, Color3.fromRGB(60, 60, 80)),
+		})
+		cardGrad.Transparency = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 0.7),
+			NumberSequenceKeypoint.new(1, 0),
+		})
+		cardGrad.Rotation = 90
+		cardGrad.Parent = card
+
+		-- Thick bottom colour strip (rarity)
 		local bottomStrip = Instance.new("Frame")
 		bottomStrip.Name = "BottomStrip"
-		bottomStrip.Size = UDim2.new(1, 0, 0, 4)
-		bottomStrip.Position = UDim2.new(0, 0, 1, -4)
+		bottomStrip.Size = UDim2.new(1, 0, 0, 5)
+		bottomStrip.Position = UDim2.new(0, 0, 1, -5)
 		bottomStrip.BackgroundColor3 = rarityColor
 		bottomStrip.BorderSizePixel = 0
 		bottomStrip.Parent = card
@@ -162,47 +210,76 @@ local function buildCarousel(parent)
 		if eff then
 			local badge = Instance.new("TextLabel")
 			badge.Name = "EffectTag"
-			badge.Size = UDim2.new(1, -6, 0, 16)
-			badge.Position = UDim2.new(0.5, 0, 0, 4)
+			badge.Size = UDim2.new(1, -6, 0, 18)
+			badge.Position = UDim2.new(0.5, 0, 0, 5)
 			badge.AnchorPoint = Vector2.new(0.5, 0)
 			badge.BackgroundTransparency = 1
 			badge.Text = eff.prefix:upper()
 			badge.TextColor3 = eff.color
-			badge.Font = Enum.Font.GothamBold
-			badge.TextSize = 11
+			badge.Font = Enum.Font.FredokaOne
+			badge.TextSize = 12
 			badge.TextScaled = false
 			badge.Parent = card
+			local effStroke = Instance.new("UIStroke")
+			effStroke.Color = Color3.fromRGB(0, 0, 0)
+			effStroke.Thickness = 1
+			effStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+			effStroke.Parent = badge
 		end
 
-		-- Streamer name (center)
-		local nameY = eff and 0.18 or 0.08
+		-- Sparkle decoration only on cards that have an effect (Acid, Snow, etc.)
+		if eff then
+			local star = Instance.new("TextLabel")
+			star.Name = "Star"
+			star.Size = UDim2.new(0, 20, 0, 20)
+			star.Position = UDim2.new(1, -6, 0, 4)
+			star.AnchorPoint = Vector2.new(1, 0)
+			star.BackgroundTransparency = 1
+			star.Text = "\u{2728}"
+			star.TextSize = 14
+			star.Font = Enum.Font.SourceSans
+			star.Parent = card
+		end
+
+		-- Streamer name (center, bigger & bolder)
+		local nameY = eff and 0.18 or 0.10
 		local nameLabel = Instance.new("TextLabel")
 		nameLabel.Name = "StreamerName"
-		nameLabel.Size = UDim2.new(1, -10, 0, 44)
+		nameLabel.Size = UDim2.new(1, -10, 0, 50)
 		nameLabel.Position = UDim2.new(0.5, 0, nameY, 0)
 		nameLabel.AnchorPoint = Vector2.new(0.5, 0)
 		nameLabel.BackgroundTransparency = 1
 		nameLabel.Text = eff and (eff.prefix .. " " .. streamer.displayName) or streamer.displayName
 		nameLabel.TextColor3 = eff and eff.color or Color3.new(1, 1, 1)
-		nameLabel.Font = Enum.Font.GothamBold
-		nameLabel.TextSize = 15
+		nameLabel.Font = Enum.Font.FredokaOne
+		nameLabel.TextSize = 16
 		nameLabel.TextScaled = false
 		nameLabel.TextWrapped = true
 		nameLabel.Parent = card
+		local nameStroke = Instance.new("UIStroke")
+		nameStroke.Color = Color3.fromRGB(0, 0, 0)
+		nameStroke.Thickness = 1.5
+		nameStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+		nameStroke.Parent = nameLabel
 
-		-- Rarity label (bottom area)
+		-- Rarity label (bottom area, bigger)
 		local rarLabel = Instance.new("TextLabel")
 		rarLabel.Name = "RarityTag"
-		rarLabel.Size = UDim2.new(1, -10, 0, 18)
-		rarLabel.Position = UDim2.new(0.5, 0, 1, -26)
+		rarLabel.Size = UDim2.new(1, -10, 0, 20)
+		rarLabel.Position = UDim2.new(0.5, 0, 1, -30)
 		rarLabel.AnchorPoint = Vector2.new(0.5, 0)
 		rarLabel.BackgroundTransparency = 1
 		rarLabel.Text = streamer.rarity:upper()
 		rarLabel.TextColor3 = rarityColor
-		rarLabel.Font = Enum.Font.GothamBold
-		rarLabel.TextSize = 12
+		rarLabel.Font = Enum.Font.FredokaOne
+		rarLabel.TextSize = 13
 		rarLabel.TextScaled = false
 		rarLabel.Parent = card
+		local rarStroke = Instance.new("UIStroke")
+		rarStroke.Color = Color3.fromRGB(0, 0, 0)
+		rarStroke.Thickness = 1
+		rarStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+		rarStroke.Parent = rarLabel
 
 		items[i] = {
 			frame = card,
@@ -215,52 +292,58 @@ local function buildCarousel(parent)
 	local totalW = #items * ITEM_STEP
 	carouselContainer.Size = UDim2.new(0, totalW, 1, 0)
 
-	-- Center selector — vertical line + triangles (CS:GO style)
+	-- Center selector — glowing vertical line + big triangles
 	local selectorLine = Instance.new("Frame")
 	selectorLine.Name = "SelectorLine"
-	selectorLine.Size = UDim2.new(0, 2, 1, 6)
+	selectorLine.Size = UDim2.new(0, 3, 1, 10)
 	selectorLine.Position = UDim2.new(0.5, 0, 0.5, 0)
 	selectorLine.AnchorPoint = Vector2.new(0.5, 0.5)
-	selectorLine.BackgroundColor3 = Color3.fromRGB(230, 50, 50)
+	selectorLine.BackgroundColor3 = Color3.fromRGB(255, 60, 60)
 	selectorLine.BorderSizePixel = 0
 	selectorLine.ZIndex = 10
 	selectorLine.Parent = carouselFrame
+	-- Glow around selector
+	local selGlow = Instance.new("UIStroke")
+	selGlow.Color = Color3.fromRGB(255, 100, 100)
+	selGlow.Thickness = 2
+	selGlow.Transparency = 0.4
+	selGlow.Parent = selectorLine
 
-	-- Top triangle
+	-- Top triangle (bigger, bolder)
 	local topArrow = Instance.new("TextLabel")
 	topArrow.Name = "TopArrow"
-	topArrow.Size = UDim2.new(0, 24, 0, 18)
-	topArrow.Position = UDim2.new(0.5, 0, 0, 2)
+	topArrow.Size = UDim2.new(0, 30, 0, 22)
+	topArrow.Position = UDim2.new(0.5, 0, 0, 0)
 	topArrow.AnchorPoint = Vector2.new(0.5, 0)
 	topArrow.BackgroundTransparency = 1
 	topArrow.Text = "\u{25BC}"
-	topArrow.TextColor3 = Color3.fromRGB(230, 50, 50)
+	topArrow.TextColor3 = Color3.fromRGB(255, 60, 60)
 	topArrow.Font = Enum.Font.GothamBold
-	topArrow.TextSize = 18
+	topArrow.TextSize = 22
 	topArrow.ZIndex = 10
 	topArrow.Parent = carouselFrame
 
 	-- Bottom triangle
 	local botArrow = Instance.new("TextLabel")
 	botArrow.Name = "BotArrow"
-	botArrow.Size = UDim2.new(0, 24, 0, 18)
-	botArrow.Position = UDim2.new(0.5, 0, 1, -2)
+	botArrow.Size = UDim2.new(0, 30, 0, 22)
+	botArrow.Position = UDim2.new(0.5, 0, 1, 0)
 	botArrow.AnchorPoint = Vector2.new(0.5, 1)
 	botArrow.BackgroundTransparency = 1
 	botArrow.Text = "\u{25B2}"
-	botArrow.TextColor3 = Color3.fromRGB(230, 50, 50)
+	botArrow.TextColor3 = Color3.fromRGB(255, 60, 60)
 	botArrow.Font = Enum.Font.GothamBold
-	botArrow.TextSize = 18
+	botArrow.TextSize = 22
 	botArrow.ZIndex = 10
 	botArrow.Parent = carouselFrame
 
-	-- Dark gradient edges (fade to black on left/right for depth)
+	-- Dark gradient edges (wider fade for cinematic depth)
 	for _, side in ipairs({"Left", "Right"}) do
 		local grad = Instance.new("Frame")
 		grad.Name = "Fade" .. side
-		grad.Size = UDim2.new(0, 80, 1, 0)
-		grad.Position = side == "Left" and UDim2.new(0, 0, 0, 0) or UDim2.new(1, -80, 0, 0)
-		grad.BackgroundColor3 = Color3.fromRGB(18, 18, 28)
+		grad.Size = UDim2.new(0, 100, 1, 0)
+		grad.Position = side == "Left" and UDim2.new(0, 0, 0, 0) or UDim2.new(1, -100, 0, 0)
+		grad.BackgroundColor3 = Color3.fromRGB(12, 12, 22)
 		grad.BorderSizePixel = 0
 		grad.ZIndex = 8
 		grad.Parent = carouselFrame
@@ -413,20 +496,45 @@ local function applyEffectToCard(cardIndex, effectName)
 		if not existingBadge then
 			existingBadge = Instance.new("TextLabel")
 			existingBadge.Name = "EffectTag"
-			existingBadge.Size = UDim2.new(1, -6, 0, 16)
-			existingBadge.Position = UDim2.new(0.5, 0, 0, 4)
+			existingBadge.Size = UDim2.new(1, -6, 0, 18)
+			existingBadge.Position = UDim2.new(0.5, 0, 0, 5)
 			existingBadge.AnchorPoint = Vector2.new(0.5, 0)
 			existingBadge.BackgroundTransparency = 1
-			existingBadge.Font = Enum.Font.GothamBold
-			existingBadge.TextSize = 11
+			existingBadge.Font = Enum.Font.FredokaOne
+			existingBadge.TextSize = 12
 			existingBadge.TextScaled = false
 			existingBadge.Parent = card
+			local effS = Instance.new("UIStroke")
+			effS.Color = Color3.fromRGB(0, 0, 0)
+			effS.Thickness = 1
+			effS.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+			effS.Parent = existingBadge
 		end
 		existingBadge.Text = effectInfo.prefix:upper()
 		existingBadge.TextColor3 = effectInfo.color
 		existingBadge.Visible = true
 	elseif existingBadge then
 		existingBadge.Visible = false
+	end
+
+	-- Sparkle — show on effect cards, hide on non-effect cards
+	local existingStar = card:FindFirstChild("Star")
+	if effectInfo then
+		if not existingStar then
+			existingStar = Instance.new("TextLabel")
+			existingStar.Name = "Star"
+			existingStar.Size = UDim2.new(0, 20, 0, 20)
+			existingStar.Position = UDim2.new(1, -6, 0, 4)
+			existingStar.AnchorPoint = Vector2.new(1, 0)
+			existingStar.BackgroundTransparency = 1
+			existingStar.Text = "\u{2728}"
+			existingStar.TextSize = 14
+			existingStar.Font = Enum.Font.SourceSans
+			existingStar.Parent = card
+		end
+		existingStar.Visible = true
+	elseif existingStar then
+		existingStar.Visible = false
 	end
 
 	-- Streamer name
@@ -439,7 +547,7 @@ local function applyEffectToCard(cardIndex, effectName)
 		else
 			nameLabel.Text = streamer.displayName
 			nameLabel.TextColor3 = Color3.new(1, 1, 1)
-			nameLabel.Position = UDim2.new(0.5, 0, 0.08, 0)
+			nameLabel.Position = UDim2.new(0.5, 0, 0.10, 0)
 		end
 	end
 end
@@ -556,10 +664,75 @@ local function playSpinAnimation(resultData, callback)
 	carouselContainer.Position = UDim2.new(0, startX, 0, 0)
 
 	local totalDist = startX - endX -- positive (moving left)
-	local connection
 	local done = false
+	skipRequested = false
 
-	connection = RunService.RenderStepped:Connect(function()
+	-- Show skip button
+	if skipButton then
+		skipButton.Visible = true
+	end
+
+	-- Cleanup previous connection
+	if currentAnimConnection then
+		pcall(function() currentAnimConnection:Disconnect() end)
+		currentAnimConnection = nil
+	end
+
+	local function finishAnimation()
+		-- Snap to exact final position
+		carouselContainer.Position = UDim2.new(0, endX, 0, 0)
+
+		-- Hide skip button
+		if skipButton then
+			skipButton.Visible = false
+		end
+
+		-- Highlight the winning card
+		local winCard = items[targetIndex] and items[targetIndex].frame
+		if winCard then
+			local glow = winCard:FindFirstChild("WinGlow")
+			if not glow then
+				glow = Instance.new("UIStroke")
+				glow.Name = "WinGlow"
+				glow.Parent = winCard
+			end
+			local rarCol = Rarities.ByName[items[targetIndex].streamer.rarity]
+			local glowColor = rarCol and rarCol.color or Color3.fromRGB(255, 255, 255)
+			glow.Color = glowColor
+			glow.Thickness = 0
+			glow.Transparency = 0
+			TweenService:Create(glow, TweenInfo.new(0.35, Enum.EasingStyle.Back), {
+				Thickness = 5,
+			}):Play()
+		end
+
+		task.spawn(function()
+			task.wait(0.6)
+			if callback then
+				callback()
+			end
+		end)
+	end
+
+	currentAnimConnection = RunService.RenderStepped:Connect(function()
+		-- Check for skip
+		if skipRequested and not done then
+			done = true
+			currentAnimConnection:Disconnect()
+			currentAnimConnection = nil
+
+			-- Quick tween to final position (0.3s fluid skip)
+			local tweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+			local tween = TweenService:Create(carouselContainer, tweenInfo, {
+				Position = UDim2.new(0, endX, 0, 0),
+			})
+			tween:Play()
+			tween.Completed:Connect(function()
+				finishAnimation()
+			end)
+			return
+		end
+
 		local t = (tick() - startTime) / DURATION
 		if t >= 1 then t = 1 end
 
@@ -570,39 +743,9 @@ local function playSpinAnimation(resultData, callback)
 
 		if t >= 1 and not done then
 			done = true
-			connection:Disconnect()
-
-			-- Snap to exact final position
-			carouselContainer.Position = UDim2.new(0, endX, 0, 0)
-
-			-- Highlight the winning card
-			task.spawn(function()
-				task.wait(0.05)
-				local winCard = items[targetIndex] and items[targetIndex].frame
-				if winCard then
-					-- Add a bright glow stroke
-					local glow = winCard:FindFirstChild("WinGlow")
-					if not glow then
-						glow = Instance.new("UIStroke")
-						glow.Name = "WinGlow"
-						glow.Parent = winCard
-					end
-					local rarCol = Rarities.ByName[items[targetIndex].streamer.rarity]
-					local glowColor = rarCol and rarCol.color or Color3.fromRGB(255, 255, 255)
-					glow.Color = glowColor
-					glow.Thickness = 0
-					glow.Transparency = 0
-					-- Animate glow in
-					TweenService:Create(glow, TweenInfo.new(0.35, Enum.EasingStyle.Back), {
-						Thickness = 5,
-					}):Play()
-				end
-
-				task.wait(1.0) -- pause to admire the result
-				if callback then
-					callback()
-				end
-			end)
+			currentAnimConnection:Disconnect()
+			currentAnimConnection = nil
+			finishAnimation()
 		end
 	end)
 end
@@ -656,26 +799,27 @@ local function showResult(data)
 	local modelTemplate = modelsFolder and modelsFolder:FindFirstChild(data.streamerId or "")
 	local hasModel = modelTemplate ~= nil
 
-	-- Make the message taller if we have a model to show
-	local messageHeight = hasModel and 260 or 140
+	-- Make the message much taller if we have a model to show (big model!)
+	local messageHeight = hasModel and 380 or 160
 	local receivedMessage = UIHelper.CreateRoundedFrame({
 		Name = "ReceivedMessage",
-		Size = UDim2.new(0.6, 0, 0, messageHeight),
-		Position = UDim2.new(0.5, 0, 0.25, 0),
+		Size = UDim2.new(0.65, 0, 0, messageHeight),
+		Position = UDim2.new(0.5, 0, 0.22, 0),
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		Color = DesignConfig.Colors.BackgroundLight,
-		CornerRadius = DesignConfig.Layout.PanelCorner,
+		Color = Color3.fromRGB(18, 18, 30),
+		CornerRadius = UDim.new(0, 18),
 		StrokeColor = displayColor,
+		StrokeThickness = 3,
 		Parent = spinContainer,
 	})
 	receivedMessage.ZIndex = 20
 
-	-- ViewportFrame showing the 3D model (if available)
+	-- ViewportFrame showing the 3D model (if available) — BIG and prominent
 	if hasModel then
 		local viewport = Instance.new("ViewportFrame")
 		viewport.Name = "ModelViewport"
-		viewport.Size = UDim2.new(0, 120, 0, 120)
-		viewport.Position = UDim2.new(0.5, 0, 0, 10)
+		viewport.Size = UDim2.new(0, 220, 0, 220)
+		viewport.Position = UDim2.new(0.5, 0, 0, 12)
 		viewport.AnchorPoint = Vector2.new(0.5, 0)
 		viewport.BackgroundTransparency = 1
 		viewport.ZIndex = 21
@@ -690,16 +834,16 @@ local function showResult(data)
 		vpCamera.Parent = viewport
 		viewport.CurrentCamera = vpCamera
 
-		-- Position camera to frame the model
+		-- Position camera to frame the model nicely
 		local ok, cf, size = pcall(function()
 			return vpModel:GetBoundingBox()
 		end)
 		if ok and cf and size then
 			local maxDim = math.max(size.X, size.Y, size.Z)
-			local dist = maxDim * 1.8
-			vpCamera.CFrame = CFrame.new(cf.Position + Vector3.new(0, size.Y * 0.2, dist), cf.Position)
+			local dist = maxDim * 1.6 -- closer for bigger appearance
+			vpCamera.CFrame = CFrame.new(cf.Position + Vector3.new(0, size.Y * 0.15, dist), cf.Position)
 		else
-			vpCamera.CFrame = CFrame.new(Vector3.new(0, 2, 6), Vector3.new(0, 1, 0))
+			vpCamera.CFrame = CFrame.new(Vector3.new(0, 2, 5), Vector3.new(0, 1, 0))
 		end
 
 		-- Slow rotation animation
@@ -719,7 +863,7 @@ local function showResult(data)
 	end
 
 	-- Text section (below model or centered)
-	local textYStart = hasModel and 132 or 10
+	local textYStart = hasModel and 235 or 10
 	local messageLines = { "YOU RECEIVED:", data.displayName or "Unknown", (data.rarity or "Common"):upper() }
 	if effectInfo then
 		table.insert(messageLines, effectInfo.prefix:upper() .. " EFFECT (x" .. effectInfo.cashMultiplier .. " CASH)")
@@ -749,18 +893,24 @@ local function showResult(data)
 	if oddsText ~= "" then
 		table.insert(messageLines, oddsText)
 	end
-	local messageText = UIHelper.CreateLabel({
-		Name = "MessageText",
-		Size = UDim2.new(1, -20, 0, messageHeight - textYStart - 10),
-		Position = UDim2.new(0.5, 0, 0, textYStart),
-		AnchorPoint = Vector2.new(0.5, 0),
-		Text = table.concat(messageLines, "\n"),
-		TextColor = displayColor,
-		Font = DesignConfig.Fonts.Accent,
-		TextSize = 18,
-		Parent = receivedMessage,
-	})
-	messageText.TextScaled = false
+	local messageText = Instance.new("TextLabel")
+	messageText.Name = "MessageText"
+	messageText.Size = UDim2.new(1, -20, 0, messageHeight - textYStart - 10)
+	messageText.Position = UDim2.new(0.5, 0, 0, textYStart)
+	messageText.AnchorPoint = Vector2.new(0.5, 0)
+	messageText.BackgroundTransparency = 1
+	messageText.Text = table.concat(messageLines, "\n")
+	messageText.TextColor3 = displayColor
+	messageText.Font = Enum.Font.FredokaOne
+	messageText.TextSize = 20
+	messageText.TextWrapped = true
+	messageText.ZIndex = 21
+	messageText.Parent = receivedMessage
+	local msgStroke = Instance.new("UIStroke")
+	msgStroke.Color = Color3.fromRGB(0, 0, 0)
+	msgStroke.Thickness = 2
+	msgStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+	msgStroke.Parent = messageText
 	
 	UIHelper.ScaleIn(receivedMessage, 0.3)
 
@@ -822,10 +972,45 @@ local function showResult(data)
 		task.spawn(onSpinResult, data)
 	end
 	
-	-- Auto-close the window after showing the result
+	-- Auto-close or start queued spin
+	-- Capture the current generation so we can bail if a new spin started
+	local myGeneration = spinGeneration
+
 	task.spawn(function()
+		-- If there's a queued spin result, start it immediately after a brief pause
+		if queuedSpinResult then
+			task.wait(1.0)
+			if spinGeneration ~= myGeneration then return end -- new spin already started
+			if receivedMessage and receivedMessage.Parent then
+				receivedMessage:Destroy()
+			end
+			local nextData = queuedSpinResult
+			queuedSpinResult = nil
+			animationDone = false
+			SpinController._startSpin(nextData)
+			return
+		end
+
 		task.wait(3.5) -- Show result for 3.5 seconds
+
+		-- Bail if a new spin started while we waited
+		if spinGeneration ~= myGeneration then return end
+
+		-- Check again if a spin was queued while we were showing result
+		if queuedSpinResult then
+			if receivedMessage and receivedMessage.Parent then
+				receivedMessage:Destroy()
+			end
+			local nextData = queuedSpinResult
+			queuedSpinResult = nil
+			animationDone = false
+			SpinController._startSpin(nextData)
+			return
+		end
 		
+		-- Bail again in case something changed
+		if spinGeneration ~= myGeneration then return end
+
 		-- Fade out the received message
 		if receivedMessage and receivedMessage.Parent then
 			TweenService:Create(receivedMessage, TweenInfo.new(0.3), {
@@ -838,12 +1023,15 @@ local function showResult(data)
 				}):Play()
 			end
 			task.wait(0.3)
+			if spinGeneration ~= myGeneration then return end
 			if receivedMessage then
 				receivedMessage:Destroy()
 			end
 		end
 		
-		-- Close the spin window
+		-- No queued spin — close the window (only if still our generation)
+		if spinGeneration ~= myGeneration then return end
+		isSpinning = false
 		task.wait(0.2)
 		SpinController.Hide()
 	end)
@@ -900,64 +1088,122 @@ function SpinController.Init()
 
 	spinContainer = UIHelper.CreateRoundedFrame({
 		Name = "SpinContainer",
-		Size = UDim2.new(0.45, 0, 0.85, 0),
+		Size = UDim2.new(0.55, 0, 0.88, 0),
 		Position = UDim2.new(0.5, 0, 0.5, 0),
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		Color = DesignConfig.Colors.Background,
-		CornerRadius = DesignConfig.Layout.ModalCorner,
-		StrokeColor = Color3.fromRGB(80, 80, 120),
+		Color = Color3.fromRGB(15, 15, 25),
+		CornerRadius = UDim.new(0, 18),
+		StrokeColor = Color3.fromRGB(100, 60, 180),
+		StrokeThickness = 3,
 		Parent = screenGui,
 	})
 	spinContainer.Visible = false
 
-	UIHelper.CreateLabel({
-		Name = "SpinTitle",
-		Size = UDim2.new(1, 0, 0, 40),
-		Position = UDim2.new(0.5, 0, 0, 8),
-		AnchorPoint = Vector2.new(0.5, 0),
-		Text = "SPIN THE STREAMER",
-		TextColor = Color3.fromRGB(200, 120, 255),
-		Font = DesignConfig.Fonts.Accent,
-		TextSize = DesignConfig.FontSizes.Title,
-		Parent = spinContainer,
-	})
+	local spinTitle = Instance.new("TextLabel")
+	spinTitle.Name = "SpinTitle"
+	spinTitle.Size = UDim2.new(1, 0, 0, 48)
+	spinTitle.Position = UDim2.new(0.5, 0, 0, 6)
+	spinTitle.AnchorPoint = Vector2.new(0.5, 0)
+	spinTitle.BackgroundTransparency = 1
+	spinTitle.Text = "SPIN THE STREAMER"
+	spinTitle.TextColor3 = Color3.fromRGB(255, 200, 80)
+	spinTitle.Font = Enum.Font.FredokaOne
+	spinTitle.TextSize = 34
+	spinTitle.Parent = spinContainer
+	local titleStroke = Instance.new("UIStroke")
+	titleStroke.Color = Color3.fromRGB(180, 80, 255)
+	titleStroke.Thickness = 3
+	titleStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+	titleStroke.Parent = spinTitle
 
 	buildCarousel(spinContainer)
 	buildResultDisplay(spinContainer)
 
-	spinButton = UIHelper.CreateButton({
-		Name = "SpinButton",
-		Size = UDim2.new(0.4, 0, 0, 50),
-		Position = UDim2.new(0.5, 0, 0.95, 0),
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Color = DesignConfig.Colors.Accent,
-		HoverColor = Color3.fromRGB(0, 230, 120),
-		Text = "SPIN  ($" .. Economy.SpinCost .. ")",
-		TextColor = DesignConfig.Colors.White,
-		Font = DesignConfig.Fonts.Primary,
-		TextSize = DesignConfig.FontSizes.Header,
-		CornerRadius = DesignConfig.Layout.ButtonCorner,
-		StrokeColor = Color3.fromRGB(0, 255, 130),
-		Parent = spinContainer,
+	spinButton = Instance.new("TextButton")
+	spinButton.Name = "SpinButton"
+	spinButton.Size = UDim2.new(0.5, 0, 0, 56)
+	spinButton.Position = UDim2.new(0.5, 0, 0.94, 0)
+	spinButton.AnchorPoint = Vector2.new(0.5, 0.5)
+	spinButton.BackgroundColor3 = Color3.fromRGB(80, 255, 120)
+	spinButton.Text = "SPIN  ($" .. currentSpinCost .. ")"
+	spinButton.TextColor3 = Color3.fromRGB(10, 30, 15)
+	spinButton.Font = Enum.Font.FredokaOne
+	spinButton.TextSize = 24
+	spinButton.BorderSizePixel = 0
+	spinButton.Parent = spinContainer
+	local spinBtnCorner = Instance.new("UICorner")
+	spinBtnCorner.CornerRadius = UDim.new(0, 14)
+	spinBtnCorner.Parent = spinButton
+	local spinBtnStroke = Instance.new("UIStroke")
+	spinBtnStroke.Color = Color3.fromRGB(0, 200, 80)
+	spinBtnStroke.Thickness = 3
+	spinBtnStroke.Parent = spinButton
+	-- Gradient for the button
+	local spinBtnGrad = Instance.new("UIGradient")
+	spinBtnGrad.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(80, 255, 130)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(30, 200, 80)),
 	})
+	spinBtnGrad.Rotation = 90
+	spinBtnGrad.Parent = spinButton
 
 	spinButton.MouseButton1Click:Connect(function()
 		SpinController.RequestSpin()
 	end)
 
+	-- Skip button (appears during spin animation)
+	skipButton = Instance.new("TextButton")
+	skipButton.Name = "SkipButton"
+	skipButton.Size = UDim2.new(0, 100, 0, 36)
+	skipButton.Position = UDim2.new(0.5, 0, 0.66, 0)
+	skipButton.AnchorPoint = Vector2.new(0.5, 0.5)
+	skipButton.BackgroundColor3 = Color3.fromRGB(60, 60, 80)
+	skipButton.Text = "SKIP"
+	skipButton.TextColor3 = Color3.fromRGB(220, 220, 240)
+	skipButton.Font = Enum.Font.FredokaOne
+	skipButton.TextSize = 18
+	skipButton.BorderSizePixel = 0
+	skipButton.Visible = false
+	skipButton.ZIndex = 15
+	skipButton.Parent = spinContainer
+	local skipCorner = Instance.new("UICorner")
+	skipCorner.CornerRadius = UDim.new(0, 10)
+	skipCorner.Parent = skipButton
+	local skipStroke = Instance.new("UIStroke")
+	skipStroke.Color = Color3.fromRGB(120, 120, 150)
+	skipStroke.Thickness = 2
+	skipStroke.Parent = skipButton
+
+	skipButton.MouseButton1Click:Connect(function()
+		skipRequested = true
+	end)
+
 	-- Listen for spin results
 	SpinResult.OnClientEvent:Connect(function(data)
 		if data.success then
-			playSpinAnimation(data, function()
-				showResult(data)
-				isSpinning = false
-				spinButton.Text = "SPIN  ($" .. Economy.SpinCost .. ")"
-			end)
+			if queuedSpinPending then
+				-- This result is for a queued spin — store it
+				queuedSpinResult = data
+				queuedSpinPending = false
+			elseif isSpinning then
+				-- We're waiting for the primary result — play animation
+				SpinController._startSpin(data)
+			else
+				-- Normal flow: start the spin animation
+				SpinController._startSpin(data)
+			end
 		else
-			isSpinning = false
+			-- Error handling — if this was for a queued spin, just clear queue
+			if queuedSpinPending then
+				queuedSpinPending = false
+				spinButton.Text = "SPIN AGAIN  ($" .. currentSpinCost .. ")"
+			else
+				isSpinning = false
+				animationDone = false
+			end
 			spinButton.Text = data.reason or "ERROR"
 			task.delay(1.5, function()
-				spinButton.Text = "SPIN  ($" .. Economy.SpinCost .. ")"
+				spinButton.Text = "SPIN  ($" .. currentSpinCost .. ")"
 			end)
 		end
 	end)
@@ -972,10 +1218,16 @@ end
 -- PUBLIC
 -------------------------------------------------
 
-function SpinController.RequestSpin()
-	if isSpinning then return end
+--- Internal: prepare carousel and play animation for a spin result
+function SpinController._startSpin(data)
 	isSpinning = true
+	animationDone = false
+	spinGeneration = spinGeneration + 1
 	resultFrame.Visible = false
+
+	-- Clean up any existing received message
+	local existingMsg = spinContainer:FindFirstChild("ReceivedMessage")
+	if existingMsg then existingMsg:Destroy() end
 	
 	-- Reset carousel position for new spin
 	if carouselContainer then
@@ -989,8 +1241,7 @@ function SpinController.RequestSpin()
 		end
 	end
 
-	-- Re-randomize cosmetic effects on every spin so the strip always
-	-- looks fresh and exciting.  ~15% of cards get a random effect.
+	-- Re-randomize cosmetic effects
 	local COSMETIC_CHANCE = 0.15
 	for idx, item in ipairs(items) do
 		local newEff = nil
@@ -999,22 +1250,107 @@ function SpinController.RequestSpin()
 		end
 		applyEffectToCard(idx, newEff and newEff.name or nil)
 	end
-	
+
 	spinButton.Text = "SPINNING..."
-	SpinRequest:FireServer()
+
+	playSpinAnimation(data, function()
+		animationDone = true
+		showResult(data)
+		-- Don't set isSpinning = false here; showResult's auto-close handles it
+		spinButton.Text = "SPIN AGAIN  ($" .. currentSpinCost .. ")"
+	end)
+end
+
+function SpinController.RequestSpin()
+	-- If animation is done (result screen showing), start next spin immediately
+	if isSpinning and animationDone then
+		-- Clean up result display and start fresh
+		local existingMsg = spinContainer:FindFirstChild("ReceivedMessage")
+		if existingMsg then existingMsg:Destroy() end
+
+		isSpinning = true
+		animationDone = false
+		resultFrame.Visible = false
+		spinButton.Text = "SPINNING..."
+
+		-- Fire the appropriate spin request
+		if currentCrateId then
+			local BuyCrateRequest = RemoteEvents:WaitForChild("BuyCrateRequest")
+			BuyCrateRequest:FireServer(currentCrateId)
+		else
+			SpinRequest:FireServer()
+		end
+		return
+	end
+
+	-- If animation is still playing (cards scrolling), queue a next spin
+	if isSpinning and not animationDone then
+		-- Only allow one queued spin at a time
+		if queuedSpinPending then return end
+		queuedSpinPending = true
+		spinButton.Text = "QUEUED..."
+
+		-- Fire the appropriate spin request
+		if currentCrateId then
+			local BuyCrateRequest = RemoteEvents:WaitForChild("BuyCrateRequest")
+			BuyCrateRequest:FireServer(currentCrateId)
+		else
+			SpinRequest:FireServer()
+		end
+		return
+	end
+
+	-- Normal first spin (not spinning at all)
+	isSpinning = true
+	animationDone = false
+	resultFrame.Visible = false
+
+	spinButton.Text = "SPINNING..."
+
+	-- Fire the appropriate spin request
+	if currentCrateId then
+		local BuyCrateRequest = RemoteEvents:WaitForChild("BuyCrateRequest")
+		BuyCrateRequest:FireServer(currentCrateId)
+	else
+		SpinRequest:FireServer()
+	end
 end
 
 function SpinController.Show()
 	spinContainer.Visible = true
+	spinButton.Text = "SPIN  ($" .. currentSpinCost .. ")"
 	UIHelper.ScaleIn(spinContainer, 0.3)
 end
 
 function SpinController.Hide()
 	spinContainer.Visible = false
+	-- Reset queue state
+	queuedSpinResult = nil
+	queuedSpinPending = false
+	isSpinning = false
+	animationDone = false
+	if skipButton then skipButton.Visible = false end
+	if currentAnimConnection then
+		pcall(function() currentAnimConnection:Disconnect() end)
+		currentAnimConnection = nil
+	end
 end
 
 function SpinController.IsVisible(): boolean
 	return spinContainer.Visible
+end
+
+--- Set the cost displayed on the spin button (called by SpinStandController)
+function SpinController.SetCurrentCost(cost: number)
+	currentSpinCost = cost
+	if spinButton and not isSpinning then
+		spinButton.Text = "SPIN  ($" .. currentSpinCost .. ")"
+	end
+end
+
+--- Set the crate ID for crate spins (nil = regular spin)
+function SpinController.SetCurrentCrateId(crateId)
+	currentCrateId = crateId
 end
 
 --- Set callback for spin result (used by Main to flash inventory)

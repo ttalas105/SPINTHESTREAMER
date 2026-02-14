@@ -22,6 +22,8 @@ local SpinController         = require(controllers.SpinController)
 local SpinStandController    = require(controllers.SpinStandController)
 local UpgradeStandController = require(controllers.UpgradeStandController)
 local SellStandController    = require(controllers.SellStandController)
+local PotionController       = require(controllers.PotionController)
+local RebirthController      = require(controllers.RebirthController)
 local HoldController         = require(controllers.HoldController)
 local SlotPadController      = require(controllers.SlotPadController)
 local InventoryController    = require(controllers.InventoryController)
@@ -42,6 +44,8 @@ SpinController.Init()
 SpinStandController.Init()
 UpgradeStandController.Init()
 SellStandController.Init()
+PotionController.Init()
+RebirthController.Init()
 HoldController.Init()
 InventoryController.Init()
 SlotPadController.Init(InventoryController)
@@ -132,8 +136,7 @@ end)
 -------------------------------------------------
 
 RightSideNavController.OnClick("Rebirth", function()
-	local RebirthRequest = RemoteEvents:WaitForChild("RebirthRequest")
-	RebirthRequest:FireServer()
+	RebirthController.Open()
 end)
 
 RightSideNavController.OnClick("Settings", function()
@@ -198,18 +201,7 @@ UnequipResult.OnClientEvent:Connect(function(data)
 	end
 end)
 
--------------------------------------------------
--- REBIRTH RESULT
--------------------------------------------------
-
-local RebirthResult = RemoteEvents:WaitForChild("RebirthResult")
-RebirthResult.OnClientEvent:Connect(function(data)
-	if data.success then
-		print("[Client] Rebirth! Now at: " .. data.newRebirthCount)
-	else
-		print("[Client] Rebirth failed: " .. (data.reason or "unknown"))
-	end
-end)
+-- Rebirth result is handled by RebirthController
 
 -------------------------------------------------
 -- SELL RESULT

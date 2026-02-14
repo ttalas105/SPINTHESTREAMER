@@ -154,12 +154,95 @@ do
 	end
 end
 
+local PotionService  = require(services.PotionService)
+
+-- Rebirth stand: open rebirth UI when player interacts
+do
+	local stallRebirth = hub:FindFirstChild("Stall_Rebirth")
+	local basePart = nil
+	if stallRebirth and stallRebirth:IsA("Model") then
+		basePart = stallRebirth:FindFirstChildWhichIsA("BasePart") or stallRebirth.PrimaryPart
+	end
+	if not basePart then
+		local signRebirth = hub:FindFirstChild("Sign_Rebirth")
+		if signRebirth and signRebirth:IsA("BasePart") then
+			basePart = signRebirth
+		end
+	end
+	if basePart then
+		local frontAnchor = Instance.new("Part")
+		frontAnchor.Name = "RebirthPromptAnchor"
+		frontAnchor.Size = Vector3.new(1, 2, 1)
+		frontAnchor.Transparency = 1
+		frontAnchor.CanCollide = false
+		frontAnchor.Anchored = true
+		local pos = basePart.Position
+		frontAnchor.Position = pos + Vector3.new(0, 2, -3)
+		frontAnchor.Parent = hub
+		local prompt = Instance.new("ProximityPrompt")
+		prompt.ActionText = "Open"
+		prompt.ObjectText = "Rebirth"
+		prompt.KeyboardKeyCode = Enum.KeyCode.E
+		prompt.MaxActivationDistance = 14
+		prompt.HoldDuration = 0
+		prompt.Parent = frontAnchor
+		local OpenRebirthGui = ReplicatedStorage.RemoteEvents:WaitForChild("OpenRebirthGui")
+		prompt.Triggered:Connect(function(player)
+			OpenRebirthGui:FireClient(player)
+		end)
+		print("[Server] Rebirth stand ProximityPrompt added")
+	else
+		warn("[Server] Could not find a part to attach Rebirth stand ProximityPrompt")
+	end
+end
+
+-- Potion stand: open potion shop UI when player interacts
+do
+	local stallPotions = hub:FindFirstChild("Stall_Potions")
+	local basePart = nil
+	if stallPotions and stallPotions:IsA("Model") then
+		basePart = stallPotions:FindFirstChildWhichIsA("BasePart") or stallPotions.PrimaryPart
+	end
+	if not basePart then
+		local signPotions = hub:FindFirstChild("Sign_Potions")
+		if signPotions and signPotions:IsA("BasePart") then
+			basePart = signPotions
+		end
+	end
+	if basePart then
+		local frontAnchor = Instance.new("Part")
+		frontAnchor.Name = "PotionPromptAnchor"
+		frontAnchor.Size = Vector3.new(1, 2, 1)
+		frontAnchor.Transparency = 1
+		frontAnchor.CanCollide = false
+		frontAnchor.Anchored = true
+		local pos = basePart.Position
+		frontAnchor.Position = pos + Vector3.new(0, 2, -3)
+		frontAnchor.Parent = hub
+		local prompt = Instance.new("ProximityPrompt")
+		prompt.ActionText = "Open"
+		prompt.ObjectText = "Potions"
+		prompt.KeyboardKeyCode = Enum.KeyCode.E
+		prompt.MaxActivationDistance = 14
+		prompt.HoldDuration = 0
+		prompt.Parent = frontAnchor
+		local OpenPotionStandGui = ReplicatedStorage.RemoteEvents:WaitForChild("OpenPotionStandGui")
+		prompt.Triggered:Connect(function(player)
+			OpenPotionStandGui:FireClient(player)
+		end)
+		print("[Server] Potion stand ProximityPrompt added")
+	else
+		warn("[Server] Could not find a part to attach Potion stand ProximityPrompt")
+	end
+end
+
 -- Initialize services (order matters: PlayerData first, then BaseService)
 PlayerData.Init()
+PotionService.Init(PlayerData)
 BaseService.Init(PlayerData)
-SpinService.Init(PlayerData, BaseService)
-EconomyService.Init(PlayerData)
-RebirthService.Init(PlayerData, BaseService)
+SpinService.Init(PlayerData, BaseService, PotionService)
+EconomyService.Init(PlayerData, PotionService)
+RebirthService.Init(PlayerData, BaseService, PotionService)
 StoreService.Init(PlayerData, SpinService)
 
 print("[Server] Spin the Streamer initialized! Map size: 400x1000 studs, 8 base slots")
