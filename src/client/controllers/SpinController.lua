@@ -768,7 +768,12 @@ local function showResult(data)
 		resultLabel.TextColor3 = displayColor
 	end
 	if nameLabel then
-		nameLabel.Text = data.displayName or "Unknown"
+		-- Ensure effect prefix is always shown even if server displayName doesn't include it
+		local fullName = data.displayName or "Unknown"
+		if effectInfo and not string.find(fullName, effectInfo.prefix, 1, true) then
+			fullName = effectInfo.prefix .. " " .. fullName
+		end
+		nameLabel.Text = fullName
 		nameLabel.TextColor3 = displayColor
 	end
 	if rarityLabel then
@@ -864,7 +869,12 @@ local function showResult(data)
 
 	-- Text section (below model or centered)
 	local textYStart = hasModel and 235 or 10
-	local messageLines = { "YOU RECEIVED:", data.displayName or "Unknown", (data.rarity or "Common"):upper() }
+	-- Build display name with effect prefix guaranteed
+	local resultFullName = data.displayName or "Unknown"
+	if effectInfo and not string.find(resultFullName, effectInfo.prefix, 1, true) then
+		resultFullName = effectInfo.prefix .. " " .. resultFullName
+	end
+	local messageLines = { "YOU RECEIVED:", resultFullName, (data.rarity or "Common"):upper() }
 	if effectInfo then
 		table.insert(messageLines, effectInfo.prefix:upper() .. " EFFECT (x" .. effectInfo.cashMultiplier .. " CASH)")
 	end
@@ -1229,9 +1239,10 @@ function SpinController._startSpin(data)
 	local existingMsg = spinContainer:FindFirstChild("ReceivedMessage")
 	if existingMsg then existingMsg:Destroy() end
 	
-	-- Reset carousel position for new spin
+	-- Hide carousel container until playSpinAnimation sets the proper start position
+	-- (prevents a black/empty flash before the strip appears)
 	if carouselContainer then
-		carouselContainer.Position = UDim2.new(0, 0, 0, 0)
+		carouselContainer.Position = UDim2.new(0, -99999, 0, 0)
 	end
 	-- Remove any lingering win glow from previous spin
 	for _, item in ipairs(items) do

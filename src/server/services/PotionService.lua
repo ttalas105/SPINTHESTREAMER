@@ -1,12 +1,14 @@
 --[[
 	PotionService.lua
 	Server-side potion management.
-	Tracks active luck/cash potions per player with expiry times.
+	Tracks active luck/cash/prismatic potions per player with expiry times.
 	Time stacks (+5 min each use, max 3 hours). Multiplier does NOT stack (replaced).
+	Prismatic (Robux) boosts both luck and cash simultaneously (x7).
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
+local MarketplaceService = game:GetService("MarketplaceService")
 
 local Potions = require(ReplicatedStorage.Shared.Config.Potions)
 
@@ -19,8 +21,12 @@ local BuyPotionRequest = RemoteEvents:WaitForChild("BuyPotionRequest")
 local BuyPotionResult = RemoteEvents:WaitForChild("BuyPotionResult")
 local PotionUpdate = RemoteEvents:WaitForChild("PotionUpdate")
 
--- Per-player active potions: { [userId] = { Luck = {multiplier, expiresAt}, Cash = {multiplier, expiresAt} } }
+-- Per-player active potions:
+-- { [userId] = { Luck = {multiplier, tier, expiresAt}, Cash = {...}, Prismatic = {...} } }
 local activeEffects = {}
+
+-- Per-player pending Prismatic potion count (bought with Robux, consumed one at a time)
+local prismaticInventory = {} -- { [userId] = count }
 
 -------------------------------------------------
 -- HELPERS
@@ -46,11 +52,13 @@ local function sendPotionUpdate(player)
 			}
 		end
 	end
+	-- Include prismatic inventory count
+	payload._prismaticCount = prismaticInventory[player.UserId] or 0
 	PotionUpdate:FireClient(player, payload)
 end
 
 -------------------------------------------------
--- BUY / CONSUME POTION
+-- BUY / CONSUME POTION (Luck/Cash — in-game currency)
 -------------------------------------------------
 
 local function handleBuyPotion(player, potionType, tier)
@@ -78,13 +86,21 @@ local function handleBuyPotion(player, potionType, tier)
 		return
 	end
 
-	-- Check if a potion of the same TYPE is already active
+	-- Check conflicts with Prismatic (Prismatic covers both Luck + Cash)
 	local effects = getEffects(player.UserId)
 	local now = os.clock()
-	local existing = effects[potionType]
+	local prismatic = effects.Prismatic
+	if prismatic and prismatic.expiresAt > now then
+		BuyPotionResult:FireClient(player, {
+			success = false,
+			reason = "You have a Prismatic Potion active! It already boosts " .. potionType .. ".",
+		})
+		return
+	end
 
+	-- Check if a potion of the same TYPE is already active
+	local existing = effects[potionType]
 	if existing and existing.expiresAt > now then
-		-- Already active — only allow buying the SAME tier (stacks time)
 		if existing.tier ~= tier then
 			BuyPotionResult:FireClient(player, {
 				success = false,
@@ -93,7 +109,7 @@ local function handleBuyPotion(player, potionType, tier)
 			return
 		end
 
-		-- Same tier: add time (max 3 hours), keep same multiplier
+		-- Same tier: add time (max 3 hours)
 		data.cash = data.cash - potionInfo.cost
 		local currentRemaining = existing.expiresAt - now
 		local newRemaining = math.min(currentRemaining + Potions.DURATION_PER_USE, Potions.MAX_DURATION)
@@ -119,35 +135,132 @@ local function handleBuyPotion(player, potionType, tier)
 end
 
 -------------------------------------------------
+-- PRISMATIC POTION (Robux)
+-------------------------------------------------
+
+-- Consume one prismatic potion from inventory (activate or extend time)
+local function handleUsePrismatic(player)
+	local userId = player.UserId
+	local count = prismaticInventory[userId] or 0
+	if count <= 0 then
+		BuyPotionResult:FireClient(player, {
+			success = false,
+			reason = "You have no Prismatic Potions! Purchase some first.",
+		})
+		return
+	end
+
+	local effects = getEffects(userId)
+	local now = os.clock()
+
+	-- Check conflicts: cannot use Prismatic if Luck or Cash potion is active
+	local luckActive = effects.Luck and effects.Luck.expiresAt > now
+	local cashActive = effects.Cash and effects.Cash.expiresAt > now
+	if luckActive or cashActive then
+		local activeType = luckActive and "Luck" or "Cash"
+		BuyPotionResult:FireClient(player, {
+			success = false,
+			reason = "You have a " .. activeType .. " Potion active! Wait for it to expire before using Prismatic.",
+		})
+		return
+	end
+
+	-- Use one potion
+	prismaticInventory[userId] = count - 1
+
+	local existing = effects.Prismatic
+	if existing and existing.expiresAt > now then
+		-- Stack time
+		local currentRemaining = existing.expiresAt - now
+		local newRemaining = math.min(currentRemaining + Potions.DURATION_PER_USE, Potions.MAX_DURATION)
+		existing.expiresAt = now + newRemaining
+	else
+		-- Start fresh
+		effects.Prismatic = {
+			multiplier = Potions.Prismatic.multiplier,
+			tier = 0, -- Prismatic has no tier
+			expiresAt = now + Potions.DURATION_PER_USE,
+		}
+	end
+
+	sendPotionUpdate(player)
+	BuyPotionResult:FireClient(player, {
+		success = true,
+		potionType = "Prismatic",
+		tier = 0,
+		name = Potions.Prismatic.name,
+	})
+end
+
+-- Grant prismatic potions after Robux purchase
+local function grantPrismaticPotions(player, amount)
+	local userId = player.UserId
+	prismaticInventory[userId] = (prismaticInventory[userId] or 0) + amount
+	sendPotionUpdate(player)
+	BuyPotionResult:FireClient(player, {
+		success = true,
+		potionType = "PrismaticPurchase",
+		tier = 0,
+		name = amount .. "x Prismatic Potion" .. (amount > 1 and "s" or ""),
+		amount = amount,
+	})
+end
+
+-------------------------------------------------
 -- PUBLIC API (used by SpinService / EconomyService)
 -------------------------------------------------
 
 --- Get the active luck multiplier for a player (1 if no potion)
 function PotionService.GetLuckMultiplier(player): number
 	local effects = activeEffects[player.UserId]
-	if not effects or not effects.Luck then return 1 end
-	if effects.Luck.expiresAt <= os.clock() then
-		effects.Luck = nil
-		return 1
-	end
-	return effects.Luck.multiplier
-end
+	if not effects then return 1 end
 
---- Clear all active potions for a player (used on rebirth)
-function PotionService.ClearPotions(player)
-	activeEffects[player.UserId] = {}
-	sendPotionUpdate(player)
+	local now = os.clock()
+
+	-- Check Prismatic first (it covers luck)
+	if effects.Prismatic and effects.Prismatic.expiresAt > now then
+		return effects.Prismatic.multiplier
+	end
+
+	if effects.Luck and effects.Luck.expiresAt > now then
+		return effects.Luck.multiplier
+	end
+
+	-- Cleanup expired
+	if effects.Luck and effects.Luck.expiresAt <= now then effects.Luck = nil end
+	if effects.Prismatic and effects.Prismatic.expiresAt <= now then effects.Prismatic = nil end
+
+	return 1
 end
 
 --- Get the active cash multiplier for a player (1 if no potion)
 function PotionService.GetCashMultiplier(player): number
 	local effects = activeEffects[player.UserId]
-	if not effects or not effects.Cash then return 1 end
-	if effects.Cash.expiresAt <= os.clock() then
-		effects.Cash = nil
-		return 1
+	if not effects then return 1 end
+
+	local now = os.clock()
+
+	-- Check Prismatic first (it covers cash)
+	if effects.Prismatic and effects.Prismatic.expiresAt > now then
+		return effects.Prismatic.multiplier
 	end
-	return effects.Cash.multiplier
+
+	if effects.Cash and effects.Cash.expiresAt > now then
+		return effects.Cash.multiplier
+	end
+
+	-- Cleanup expired
+	if effects.Cash and effects.Cash.expiresAt <= now then effects.Cash = nil end
+	if effects.Prismatic and effects.Prismatic.expiresAt <= now then effects.Prismatic = nil end
+
+	return 1
+end
+
+--- Clear all active potions for a player (used on rebirth)
+function PotionService.ClearPotions(player)
+	activeEffects[player.UserId] = {}
+	-- Note: prismatic inventory (bought with Robux) is NOT cleared on rebirth
+	sendPotionUpdate(player)
 end
 
 -------------------------------------------------
@@ -157,9 +270,35 @@ end
 function PotionService.Init(playerDataModule)
 	PlayerData = playerDataModule
 
+	-- Regular potion purchases (in-game cash)
 	BuyPotionRequest.OnServerEvent:Connect(function(player, potionType, tier)
-		handleBuyPotion(player, potionType, tier)
+		if potionType == "UsePrismatic" then
+			handleUsePrismatic(player)
+		else
+			handleBuyPotion(player, potionType, tier)
+		end
 	end)
+
+	-- Handle Robux purchases via Developer Products
+	local function processReceipt(receiptInfo)
+		local player = Players:GetPlayerByUserId(receiptInfo.PlayerId)
+		if not player then return Enum.ProductPurchaseDecision.NotProcessedYet end
+
+		local productId = receiptInfo.ProductId
+		local amount = Potions.ProductIdToAmount[productId]
+
+		if amount then
+			grantPrismaticPotions(player, amount)
+			return Enum.ProductPurchaseDecision.PurchaseGranted
+		end
+
+		-- Not our product, let other handlers process
+		return Enum.ProductPurchaseDecision.NotProcessedYet
+	end
+
+	-- Only set ProcessReceipt if no other handler is already set
+	-- (in a real game you'd combine all product handlers)
+	MarketplaceService.ProcessReceipt = processReceipt
 
 	-- Periodic update: send timer updates to all players every 1 second
 	task.spawn(function()
@@ -176,6 +315,7 @@ function PotionService.Init(playerDataModule)
 	-- Cleanup on leave
 	Players.PlayerRemoving:Connect(function(player)
 		activeEffects[player.UserId] = nil
+		prismaticInventory[player.UserId] = nil
 	end)
 end
 

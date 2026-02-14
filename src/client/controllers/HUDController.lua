@@ -21,14 +21,17 @@ local playerGui = player:WaitForChild("PlayerGui")
 
 -- Cached references
 local cashLabel
+local gemsLabel
 local luckLabel
 
 -- Local data mirror
 HUDController.Data = {
 	cash = 0,
+	gems = 0,
 	inventory = {},
 	equippedPads = {},
 	collection = {},
+	indexCollection = {},
 	rebirthCount = 0,
 	luck = 0,
 	cashUpgrade = 0,
@@ -53,10 +56,10 @@ function HUDController.Init()
 	local screenGui = UIHelper.CreateScreenGui("HUDGui", 3)
 	screenGui.Parent = playerGui
 
-	-- Bottom-left currency display (cash + luck)
+	-- Bottom-left currency display (cash + gems + luck)
 	local hudContainer = Instance.new("Frame")
 	hudContainer.Name = "HUDContainer"
-	hudContainer.Size = UDim2.new(0, 180, 0, 52)
+	hudContainer.Size = UDim2.new(0, 220, 0, 72)
 	hudContainer.Position = UDim2.new(0, 12, 1, -12)
 	hudContainer.AnchorPoint = Vector2.new(0, 1)
 	hudContainer.BackgroundTransparency = 1
@@ -76,11 +79,24 @@ function HUDController.Init()
 	cashLabel.TextXAlignment = Enum.TextXAlignment.Left
 	cashLabel.Parent = hudContainer
 
+	-- Gems
+	gemsLabel = Instance.new("TextLabel")
+	gemsLabel.Name = "GemsLabel"
+	gemsLabel.Size = UDim2.new(1, 0, 0, 20)
+	gemsLabel.Position = UDim2.new(0, 0, 0, 24)
+	gemsLabel.BackgroundTransparency = 1
+	gemsLabel.TextColor3 = Color3.fromRGB(100, 200, 255)
+	gemsLabel.Font = DesignConfig.Fonts.Primary
+	gemsLabel.TextSize = 16
+	gemsLabel.Text = "\u{1F48E} 0 Gems"
+	gemsLabel.TextXAlignment = Enum.TextXAlignment.Left
+	gemsLabel.Parent = hudContainer
+
 	-- Luck (1 luck = +1% drop luck; upgrade at the Upgrade stand)
 	luckLabel = Instance.new("TextLabel")
 	luckLabel.Name = "LuckLabel"
 	luckLabel.Size = UDim2.new(1, 0, 0, 20)
-	luckLabel.Position = UDim2.new(0, 0, 0, 26)
+	luckLabel.Position = UDim2.new(0, 0, 0, 46)
 	luckLabel.BackgroundTransparency = 1
 	luckLabel.TextColor3 = Color3.fromRGB(200, 180, 255)
 	luckLabel.Font = DesignConfig.Fonts.Primary
@@ -136,6 +152,11 @@ function HUDController.UpdateData(payload)
 		end
 	end
 
+	-- Update gems display
+	if gemsLabel then
+		gemsLabel.Text = "\u{1F48E} " .. tostring(HUDController.Data.gems or 0) .. " Gems"
+	end
+
 	-- Update luck display (1 luck = +1%) with potion boost shown
 	if luckLabel then
 		local luck = HUDController.Data.luck or 0
@@ -146,12 +167,21 @@ function HUDController.UpdateData(payload)
 			if ok then PotionController = mod end
 		end
 		local potionMult = 1
-		if PotionController and PotionController.ActivePotions and PotionController.ActivePotions.Luck then
-			potionMult = PotionController.ActivePotions.Luck.multiplier or 1
+		local potionSource = ""
+		if PotionController and PotionController.ActivePotions then
+			-- Prismatic covers both luck and cash
+			if PotionController.ActivePotions.Prismatic and PotionController.ActivePotions.Prismatic.multiplier then
+				potionMult = PotionController.ActivePotions.Prismatic.multiplier
+				potionSource = "Prismatic"
+			elseif PotionController.ActivePotions.Luck and PotionController.ActivePotions.Luck.multiplier then
+				potionMult = PotionController.ActivePotions.Luck.multiplier
+				potionSource = "Luck"
+			end
 		end
 		if potionMult > 1 then
-			luckLabel.Text = ("Luck: %d (+%d%%)  |  Potion: x%.1f"):format(luck, percent, potionMult)
-			luckLabel.TextColor3 = Color3.fromRGB(80, 255, 100) -- green when potion active
+			local potionLabel = potionSource == "Prismatic" and "Prismatic" or "Potion"
+			luckLabel.Text = ("Luck: %d (+%d%%)  |  %s: x%.1f"):format(luck, percent, potionLabel, potionMult)
+			luckLabel.TextColor3 = potionSource == "Prismatic" and Color3.fromRGB(255, 150, 255) or Color3.fromRGB(80, 255, 100)
 		else
 			luckLabel.Text = ("Luck: %d (+%d%%)"):format(luck, percent)
 			luckLabel.TextColor3 = Color3.fromRGB(200, 180, 255) -- default purple

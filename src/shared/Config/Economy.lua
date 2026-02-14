@@ -142,4 +142,15 @@ Economy.Products = {
 -------------------------------------------------
 Economy.DoubleCashMultiplier = 2
 
+-------------------------------------------------
+-- GEMS (earned from Index / Collection)
+-------------------------------------------------
+Economy.IndexGemRewards = {
+	Common    = 2,
+	Rare      = 5,
+	Epic      = 10,
+	Legendary = 25,
+	Mythic    = 50,
+}
+
 return Economy

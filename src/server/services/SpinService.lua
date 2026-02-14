@@ -197,13 +197,22 @@ local function handleSpin(player)
 		end
 	end
 
+	-- Compute effective odds (base odds × effect rarity multiplier)
+	local effectiveOdds = streamer.odds
+	if effect then
+		local ei = Effects.ByName[effect]
+		if ei and ei.rarityMult then
+			effectiveOdds = math.floor(effectiveOdds * ei.rarityMult)
+		end
+	end
+
 	-- Send result to client (include odds and effect for display)
 	SpinResult:FireClient(player, {
 		success = true,
 		streamerId = streamer.id,
 		displayName = displayName,
 		rarity = streamer.rarity,
-		odds = streamer.odds,
+		odds = effectiveOdds,
 		effect = effect,
 	})
 
@@ -291,12 +300,21 @@ local function handleCrateSpin(player, crateId: number)
 		if effectInfo then displayName = effectInfo.prefix .. " " .. displayName end
 	end
 
+	-- Compute effective odds (base odds × effect rarity multiplier)
+	local effectiveOdds2 = streamer.odds
+	if effect then
+		local ei2 = Effects.ByName[effect]
+		if ei2 and ei2.rarityMult then
+			effectiveOdds2 = math.floor(effectiveOdds2 * ei2.rarityMult)
+		end
+	end
+
 	SpinResult:FireClient(player, {
 		success = true,
 		streamerId = streamer.id,
 		displayName = displayName,
 		rarity = streamer.rarity,
-		odds = streamer.odds,
+		odds = effectiveOdds2,
 		effect = effect,
 	})
 

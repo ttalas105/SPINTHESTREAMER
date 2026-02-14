@@ -47,6 +47,7 @@ end
 
 local DEFAULT_DATA = {
 	cash = 1000000,
+	gems = 0,
 	inventory = {
 		{ id = "XQC", effect = "Glitchy" },
 		{ id = "Jynxzi", effect = "Solar" },
@@ -54,6 +55,10 @@ local DEFAULT_DATA = {
 	},
 	equippedPads = {},
 	collection = { ["XQC"] = true, ["Jynxzi"] = true, ["Kai Cenat"] = true },
+	-- Index collection: tracks every unique streamer+effect combo the player has pulled
+	-- Key = "StreamerId" for base, "Effect:StreamerId" for effect variants
+	-- Value = true (unlocked) or "claimed" (gems already collected)
+	indexCollection = {},
 	rebirthCount = 0,
 	luck = 200,               -- personal luck stat; 1 luck = +1% drop luck (stacked with crate luck)
 	cashUpgrade = 0,          -- coin multiplier upgrade count; each +1 = +2% cash production
@@ -160,9 +165,11 @@ function PlayerData.Replicate(player)
 
 	local payload = {
 		cash = data.cash,
+		gems = data.gems or 0,
 		inventory = data.inventory,
 		equippedPads = data.equippedPads,
 		collection = data.collection,
+		indexCollection = data.indexCollection or {},
 		rebirthCount = data.rebirthCount,
 		luck = data.luck or 0,
 		cashUpgrade = data.cashUpgrade or 0,
@@ -259,6 +266,12 @@ function PlayerData.AddToInventory(player, streamerId: string, effect: string?)
 	table.insert(data.inventory, item)
 	-- Also mark as discovered in collection
 	data.collection[streamerId] = true
+	-- Track in indexCollection (effect-aware): "StreamerId" or "Effect:StreamerId"
+	if not data.indexCollection then data.indexCollection = {} end
+	local indexKey = effect and (effect .. ":" .. streamerId) or streamerId
+	if not data.indexCollection[indexKey] then
+		data.indexCollection[indexKey] = true -- unlocked but gems not claimed yet
+	end
 	PlayerData.Replicate(player)
 end
 
@@ -451,6 +464,67 @@ end
 function PlayerData.GetCashUpgradeMultiplier(player): number
 	local upgrades = PlayerData.GetCashUpgrade(player)
 	return 1 + (upgrades * 0.02)
+end
+
+-------------------------------------------------
+-- GEMS
+-------------------------------------------------
+
+function PlayerData.GetGems(player): number
+	local data = PlayerData.Get(player)
+	return data and (data.gems or 0) or 0
+end
+
+function PlayerData.AddGems(player, amount: number)
+	local data = PlayerData.Get(player)
+	if not data then return end
+	data.gems = math.max(0, (data.gems or 0) + amount)
+	PlayerData.Replicate(player)
+end
+
+function PlayerData.SpendGems(player, amount: number): boolean
+	local data = PlayerData.Get(player)
+	if not data or (data.gems or 0) < amount then return false end
+	data.gems = data.gems - amount
+	PlayerData.Replicate(player)
+	return true
+end
+
+-------------------------------------------------
+-- INDEX COLLECTION (streamer+effect discovery)
+-------------------------------------------------
+
+--- Get the index collection key for a streamer+effect combo
+function PlayerData.GetIndexKey(streamerId: string, effect: string?): string
+	if effect then return effect .. ":" .. streamerId end
+	return streamerId
+end
+
+--- Check if a streamer+effect combo has been discovered
+function PlayerData.HasIndexEntry(player, streamerId: string, effect: string?): boolean
+	local data = PlayerData.Get(player)
+	if not data or not data.indexCollection then return false end
+	local key = PlayerData.GetIndexKey(streamerId, effect)
+	return data.indexCollection[key] ~= nil
+end
+
+--- Check if gems have been claimed for this entry
+function PlayerData.HasClaimedIndexGems(player, streamerId: string, effect: string?): boolean
+	local data = PlayerData.Get(player)
+	if not data or not data.indexCollection then return false end
+	local key = PlayerData.GetIndexKey(streamerId, effect)
+	return data.indexCollection[key] == "claimed"
+end
+
+--- Mark gems as claimed for an index entry
+function PlayerData.ClaimIndexGems(player, streamerId: string, effect: string?): boolean
+	local data = PlayerData.Get(player)
+	if not data or not data.indexCollection then return false end
+	local key = PlayerData.GetIndexKey(streamerId, effect)
+	if data.indexCollection[key] ~= true then return false end -- not unlocked or already claimed
+	data.indexCollection[key] = "claimed"
+	PlayerData.Replicate(player)
+	return true
 end
 
 -------------------------------------------------

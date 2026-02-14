@@ -27,6 +27,8 @@ local RebirthController      = require(controllers.RebirthController)
 local HoldController         = require(controllers.HoldController)
 local SlotPadController      = require(controllers.SlotPadController)
 local InventoryController    = require(controllers.InventoryController)
+local IndexController        = require(controllers.IndexController)
+local GemShopController      = require(controllers.GemShopController)
 local UIHelper               = require(controllers.UIHelper)
 
 local RemoteEvents = ReplicatedStorage:WaitForChild("RemoteEvents")
@@ -48,6 +50,8 @@ PotionController.Init()
 RebirthController.Init()
 HoldController.Init()
 InventoryController.Init()
+IndexController.Init()
+GemShopController.Init()
 SlotPadController.Init(InventoryController)
 
 -------------------------------------------------
@@ -116,7 +120,7 @@ end)
 -------------------------------------------------
 
 LeftSideNavController.OnClick("Index", function()
-	print("[Client] Index/Collection not yet implemented")
+	IndexController.Open()
 end)
 
 LeftSideNavController.OnClick("Pets", function()

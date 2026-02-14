@@ -18,6 +18,8 @@ local EconomyService = require(services.EconomyService)
 local RebirthService = require(services.RebirthService)
 local StoreService   = require(services.StoreService)
 local BaseService    = require(services.BaseService)
+local IndexService   = require(services.IndexService)
+local GemShopService = require(services.GemShopService)
 
 -- Spin stand: add ProximityPrompt so players can open the crate shop
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -156,45 +158,7 @@ end
 
 local PotionService  = require(services.PotionService)
 
--- Rebirth stand: open rebirth UI when player interacts
-do
-	local stallRebirth = hub:FindFirstChild("Stall_Rebirth")
-	local basePart = nil
-	if stallRebirth and stallRebirth:IsA("Model") then
-		basePart = stallRebirth:FindFirstChildWhichIsA("BasePart") or stallRebirth.PrimaryPart
-	end
-	if not basePart then
-		local signRebirth = hub:FindFirstChild("Sign_Rebirth")
-		if signRebirth and signRebirth:IsA("BasePart") then
-			basePart = signRebirth
-		end
-	end
-	if basePart then
-		local frontAnchor = Instance.new("Part")
-		frontAnchor.Name = "RebirthPromptAnchor"
-		frontAnchor.Size = Vector3.new(1, 2, 1)
-		frontAnchor.Transparency = 1
-		frontAnchor.CanCollide = false
-		frontAnchor.Anchored = true
-		local pos = basePart.Position
-		frontAnchor.Position = pos + Vector3.new(0, 2, -3)
-		frontAnchor.Parent = hub
-		local prompt = Instance.new("ProximityPrompt")
-		prompt.ActionText = "Open"
-		prompt.ObjectText = "Rebirth"
-		prompt.KeyboardKeyCode = Enum.KeyCode.E
-		prompt.MaxActivationDistance = 14
-		prompt.HoldDuration = 0
-		prompt.Parent = frontAnchor
-		local OpenRebirthGui = ReplicatedStorage.RemoteEvents:WaitForChild("OpenRebirthGui")
-		prompt.Triggered:Connect(function(player)
-			OpenRebirthGui:FireClient(player)
-		end)
-		print("[Server] Rebirth stand ProximityPrompt added")
-	else
-		warn("[Server] Could not find a part to attach Rebirth stand ProximityPrompt")
-	end
-end
+-- Rebirth is accessed via the UI button (no physical stall needed)
 
 -- Potion stand: open potion shop UI when player interacts
 do
@@ -236,6 +200,46 @@ do
 	end
 end
 
+-- Gem Shop stand: open gem shop UI when player interacts
+do
+	local stallGems = hub:FindFirstChild("Stall_Gems")
+	local basePart = nil
+	if stallGems and stallGems:IsA("Model") then
+		basePart = stallGems:FindFirstChildWhichIsA("BasePart") or stallGems.PrimaryPart
+	end
+	if not basePart then
+		local signGems = hub:FindFirstChild("Sign_Gems")
+		if signGems and signGems:IsA("BasePart") then
+			basePart = signGems
+		end
+	end
+	if basePart then
+		local frontAnchor = Instance.new("Part")
+		frontAnchor.Name = "GemShopPromptAnchor"
+		frontAnchor.Size = Vector3.new(1, 2, 1)
+		frontAnchor.Transparency = 1
+		frontAnchor.CanCollide = false
+		frontAnchor.Anchored = true
+		local pos = basePart.Position
+		frontAnchor.Position = pos + Vector3.new(0, 2, -3)
+		frontAnchor.Parent = hub
+		local prompt = Instance.new("ProximityPrompt")
+		prompt.ActionText = "Open"
+		prompt.ObjectText = "Gem Shop"
+		prompt.KeyboardKeyCode = Enum.KeyCode.E
+		prompt.MaxActivationDistance = 14
+		prompt.HoldDuration = 0
+		prompt.Parent = frontAnchor
+		local OpenGemShopGui = ReplicatedStorage.RemoteEvents:WaitForChild("OpenGemShopGui")
+		prompt.Triggered:Connect(function(player)
+			OpenGemShopGui:FireClient(player)
+		end)
+		print("[Server] Gem Shop stand ProximityPrompt added")
+	else
+		warn("[Server] Could not find a part to attach Gem Shop ProximityPrompt")
+	end
+end
+
 -- Initialize services (order matters: PlayerData first, then BaseService)
 PlayerData.Init()
 PotionService.Init(PlayerData)
@@ -244,5 +248,7 @@ SpinService.Init(PlayerData, BaseService, PotionService)
 EconomyService.Init(PlayerData, PotionService)
 RebirthService.Init(PlayerData, BaseService, PotionService)
 StoreService.Init(PlayerData, SpinService)
+IndexService.Init(PlayerData)
+GemShopService.Init(PlayerData)
 
 print("[Server] Spin the Streamer initialized! Map size: 400x1000 studs, 8 base slots")
