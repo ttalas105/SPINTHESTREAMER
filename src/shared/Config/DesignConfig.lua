@@ -180,6 +180,16 @@ DesignConfig.Stalls = {
 			pantsColor  = Color3.fromRGB(50, 45, 30),
 		},
 	},
+	{
+		name      = "Sacrifice",
+		color     = Color3.fromRGB(180, 60, 80),    -- dark red / crimson
+		roofColor = Color3.fromRGB(180, 60, 80),
+		npc = {
+			skinColor   = Color3.fromRGB(245, 210, 175),
+			outfitColor = Color3.fromRGB(140, 40, 55),
+			pantsColor  = Color3.fromRGB(40, 30, 35),
+		},
+	},
 }
 
 -------------------------------------------------

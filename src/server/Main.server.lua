@@ -18,8 +18,9 @@ local EconomyService = require(services.EconomyService)
 local RebirthService = require(services.RebirthService)
 local StoreService   = require(services.StoreService)
 local BaseService    = require(services.BaseService)
-local IndexService   = require(services.IndexService)
-local GemShopService = require(services.GemShopService)
+local IndexService    = require(services.IndexService)
+local GemShopService  = require(services.GemShopService)
+local SacrificeService = require(services.SacrificeService)
 
 -- Spin stand: add ProximityPrompt so players can open the crate shop
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -240,6 +241,46 @@ do
 	end
 end
 
+-- Sacrifice stand: open sacrifice UI when player interacts
+do
+	local stallSacrifice = hub:FindFirstChild("Stall_Sacrifice")
+	local basePart = nil
+	if stallSacrifice and stallSacrifice:IsA("Model") then
+		basePart = stallSacrifice:FindFirstChildWhichIsA("BasePart") or stallSacrifice.PrimaryPart
+	end
+	if not basePart then
+		local signSacrifice = hub:FindFirstChild("Sign_Sacrifice")
+		if signSacrifice and signSacrifice:IsA("BasePart") then
+			basePart = signSacrifice
+		end
+	end
+	if basePart then
+		local frontAnchor = Instance.new("Part")
+		frontAnchor.Name = "SacrificePromptAnchor"
+		frontAnchor.Size = Vector3.new(1, 2, 1)
+		frontAnchor.Transparency = 1
+		frontAnchor.CanCollide = false
+		frontAnchor.Anchored = true
+		local pos = basePart.Position
+		frontAnchor.Position = pos + Vector3.new(0, 2, -3)
+		frontAnchor.Parent = hub
+		local prompt = Instance.new("ProximityPrompt")
+		prompt.ActionText = "Open"
+		prompt.ObjectText = "Sacrifice"
+		prompt.KeyboardKeyCode = Enum.KeyCode.E
+		prompt.MaxActivationDistance = 14
+		prompt.HoldDuration = 0
+		prompt.Parent = frontAnchor
+		local OpenSacrificeGui = ReplicatedStorage.RemoteEvents:WaitForChild("OpenSacrificeGui")
+		prompt.Triggered:Connect(function(player)
+			OpenSacrificeGui:FireClient(player)
+		end)
+		print("[Server] Sacrifice stand ProximityPrompt added")
+	else
+		warn("[Server] Could not find a part to attach Sacrifice stand ProximityPrompt")
+	end
+end
+
 -- Initialize services (order matters: PlayerData first, then BaseService)
 PlayerData.Init()
 PotionService.Init(PlayerData)
@@ -250,5 +291,6 @@ RebirthService.Init(PlayerData, BaseService, PotionService)
 StoreService.Init(PlayerData, SpinService)
 IndexService.Init(PlayerData)
 GemShopService.Init(PlayerData)
+SacrificeService.Init(PlayerData, PotionService)
 
 print("[Server] Spin the Streamer initialized! Map size: 400x1000 studs, 8 base slots")

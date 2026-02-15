@@ -217,6 +217,12 @@ function PotionService.GetLuckMultiplier(player): number
 
 	local now = os.clock()
 
+	-- Sacrifice "Feeling Lucky" overrides: 0 or 2 for 10 min
+	if effects.SacrificeLuck and effects.SacrificeLuck.expiresAt > now then
+		return effects.SacrificeLuck.multiplier
+	end
+	if effects.SacrificeLuck and effects.SacrificeLuck.expiresAt <= now then effects.SacrificeLuck = nil end
+
 	-- Check Prismatic first (it covers luck)
 	if effects.Prismatic and effects.Prismatic.expiresAt > now then
 		return effects.Prismatic.multiplier
@@ -231,6 +237,16 @@ function PotionService.GetLuckMultiplier(player): number
 	if effects.Prismatic and effects.Prismatic.expiresAt <= now then effects.Prismatic = nil end
 
 	return 1
+end
+
+--- Set temporary luck modifier from Sacrifice "Feeling Lucky" (multiplier 0 or 2, duration in seconds)
+function PotionService.SetSacrificeLuck(player, multiplier: number, durationSeconds: number)
+	local effects = getEffects(player.UserId)
+	effects.SacrificeLuck = {
+		multiplier = multiplier,
+		expiresAt = os.clock() + durationSeconds,
+	}
+	sendPotionUpdate(player)
 end
 
 --- Get the active cash multiplier for a player (1 if no potion)
@@ -259,7 +275,7 @@ end
 --- Clear all active potions for a player (used on rebirth)
 function PotionService.ClearPotions(player)
 	activeEffects[player.UserId] = {}
-	-- Note: prismatic inventory (bought with Robux) is NOT cleared on rebirth
+	-- Note: prismatic inventory (bought with Robux) and SacrificeLuck are cleared
 	sendPotionUpdate(player)
 end
 

@@ -39,6 +39,8 @@ HUDController.Data = {
 	premiumSlotUnlocked = false,
 	doubleCash = false,
 	spinCredits = 0,
+	sacrificeOneTime = {},
+	sacrificeChargeState = { FiftyFifty = { count = 0, nextAt = nil }, FeelingLucky = { count = 0, nextAt = nil } },
 }
 
 local onDataUpdated = {}

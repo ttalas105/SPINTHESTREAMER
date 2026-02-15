@@ -29,6 +29,7 @@ local SlotPadController      = require(controllers.SlotPadController)
 local InventoryController    = require(controllers.InventoryController)
 local IndexController        = require(controllers.IndexController)
 local GemShopController      = require(controllers.GemShopController)
+local SacrificeController    = require(controllers.SacrificeController)
 local UIHelper               = require(controllers.UIHelper)
 
 local RemoteEvents = ReplicatedStorage:WaitForChild("RemoteEvents")
@@ -52,6 +53,7 @@ HoldController.Init()
 InventoryController.Init()
 IndexController.Init()
 GemShopController.Init()
+SacrificeController.Init()
 SlotPadController.Init(InventoryController)
 
 -------------------------------------------------

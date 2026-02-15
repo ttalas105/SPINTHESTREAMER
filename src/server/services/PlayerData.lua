@@ -49,12 +49,13 @@ local DEFAULT_DATA = {
 	cash = 1000000,
 	gems = 0,
 	inventory = {
-		{ id = "XQC", effect = "Glitchy" },
-		{ id = "Jynxzi", effect = "Solar" },
-		{ id = "Kai Cenat", effect = "Void" },
+		{ id = "Cinna", effect = nil },
+		{ id = "Lacy", effect = nil },
+		{ id = "Fanum", effect = nil },
+		{ id = "StableRonaldo", effect = nil },
 	},
 	equippedPads = {},
-	collection = { ["XQC"] = true, ["Jynxzi"] = true, ["Kai Cenat"] = true },
+	collection = { ["Cinna"] = true, ["Lacy"] = true, ["Fanum"] = true, ["StableRonaldo"] = true },
 	-- Index collection: tracks every unique streamer+effect combo the player has pulled
 	-- Key = "StreamerId" for base, "Effect:StreamerId" for effect variants
 	-- Value = true (unlocked) or "claimed" (gems already collected)
@@ -65,6 +66,9 @@ local DEFAULT_DATA = {
 	premiumSlotUnlocked = false,
 	doubleCash = false,
 	spinCredits = 0,
+	-- Sacrifice: one-time completed, charge slots (rechargeAt times)
+	sacrificeOneTime = {},
+	sacrificeCharges = { FiftyFifty = {}, FeelingLucky = {} },
 }
 
 local RemoteEvents = ReplicatedStorage:WaitForChild("RemoteEvents")
@@ -177,6 +181,18 @@ function PlayerData.Replicate(player)
 		doubleCash = data.doubleCash,
 		spinCredits = data.spinCredits,
 		totalSlots = SlotsConfig.GetTotalSlots(data.rebirthCount, data.premiumSlotUnlocked),
+		sacrificeOneTime = data.sacrificeOneTime or {},
+		sacrificeCharges = data.sacrificeCharges or { FiftyFifty = {}, FeelingLucky = {} },
+		sacrificeChargeState = {
+			FiftyFifty = {
+				count = PlayerData.GetSacrificeChargeCount(player, "FiftyFifty", 3, 600),
+				nextAt = PlayerData.GetSacrificeNextRechargeAt(player, "FiftyFifty", 3),
+			},
+			FeelingLucky = {
+				count = PlayerData.GetSacrificeChargeCount(player, "FeelingLucky", 1, 1200),
+				nextAt = PlayerData.GetSacrificeNextRechargeAt(player, "FeelingLucky", 1),
+			},
+		},
 	}
 
 	PlayerDataUpdate:FireClient(player, payload)
@@ -315,6 +331,85 @@ function PlayerData.CountInInventory(player, streamerId: string): number
 		if itemId(item) == streamerId then count = count + 1 end
 	end
 	return count
+end
+
+--- Remove multiple items by indices (indices 1-based; remove from highest to lowest to avoid shift)
+function PlayerData.RemoveFromInventoryIndices(player, indices: { number })
+	local data = PlayerData.Get(player)
+	if not data then return end
+	table.sort(indices, function(a, b) return a > b end)
+	for _, idx in ipairs(indices) do
+		if idx >= 1 and idx <= #data.inventory then
+			table.remove(data.inventory, idx)
+		end
+	end
+	PlayerData.Replicate(player)
+end
+
+-------------------------------------------------
+-- SACRIFICE (one-time completed, charges)
+-------------------------------------------------
+
+function PlayerData.GetSacrificeOneTimeCompleted(player)
+	local data = PlayerData.Get(player)
+	return data and (data.sacrificeOneTime or {}) or {}
+end
+
+function PlayerData.SetSacrificeOneTimeCompleted(player, id: string)
+	local data = PlayerData.Get(player)
+	if not data then return end
+	if not data.sacrificeOneTime then data.sacrificeOneTime = {} end
+	data.sacrificeOneTime[id] = true
+	PlayerData.Replicate(player)
+end
+
+function PlayerData.GetSacrificeChargesRaw(player, key: string)
+	local data = PlayerData.Get(player)
+	if not data or not data.sacrificeCharges then return {} end
+	return data.sacrificeCharges[key] or {}
+end
+
+--- Use one charge; rechargeSeconds = time until this slot refills. maxSlots = 3 or 1. Returns true if had a charge.
+function PlayerData.UseSacrificeCharge(player, key: string, rechargeSeconds: number, maxSlots: number): boolean
+	local data = PlayerData.Get(player)
+	if not data then return false end
+	if not data.sacrificeCharges then data.sacrificeCharges = {} end
+	local slots = data.sacrificeCharges[key]
+	if not slots then slots = {}; data.sacrificeCharges[key] = slots end
+	local now = os.clock()
+	local limit = maxSlots or 3
+	for i = 1, limit do
+		if not slots[i] or slots[i] <= now then
+			slots[i] = now + rechargeSeconds
+			PlayerData.Replicate(player)
+			return true
+		end
+	end
+	return false
+end
+
+--- Get current charge count (filled slots that are recharged)
+function PlayerData.GetSacrificeChargeCount(player, key: string, maxCharges: number, rechargeSeconds: number): number
+	local slots = PlayerData.GetSacrificeChargesRaw(player, key)
+	local now = os.clock()
+	local count = 0
+	for i = 1, maxCharges do
+		if slots[i] and slots[i] <= now then count = count + 1 end
+	end
+	return count
+end
+
+--- Get next recharge time (when the next used slot will refill)
+function PlayerData.GetSacrificeNextRechargeAt(player, key: string, maxCharges: number): number?
+	local slots = PlayerData.GetSacrificeChargesRaw(player, key)
+	local now = os.clock()
+	local nextAt = nil
+	for i = 1, maxCharges do
+		if slots[i] and slots[i] > now then
+			if not nextAt or slots[i] < nextAt then nextAt = slots[i] end
+		end
+	end
+	return nextAt
 end
 
 -------------------------------------------------
