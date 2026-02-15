@@ -35,6 +35,9 @@ local RemoteEvents = ReplicatedStorage:WaitForChild("RemoteEvents")
 local EquipRequest = RemoteEvents:WaitForChild("EquipRequest")
 local SellRequest = RemoteEvents:WaitForChild("SellRequest")
 
+-- Lazy-loaded SacrificeController to check queued indices
+local SacrificeController = nil
+
 -- State
 local inventory = {}           -- mirror of server inventory
 local selectedIndex = nil      -- currently selected inventory index
@@ -150,6 +153,13 @@ end
 -------------------------------------------------
 
 local function updateSlotVisuals()
+	-- Lazy-load SacrificeController (avoid circular dependency at require-time)
+	if not SacrificeController then
+		local ok, mod = pcall(function() return require(script.Parent.SacrificeController) end)
+		if ok then SacrificeController = mod end
+	end
+	local queuedSet = SacrificeController and SacrificeController.GetQueuedIndices and SacrificeController.GetQueuedIndices() or {}
+
 	for i = 1, VISIBLE_SLOTS do
 		local slotData = slots[i]
 		if not slotData then continue end
@@ -158,12 +168,21 @@ local function updateSlotVisuals()
 		local streamerId = getItemId(item)
 		local effect = getItemEffect(item)
 		local stroke = slotData.frame:FindFirstChildOfClass("UIStroke")
+		local isQueued = streamerId and queuedSet[i]
 
 		-- Remove old effect tag if present
 		local oldEffectTag = slotData.frame:FindFirstChild("EffectTag")
 		if oldEffectTag then oldEffectTag:Destroy() end
 
-		if streamerId then
+		if isQueued then
+			-- Queued for sacrifice — show as completely empty slot
+			slotData.iconLabel.Text = ""
+			slotData.rarityLabel.Text = ""
+			slotData.frame.BackgroundColor3 = DesignConfig.Colors.InventorySlot
+			if stroke then
+				stroke.Color = Color3.fromRGB(70, 70, 100); stroke.Thickness = 1
+			end
+		elseif streamerId then
 			local info = Streamers.ById[streamerId]
 			local rarityColor = DesignConfig.RarityColors[info and info.rarity or "Common"]
 				or Color3.fromRGB(170, 170, 170)
@@ -356,6 +375,14 @@ end
 -------------------------------------------------
 
 function InventoryController.SelectSlot(slotIndex: number)
+	-- Don't allow selecting items that are queued for sacrifice
+	if not SacrificeController then
+		local ok, mod = pcall(function() return require(script.Parent.SacrificeController) end)
+		if ok then SacrificeController = mod end
+	end
+	local queuedSet = SacrificeController and SacrificeController.GetQueuedIndices and SacrificeController.GetQueuedIndices() or {}
+	if queuedSet[slotIndex] then return end
+
 	if selectedIndex == slotIndex then
 		-- Deselect
 		selectedIndex = nil
@@ -395,19 +422,25 @@ function InventoryController.OnSelectionChanged(callback)
 	table.insert(onSelectionChanged, callback)
 end
 
+function InventoryController.RefreshVisuals()
+	updateSlotVisuals()
+end
+
 -------------------------------------------------
 -- DATA SYNC
 -------------------------------------------------
 
-function InventoryController.UpdateInventory(newInventory)
+function InventoryController.UpdateInventory(newInventory, newStorage)
 	inventory = newInventory or {}
 
-	-- Update backpack count
+	-- Update backpack count (hotbar + storage total)
+	local storageCount = newStorage and #newStorage or 0
+	local totalCount = #inventory + storageCount
 	local countBadge = backpackButton and backpackButton:FindFirstChild("CountBadge")
 	if countBadge then
 		local countText = countBadge:FindFirstChild("Count")
 		if countText then
-			countText.Text = tostring(#inventory)
+			countText.Text = tostring(totalCount)
 		end
 	end
 

@@ -1,8 +1,8 @@
 --[[
 	PlayerData.lua
 	Manages per-player persistent data via DataStoreService.
-	Stores: cash, inventory (list of streamer IDs), equippedPads,
-	        collection (discovered unique streamers), rebirthCount,
+	Stores: cash, inventory (hotbar, max 9), storage (overflow, max 200),
+	        equippedPads, collection (discovered unique streamers), rebirthCount,
 	        premiumSlotUnlocked, doubleCash, spinCredits.
 	Replicates relevant state to the owning client.
 ]]
@@ -16,6 +16,10 @@ local SlotsConfig = require(ReplicatedStorage.Shared.Config.SlotsConfig)
 
 local PlayerData = {}
 PlayerData._cache = {} -- userId -> data table
+
+-- Capacity constants
+PlayerData.HOTBAR_MAX  = 9
+PlayerData.STORAGE_MAX = 200
 
 -- In Studio, DataStore API is blocked by default (StudioAccessToApisNotAllowed).
 -- Use an in-memory mock so we never call the real API and no error is shown.
@@ -54,6 +58,7 @@ local DEFAULT_DATA = {
 		{ id = "Fanum", effect = nil },
 		{ id = "StableRonaldo", effect = nil },
 	},
+	storage = {},  -- overflow storage (max 200 items, same {id, effect} format)
 	equippedPads = {},
 	collection = { ["Cinna"] = true, ["Lacy"] = true, ["Fanum"] = true, ["StableRonaldo"] = true },
 	-- Index collection: tracks every unique streamer+effect combo the player has pulled
@@ -139,6 +144,20 @@ local function loadData(player)
 				end
 			end
 		end
+		-- Migration: ensure storage exists
+		if not data.storage then data.storage = {} end
+		-- Migration: if inventory has more than HOTBAR_MAX items, move overflow to storage
+		if data.inventory and #data.inventory > PlayerData.HOTBAR_MAX then
+			local overflow = {}
+			for i = #data.inventory, PlayerData.HOTBAR_MAX + 1, -1 do
+				table.insert(overflow, 1, table.remove(data.inventory, i))
+			end
+			for _, item in ipairs(overflow) do
+				if #data.storage < PlayerData.STORAGE_MAX then
+					table.insert(data.storage, item)
+				end
+			end
+		end
 	else
 		data = deepCopy(DEFAULT_DATA)
 	end
@@ -171,6 +190,7 @@ function PlayerData.Replicate(player)
 		cash = data.cash,
 		gems = data.gems or 0,
 		inventory = data.inventory,
+		storage = data.storage or {},
 		equippedPads = data.equippedPads,
 		collection = data.collection,
 		indexCollection = data.indexCollection or {},
@@ -273,22 +293,33 @@ local function itemId(item)
 	return nil
 end
 
---- Add a streamer to the player's inventory (with optional effect)
-function PlayerData.AddToInventory(player, streamerId: string, effect: string?)
+--- Add a streamer to the player's hotbar or storage (with optional effect).
+--- Returns "hotbar", "storage", or "full" depending on where the item went.
+function PlayerData.AddToInventory(player, streamerId: string, effect: string?): string
 	local data = PlayerData.Get(player)
-	if not data then return end
+	if not data then return "full" end
 	local item = { id = streamerId }
 	if effect then item.effect = effect end
-	table.insert(data.inventory, item)
-	-- Also mark as discovered in collection
+	if not data.storage then data.storage = {} end
+	local dest
+	if #data.inventory < PlayerData.HOTBAR_MAX then
+		table.insert(data.inventory, item)
+		dest = "hotbar"
+	elseif #data.storage < PlayerData.STORAGE_MAX then
+		table.insert(data.storage, item)
+		dest = "storage"
+	else
+		dest = "full"
+	end
+	-- Always mark as discovered even if storage is full
 	data.collection[streamerId] = true
-	-- Track in indexCollection (effect-aware): "StreamerId" or "Effect:StreamerId"
 	if not data.indexCollection then data.indexCollection = {} end
 	local indexKey = effect and (effect .. ":" .. streamerId) or streamerId
 	if not data.indexCollection[indexKey] then
-		data.indexCollection[indexKey] = true -- unlocked but gems not claimed yet
+		data.indexCollection[indexKey] = true
 	end
 	PlayerData.Replicate(player)
+	return dest
 end
 
 --- Remove a streamer from inventory by index
@@ -344,6 +375,109 @@ function PlayerData.RemoveFromInventoryIndices(player, indices: { number })
 		end
 	end
 	PlayerData.Replicate(player)
+end
+
+-------------------------------------------------
+-- STORAGE (overflow inventory, max 200)
+-------------------------------------------------
+
+--- Get storage array
+function PlayerData.GetStorage(player)
+	local data = PlayerData.Get(player)
+	if not data then return {} end
+	if not data.storage then data.storage = {} end
+	return data.storage
+end
+
+--- Add directly to storage
+function PlayerData.AddToStorage(player, streamerId: string, effect: string?): boolean
+	local data = PlayerData.Get(player)
+	if not data then return false end
+	if not data.storage then data.storage = {} end
+	if #data.storage >= PlayerData.STORAGE_MAX then return false end
+	local item = { id = streamerId }
+	if effect then item.effect = effect end
+	table.insert(data.storage, item)
+	PlayerData.Replicate(player)
+	return true
+end
+
+--- Remove from storage by index
+function PlayerData.RemoveFromStorage(player, storageIndex: number)
+	local data = PlayerData.Get(player)
+	if not data or not data.storage then return nil end
+	if storageIndex < 1 or storageIndex > #data.storage then return nil end
+	local item = table.remove(data.storage, storageIndex)
+	PlayerData.Replicate(player)
+	return item
+end
+
+--- Remove multiple items from storage by indices (highest to lowest to avoid shift)
+function PlayerData.RemoveFromStorageIndices(player, indices: { number })
+	local data = PlayerData.Get(player)
+	if not data or not data.storage then return end
+	table.sort(indices, function(a, b) return a > b end)
+	for _, idx in ipairs(indices) do
+		if idx >= 1 and idx <= #data.storage then
+			table.remove(data.storage, idx)
+		end
+	end
+	PlayerData.Replicate(player)
+end
+
+--- Swap an item between hotbar and storage
+function PlayerData.SwapHotbarStorage(player, hotbarIndex: number, storageIndex: number): boolean
+	local data = PlayerData.Get(player)
+	if not data then return false end
+	if not data.storage then data.storage = {} end
+	if hotbarIndex < 1 or hotbarIndex > #data.inventory then return false end
+	if storageIndex < 1 or storageIndex > #data.storage then return false end
+	data.inventory[hotbarIndex], data.storage[storageIndex] = data.storage[storageIndex], data.inventory[hotbarIndex]
+	PlayerData.Replicate(player)
+	return true
+end
+
+--- Move from storage to an empty hotbar slot (or swap if hotbar slot occupied)
+function PlayerData.MoveStorageToHotbar(player, storageIndex: number, hotbarIndex: number?): boolean
+	local data = PlayerData.Get(player)
+	if not data or not data.storage then return false end
+	if storageIndex < 1 or storageIndex > #data.storage then return false end
+	if hotbarIndex then
+		if hotbarIndex < 1 or hotbarIndex > PlayerData.HOTBAR_MAX then return false end
+		if hotbarIndex > #data.inventory then
+			-- Empty slot: just move there
+			local item = table.remove(data.storage, storageIndex)
+			table.insert(data.inventory, hotbarIndex, item)
+			-- Trim inventory to HOTBAR_MAX (shouldn't be needed but safety)
+			while #data.inventory > PlayerData.HOTBAR_MAX do
+				local overflow = table.remove(data.inventory)
+				table.insert(data.storage, overflow)
+			end
+		else
+			-- Occupied slot: swap
+			data.inventory[hotbarIndex], data.storage[storageIndex] = data.storage[storageIndex], data.inventory[hotbarIndex]
+		end
+	else
+		-- No specific slot: append to hotbar if space
+		if #data.inventory >= PlayerData.HOTBAR_MAX then return false end
+		local item = table.remove(data.storage, storageIndex)
+		table.insert(data.inventory, item)
+	end
+	PlayerData.Replicate(player)
+	return true
+end
+
+--- Move from hotbar to storage
+function PlayerData.MoveHotbarToStorage(player, hotbarIndex: number): boolean
+	local data = PlayerData.Get(player)
+	if not data then return false end
+	if not data.storage then data.storage = {} end
+	if hotbarIndex < 1 or hotbarIndex > #data.inventory then return false end
+	if #data.storage >= PlayerData.STORAGE_MAX then return false end
+	local item = table.remove(data.inventory, hotbarIndex)
+	table.insert(data.storage, item)
+	PlayerData.Replicate(player)
+	return true
 end
 
 -------------------------------------------------
@@ -507,12 +641,17 @@ function PlayerData.ResetForRebirth(player)
 	local data = PlayerData.Get(player)
 	if not data then return end
 	data.cash = 0
-	-- Clear equipped pads, put equipped streamers back into inventory
+	if not data.storage then data.storage = {} end
+	-- Clear equipped pads, put equipped streamers back into inventory/storage
 	for key, item in pairs(data.equippedPads) do
-		table.insert(data.inventory, item)
+		if #data.inventory < PlayerData.HOTBAR_MAX then
+			table.insert(data.inventory, item)
+		elseif #data.storage < PlayerData.STORAGE_MAX then
+			table.insert(data.storage, item)
+		end
 	end
 	data.equippedPads = {}
-	-- Inventory and collection are kept; potions are cleared by PotionService
+	-- Inventory, storage, and collection are kept; potions are cleared by PotionService
 	PlayerData.Replicate(player)
 end
 

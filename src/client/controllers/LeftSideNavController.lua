@@ -33,7 +33,7 @@ local STROKE_COLOR = Color3.fromRGB(30, 25, 50)
 
 local menuItems = {
 	{ name = "Index",  icon = "📖", color = Color3.fromRGB(100, 200, 255),  label = "Index" },
-	{ name = "Pets",   icon = "🐾", color = Color3.fromRGB(255, 165, 50),   label = "Pets" },
+	{ name = "Storage", icon = "\u{1F4E6}", color = Color3.fromRGB(255, 165, 50), label = "Storage" },
 	{ name = "Store",  icon = "🛒", color = Color3.fromRGB(255, 90, 120),   label = "Store" },
 }
 

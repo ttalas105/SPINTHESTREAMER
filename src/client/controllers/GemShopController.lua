@@ -38,6 +38,8 @@ local activeTabId          = nil
 local dropRateFrame        = nil -- popup for viewing drop rates
 local vpConns              = {}   -- viewport heartbeat data (shared loop)
 local heartbeatConn        = nil
+local autoOpenEnabled      = false   -- auto-open toggle state
+local autoOpenCaseId       = nil     -- which case is being auto-opened
 
 local FONT = Enum.Font.FredokaOne
 
@@ -541,6 +543,40 @@ local function buildCaseContent(caseData)
 		BuyGemCase:FireServer(caseData.id)
 	end)
 
+	-- AUTO TOGGLE BUTTON
+	local autoBtn = Instance.new("TextButton")
+	autoBtn.Name = "AutoBtn"
+	autoBtn.Size = UDim2.new(0, 80, 0, 44)
+	local isAutoForThis = autoOpenEnabled and autoOpenCaseId == caseData.id
+	autoBtn.BackgroundColor3 = isAutoForThis and Color3.fromRGB(60, 200, 80) or Color3.fromRGB(50, 50, 70)
+	autoBtn.Text = isAutoForThis and "AUTO: ON" or "AUTO"
+	autoBtn.TextColor3 = isAutoForThis and Color3.new(1, 1, 1) or Color3.fromRGB(180, 180, 200)
+	autoBtn.Font = FONT; autoBtn.TextSize = 14
+	autoBtn.BorderSizePixel = 0
+	autoBtn.Parent = btnRow
+	local abCorner = Instance.new("UICorner"); abCorner.CornerRadius = UDim.new(0, 12); abCorner.Parent = autoBtn
+	local abStroke = Instance.new("UIStroke")
+	abStroke.Color = isAutoForThis and Color3.fromRGB(40, 160, 60) or Color3.fromRGB(60, 60, 80)
+	abStroke.Thickness = 2; abStroke.Parent = autoBtn
+
+	autoBtn.MouseButton1Click:Connect(function()
+		if autoOpenEnabled and autoOpenCaseId == caseData.id then
+			autoOpenEnabled = false
+			autoOpenCaseId = nil
+			autoBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 70)
+			autoBtn.Text = "AUTO"
+			autoBtn.TextColor3 = Color3.fromRGB(180, 180, 200)
+			abStroke.Color = Color3.fromRGB(60, 60, 80)
+		else
+			autoOpenEnabled = true
+			autoOpenCaseId = caseData.id
+			autoBtn.BackgroundColor3 = Color3.fromRGB(60, 200, 80)
+			autoBtn.Text = "AUTO: ON"
+			autoBtn.TextColor3 = Color3.new(1, 1, 1)
+			abStroke.Color = Color3.fromRGB(40, 160, 60)
+		end
+	end)
+
 	-- VIEW DROP RATE BUTTON
 	local drBtn = Instance.new("TextButton")
 	drBtn.Name = "DropRateBtn"
@@ -924,11 +960,31 @@ local function showCaseOpenAnimation(caseData, resultData)
 
 		UIHelper.ScaleIn(popup, 0.3)
 
-		-- Auto-dismiss after 3 seconds
-		task.delay(3, function()
+		-- Auto-dismiss after delay (shorter if auto-open is active)
+		local dismissDelay = autoOpenEnabled and 1.5 or 3
+		task.delay(dismissDelay, function()
 			if overlay and overlay.Parent then
-				TweenService:Create(overlay, TweenInfo.new(0.4), { BackgroundTransparency = 1 }):Play()
-				task.delay(0.4, function() cleanupCaseAnim() end)
+				TweenService:Create(overlay, TweenInfo.new(0.3), { BackgroundTransparency = 1 }):Play()
+				task.delay(0.3, function()
+					cleanupCaseAnim()
+					-- Auto-open: fire next case if toggle is on and player can afford it
+					if autoOpenEnabled and autoOpenCaseId and isOpen then
+						local autoCaseData = GemCases.ById[autoOpenCaseId]
+						if autoCaseData then
+							local gems = HUDController.Data.gems or 0
+							if gems >= autoCaseData.cost then
+								BuyGemCase:FireServer(autoOpenCaseId)
+							else
+								autoOpenEnabled = false
+								autoOpenCaseId = nil
+								if activeTabId then
+									local cd = GemCases.ById[activeTabId]
+									if cd then buildCaseContent(cd) end
+								end
+							end
+						end
+					end
+				end)
 			end
 		end)
 	end
@@ -993,6 +1049,8 @@ end
 function GemShopController.Close()
 	if not isOpen then return end
 	isOpen = false
+	autoOpenEnabled = false
+	autoOpenCaseId = nil
 	closeDropRatePopup()
 	cleanupCaseAnim()
 	stopViewports()
@@ -1171,9 +1229,19 @@ function GemShopController.Init()
 		addSidebarTab(ec, "\u{2728}")
 	end
 
-	-- Add All In
+	-- Add special cases
 	addSectionLabel("— SPECIAL —")
-	addSidebarTab(GemCases.AllInCase, "\u{1F3B0}")
+	for _, sc in ipairs(GemCases.SpecialCases) do
+		local emoji = "\u{1F3B0}"
+		if sc.id == "QueensCase" then emoji = "\u{1F451}"
+		elseif sc.id == "LuckySevenCase" then emoji = "\u{1F340}"
+		elseif sc.id == "FiftyFiftyCase" then emoji = "\u{1F3B2}"
+		elseif sc.id == "MythicOrBustCase" then emoji = "\u{1F525}"
+		elseif sc.id == "WRizzCase" then emoji = "\u{1F60E}"
+		elseif sc.id == "OGCase" then emoji = "\u{1F3AE}"
+		end
+		addSidebarTab(sc, emoji)
+	end
 
 	-------------------------------------------------
 	-- CONTENT AREA (right side)
@@ -1219,6 +1287,15 @@ function GemShopController.Init()
 				showCaseOpenAnimation(caseData2, result)
 			end
 		else
+			-- Disable auto-open on failure
+			if autoOpenEnabled then
+				autoOpenEnabled = false
+				autoOpenCaseId = nil
+				if activeTabId then
+					local cd = GemCases.ById[activeTabId]
+					if cd then buildCaseContent(cd) end
+				end
+			end
 			local toast = Instance.new("Frame")
 			toast.Size = UDim2.new(0.6, 0, 0, 48)
 			toast.Position = UDim2.new(0.5, 0, 0.9, 0)

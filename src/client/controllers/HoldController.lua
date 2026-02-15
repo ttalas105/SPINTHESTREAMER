@@ -266,11 +266,7 @@ function HoldController.Hold(item)
 	local streamerId = type(item) == "table" and item.id or item
 	local effect = type(item) == "table" and item.effect or nil
 
-	if heldStreamerId == streamerId and heldEffect == effect then
-		clearHeld()
-		return
-	end
-
+	-- Always clear and re-hold; toggle logic is handled by InventoryController.SelectSlot
 	clearHeld()
 
 	if not modelsFolder then

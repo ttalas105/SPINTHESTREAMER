@@ -281,6 +281,47 @@ do
 	end
 end
 
+-- Storage actions (swap, move between hotbar/storage)
+do
+	local StorageAction = ReplicatedStorage.RemoteEvents:WaitForChild("StorageAction")
+	local StorageResult = ReplicatedStorage.RemoteEvents:WaitForChild("StorageResult")
+
+	StorageAction.OnServerEvent:Connect(function(player, action, arg1, arg2)
+		if action == "swap" then
+			local hotbarIdx = tonumber(arg1)
+			local storageIdx = tonumber(arg2)
+			if not hotbarIdx or not storageIdx then
+				StorageResult:FireClient(player, { success = false, reason = "Invalid indices." })
+				return
+			end
+			local ok = PlayerData.SwapHotbarStorage(player, hotbarIdx, storageIdx)
+			StorageResult:FireClient(player, { success = ok, action = "swap" })
+		elseif action == "toHotbar" then
+			local storageIdx = tonumber(arg1)
+			local hotbarIdx = arg2 and tonumber(arg2) or nil
+			if not storageIdx then
+				StorageResult:FireClient(player, { success = false, reason = "Invalid index." })
+				return
+			end
+			local ok = PlayerData.MoveStorageToHotbar(player, storageIdx, hotbarIdx)
+			StorageResult:FireClient(player, { success = ok, action = "toHotbar" })
+		elseif action == "toStorage" then
+			local hotbarIdx = tonumber(arg1)
+			if not hotbarIdx then
+				StorageResult:FireClient(player, { success = false, reason = "Invalid index." })
+				return
+			end
+			local ok = PlayerData.MoveHotbarToStorage(player, hotbarIdx)
+			if not ok then
+				StorageResult:FireClient(player, { success = false, reason = "Storage is full!" })
+			else
+				StorageResult:FireClient(player, { success = true, action = "toStorage" })
+			end
+		end
+	end)
+	print("[Server] Storage actions wired")
+end
+
 -- Initialize services (order matters: PlayerData first, then BaseService)
 PlayerData.Init()
 PotionService.Init(PlayerData)

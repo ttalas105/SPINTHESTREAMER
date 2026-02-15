@@ -68,21 +68,31 @@ local function allQueuedIndices()
 	return s
 end
 
+-- Resolve a virtual index to an item (hotbar < 1000, storage >= 1001)
+local function resolveVirtualItem(vi)
+	if vi > 1000 then
+		local sto = HUDController.Data.storage or {}
+		return sto[vi - 1000]
+	else
+		local inv = HUDController.Data.inventory or {}
+		return inv[vi]
+	end
+end
+
 -- Validate a queue set: remove indices that no longer match the filter
 local function validateQueueSet(queueSet, matchFn)
-	local inv = HUDController.Data.inventory or {}
 	local bad = {}
-	for idx in pairs(queueSet) do
-		local item = inv[idx]
-		if not item or not matchFn(item) then bad[idx] = true end
+	for vi in pairs(queueSet) do
+		local item = resolveVirtualItem(vi)
+		if not item or not matchFn(item) then bad[vi] = true end
 	end
-	for idx in pairs(bad) do queueSet[idx] = nil end
+	for vi in pairs(bad) do queueSet[vi] = nil end
 end
 
 local function validateOneTimeQueue(queueMap, reqList)
-	local inv = HUDController.Data.inventory or {}
-	for key, idx in pairs(queueMap) do
-		if not inv[idx] then queueMap[key] = nil end
+	for key, vi in pairs(queueMap) do
+		local item = resolveVirtualItem(vi)
+		if not item then queueMap[key] = nil end
 	end
 end
 
@@ -210,13 +220,29 @@ local function closePicker()
 	if pickerFrame then pickerFrame:Destroy(); pickerFrame = nil end
 end
 
+local STORAGE_OFFSET = 1000
+
+--- Build a combined list of {vi, item, source} from hotbar + storage for sacrifice UI
+local function getCombinedItems()
+	local inv = HUDController.Data.inventory or {}
+	local sto = HUDController.Data.storage or {}
+	local combined = {}
+	for i, item in ipairs(inv) do
+		table.insert(combined, { vi = i, item = item, source = "hotbar" })
+	end
+	for i, item in ipairs(sto) do
+		table.insert(combined, { vi = STORAGE_OFFSET + i, item = item, source = "storage" })
+	end
+	return combined
+end
+
 local function showPicker(title, filterFn, excludeSet, onSelect)
 	closePicker()
-	local inv = HUDController.Data.inventory or {}
+	local combined = getCombinedItems()
 	local eligible = {}
-	for i, item in ipairs(inv) do
-		if filterFn(item) and not (excludeSet and excludeSet[i]) then
-			table.insert(eligible, i)
+	for _, entry in ipairs(combined) do
+		if filterFn(entry.item) and not (excludeSet and excludeSet[entry.vi]) then
+			table.insert(eligible, entry)
 		end
 	end
 
@@ -268,10 +294,12 @@ local function showPicker(title, filterFn, excludeSet, onSelect)
 		nl.Font = FONT; nl.TextSize = 16; nl.ZIndex = 42; nl.Parent = scroll
 	end
 
-	for order, invIdx in ipairs(eligible) do
-		local item = inv[invIdx]
+	for order, entry in ipairs(eligible) do
+		local item = entry.item
+		local vi = entry.vi
 		local id, eff, info = getItemInfo(item)
 		local rColor = DesignConfig.RarityColors[info and info.rarity or "Common"] or Color3.new(1, 1, 1)
+		local isStorage = vi > STORAGE_OFFSET
 
 		local cell = Instance.new("TextButton")
 		cell.Size = UDim2.new(0, 100, 0, 72)
@@ -279,6 +307,15 @@ local function showPicker(title, filterFn, excludeSet, onSelect)
 		cell.Text = ""; cell.LayoutOrder = order; cell.ZIndex = 42; cell.Parent = scroll
 		Instance.new("UICorner", cell).CornerRadius = UDim.new(0, 10)
 		local cs = Instance.new("UIStroke", cell); cs.Color = rColor; cs.Thickness = 1.5; cs.Transparency = 0.3
+
+		-- Storage indicator
+		if isStorage then
+			local si = Instance.new("TextLabel")
+			si.Size = UDim2.new(0, 14, 0, 10); si.Position = UDim2.new(1, -2, 0, 2)
+			si.AnchorPoint = Vector2.new(1, 0); si.BackgroundTransparency = 1
+			si.Text = "S"; si.TextColor3 = Color3.fromRGB(255, 165, 50)
+			si.Font = Enum.Font.GothamBold; si.TextSize = 8; si.ZIndex = 43; si.Parent = cell
+		end
 
 		local nl2 = Instance.new("TextLabel")
 		nl2.Size = UDim2.new(1, -6, 0, 22); nl2.Position = UDim2.new(0.5, 0, 0, 8)
@@ -301,10 +338,10 @@ local function showPicker(title, filterFn, excludeSet, onSelect)
 		rl.Text = info and info.rarity or "?"; rl.TextColor3 = rColor
 		rl.Font = FONT2; rl.TextSize = 10; rl.ZIndex = 43; rl.Parent = cell
 
-		local capturedIdx = invIdx
+		local capturedVI = vi
 		cell.MouseButton1Click:Connect(function()
 			closePicker()
-			if onSelect then onSelect(capturedIdx) end
+			if onSelect then onSelect(capturedVI) end
 		end)
 	end
 
@@ -558,17 +595,17 @@ end
 -------------------------------------------------
 
 local function buildStreamerGrid(parent, matchFn, queueSet, onChanged, accentColor)
-	local inv = HUDController.Data.inventory or {}
+	local combined = getCombinedItems()
 	local queued = allQueuedIndices()
 
 	-- Collect eligible items (matching + not queued in OTHER queues)
 	local items = {}
-	for i, item in ipairs(inv) do
-		if matchFn(item) then
-			local inThisQueue = queueSet[i]
-			local inOtherQueue = not inThisQueue and queued[i]
+	for _, entry in ipairs(combined) do
+		if matchFn(entry.item) then
+			local inThisQueue = queueSet[entry.vi]
+			local inOtherQueue = not inThisQueue and queued[entry.vi]
 			if not inOtherQueue then
-				table.insert(items, i)
+				table.insert(items, entry)
 			end
 		end
 	end
@@ -576,7 +613,7 @@ local function buildStreamerGrid(parent, matchFn, queueSet, onChanged, accentCol
 	if #items == 0 then
 		local nl = Instance.new("TextLabel")
 		nl.Size = UDim2.new(1, 0, 0, 50); nl.BackgroundTransparency = 1
-		nl.Text = "No eligible streamers in your inventory"; nl.TextColor3 = Color3.fromRGB(120, 120, 140)
+		nl.Text = "No eligible streamers in your inventory or storage"; nl.TextColor3 = Color3.fromRGB(120, 120, 140)
 		nl.Font = FONT; nl.TextSize = 14; nl.TextWrapped = true; nl.Parent = parent
 		return
 	end
@@ -592,11 +629,13 @@ local function buildStreamerGrid(parent, matchFn, queueSet, onChanged, accentCol
 	grid.CellPadding = UDim2.new(0, 6, 0, 6)
 	grid.SortOrder = Enum.SortOrder.LayoutOrder
 
-	for order, invIdx in ipairs(items) do
-		local item = inv[invIdx]
+	for order, entry in ipairs(items) do
+		local item = entry.item
+		local vi = entry.vi
 		local id, eff, info = getItemInfo(item)
-		local selected = queueSet[invIdx] == true
+		local selected = queueSet[vi] == true
 		local rColor = DesignConfig.RarityColors[info and info.rarity or "Common"] or Color3.new(1, 1, 1)
+		local isStorage = entry.source == "storage"
 
 		local cell = Instance.new("TextButton")
 		cell.Size = UDim2.new(0, 88, 0, 68)
@@ -608,6 +647,15 @@ local function buildStreamerGrid(parent, matchFn, queueSet, onChanged, accentCol
 		cs.Color = selected and Color3.fromRGB(60, 220, 80) or rColor
 		cs.Thickness = selected and 2.5 or 1.5
 		cs.Transparency = selected and 0 or 0.4
+
+		-- Storage indicator
+		if isStorage then
+			local si = Instance.new("TextLabel")
+			si.Size = UDim2.new(0, 14, 0, 10); si.Position = UDim2.new(1, -2, 0, 2)
+			si.AnchorPoint = Vector2.new(1, 0); si.BackgroundTransparency = 1
+			si.Text = "S"; si.TextColor3 = Color3.fromRGB(255, 165, 50)
+			si.Font = Enum.Font.GothamBold; si.TextSize = 8; si.Parent = cell
+		end
 
 		-- Name
 		local nl2 = Instance.new("TextLabel")
@@ -635,14 +683,32 @@ local function buildStreamerGrid(parent, matchFn, queueSet, onChanged, accentCol
 		bl.TextColor3 = selected and Color3.fromRGB(100, 255, 120) or Color3.fromRGB(100, 100, 120)
 		bl.Font = FONT; bl.TextSize = 9; bl.Parent = cell
 
-		local capIdx = invIdx
+		local capVI = vi
+		local capCell = cell
+		local capCS = cs
+		local capNL = nl2
+		local capBL = bl
+		local capRColor = rColor
 		cell.MouseButton1Click:Connect(function()
-			if queueSet[capIdx] then
-				queueSet[capIdx] = nil
+			if queueSet[capVI] then
+				queueSet[capVI] = nil
 			else
-				queueSet[capIdx] = true
+				queueSet[capVI] = true
 			end
-			if onChanged then onChanged() end
+			-- Instant visual update on the cell (no full rebuild)
+			local sel = queueSet[capVI] == true
+			capCell.BackgroundColor3 = sel and Color3.fromRGB(30, 100, 45) or Color3.fromRGB(28, 26, 48)
+			capCS.Color = sel and Color3.fromRGB(60, 220, 80) or capRColor
+			capCS.Thickness = sel and 2.5 or 1.5
+			capCS.Transparency = sel and 0 or 0.4
+			capNL.TextColor3 = sel and Color3.fromRGB(200, 255, 200) or capRColor
+			capBL.Text = sel and "QUEUED" or (info and info.rarity or "")
+			capBL.TextColor3 = sel and Color3.fromRGB(100, 255, 120) or Color3.fromRGB(100, 100, 120)
+			fireQueueChanged()
+			-- Defer the heavy content rebuild so the click feels instant
+			task.defer(function()
+				if onChanged then onChanged() end
+			end)
 		end)
 	end
 end
@@ -759,6 +825,7 @@ local function buildGemTradeContent(tradeIndex)
 	Instance.new("UICorner", clBtn).CornerRadius = UDim.new(0, 10)
 	clBtn.MouseButton1Click:Connect(function()
 		gemTradeQueues[tradeIndex] = {}
+		fireQueueChanged()
 		buildContent(activeTabId)
 	end)
 
@@ -778,6 +845,7 @@ local function buildGemTradeContent(tradeIndex)
 				function()
 					SacrificeRequest:FireServer("GemTrade", tradeIndex)
 					gemTradeQueues[tradeIndex] = {}
+					fireQueueChanged()
 				end
 			)
 		end)
@@ -839,15 +907,32 @@ local function buildOneTimeContent(oneTimeId)
 	local usedSet = {}
 	for _, idx in pairs(queue) do if idx then usedSet[idx] = true end end
 
-	local allFilled = true
-	local slotRow = Instance.new("Frame")
-	slotRow.Size = UDim2.new(1, -10, 0, 115)
-	slotRow.BackgroundTransparency = 1; slotRow.Parent = contentFrame
-	local sl2 = Instance.new("UIListLayout", slotRow)
-	sl2.FillDirection = Enum.FillDirection.Horizontal; sl2.Padding = UDim.new(0, 12)
-	sl2.HorizontalAlignment = Enum.HorizontalAlignment.Center
-	sl2.VerticalAlignment = Enum.VerticalAlignment.Center
+	-- Count total slots to decide layout
+	local totalSlots = 0
+	for _, r in ipairs(cfg.req) do totalSlots = totalSlots + (r.count or 1) end
 
+	local allFilled = true
+	local slotGrid = Instance.new("Frame")
+	slotGrid.BackgroundTransparency = 1; slotGrid.Parent = contentFrame
+	if totalSlots <= 5 then
+		slotGrid.Size = UDim2.new(1, -10, 0, 115)
+		local sl2 = Instance.new("UIListLayout", slotGrid)
+		sl2.FillDirection = Enum.FillDirection.Horizontal; sl2.Padding = UDim.new(0, 12)
+		sl2.HorizontalAlignment = Enum.HorizontalAlignment.Center
+		sl2.VerticalAlignment = Enum.VerticalAlignment.Center
+	else
+		local cols = 5
+		local rows = math.ceil(totalSlots / cols)
+		slotGrid.Size = UDim2.new(1, -10, 0, rows * 115 + (rows - 1) * 10)
+		local gl = Instance.new("UIGridLayout", slotGrid)
+		gl.CellSize = UDim2.new(0, 110, 0, 105)
+		gl.CellPadding = UDim2.new(0, 10, 0, 10)
+		gl.FillDirection = Enum.FillDirection.Horizontal
+		gl.HorizontalAlignment = Enum.HorizontalAlignment.Center
+		gl.SortOrder = Enum.SortOrder.LayoutOrder
+	end
+
+	local slotOrder = 0
 	for si, r in ipairs(cfg.req) do
 		local count = r.count or 1
 		for c = 1, count do
@@ -855,28 +940,41 @@ local function buildOneTimeContent(oneTimeId)
 			local filled = queue[key] ~= nil
 			if not filled then allFilled = false end
 
-			local reqLabel = r.streamerId or r.rarity or "?"
+			-- Build label: show effect + display name or rarity
+			local reqLabel
+			local displayId = r.streamerId and Streamers.ById[r.streamerId] and Streamers.ById[r.streamerId].displayName or r.streamerId
+			if r.effect and r.streamerId then
+				reqLabel = r.effect .. " " .. (displayId or "?")
+			elseif r.streamerId then
+				reqLabel = displayId or "?"
+			elseif r.rarity then
+				reqLabel = r.rarity
+			else
+				reqLabel = "?"
+			end
 
+			slotOrder = slotOrder + 1
 			local slot = Instance.new("TextButton")
 			slot.Size = UDim2.new(0, 110, 0, 105)
 			slot.BackgroundColor3 = filled and Color3.fromRGB(30, 100, 45) or Color3.fromRGB(28, 26, 48)
-			slot.BorderSizePixel = 0; slot.Text = ""; slot.Parent = slotRow
+			slot.BorderSizePixel = 0; slot.Text = ""; slot.LayoutOrder = slotOrder; slot.Parent = slotGrid
 			Instance.new("UICorner", slot).CornerRadius = UDim.new(0, 14)
 			local ss = Instance.new("UIStroke", slot)
 			ss.Color = filled and Color3.fromRGB(60, 220, 80) or Color3.fromRGB(60, 58, 90); ss.Thickness = 2.5
 
-			-- Required label
+			-- Required label (top of slot)
 			local rl = Instance.new("TextLabel")
-			rl.Size = UDim2.new(1, -8, 0, 22); rl.Position = UDim2.new(0.5, 0, 0, 6)
+			rl.Size = UDim2.new(1, -8, 0, 30); rl.Position = UDim2.new(0.5, 0, 0, 4)
 			rl.AnchorPoint = Vector2.new(0.5, 0); rl.BackgroundTransparency = 1
 			rl.Text = reqLabel; rl.TextColor3 = Color3.new(1, 1, 1)
-			rl.Font = FONT; rl.TextSize = 13; rl.TextTruncate = Enum.TextTruncate.AtEnd; rl.Parent = slot
+			rl.Font = FONT; rl.TextSize = 11; rl.TextWrapped = true; rl.Parent = slot
 
 			if filled then
-				local name = type(HUDController.Data.inventory[queue[key]]) == "table" and HUDController.Data.inventory[queue[key]].id or HUDController.Data.inventory[queue[key]] or "?"
-				local eff = type(HUDController.Data.inventory[queue[key]]) == "table" and HUDController.Data.inventory[queue[key]].effect or nil
+				local resolvedItem = resolveVirtualItem(queue[key])
+				local name = type(resolvedItem) == "table" and resolvedItem.id or resolvedItem or "?"
+				local eff = type(resolvedItem) == "table" and resolvedItem.effect or nil
 				local nl = Instance.new("TextLabel")
-				nl.Size = UDim2.new(1, -8, 0, 20); nl.Position = UDim2.new(0.5, 0, 0, 30)
+				nl.Size = UDim2.new(1, -8, 0, 20); nl.Position = UDim2.new(0.5, 0, 0, 36)
 				nl.AnchorPoint = Vector2.new(0.5, 0); nl.BackgroundTransparency = 1
 				nl.Text = name .. (eff and (" (" .. eff .. ")") or "")
 				nl.TextColor3 = Color3.fromRGB(180, 255, 180)
@@ -891,6 +989,7 @@ local function buildOneTimeContent(oneTimeId)
 				local capKey, capId = key, oneTimeId
 				slot.MouseButton1Click:Connect(function()
 					oneTimeQueues[capId][capKey] = nil
+					fireQueueChanged()
 					buildContent(activeTabId)
 				end)
 			else
@@ -913,7 +1012,12 @@ local function buildOneTimeContent(oneTimeId)
 					if capR.streamerId then
 						filterFn = function(item)
 							local id = type(item) == "table" and item.id or item
-							return id == capR.streamerId
+							if id ~= capR.streamerId then return false end
+							if capR.effect ~= nil then
+								local e = type(item) == "table" and item.effect or nil
+								if e ~= capR.effect then return false end
+							end
+							return true
 						end
 					elseif capR.rarity then
 						filterFn = function(item)
@@ -922,9 +1026,17 @@ local function buildOneTimeContent(oneTimeId)
 							return info and info.rarity == capR.rarity
 						end
 					end
+					local pickerTitle = "Pick a "
+					if capR.effect and capR.streamerId then
+						local dn = Streamers.ById[capR.streamerId] and Streamers.ById[capR.streamerId].displayName or capR.streamerId
+						pickerTitle = pickerTitle .. capR.effect .. " " .. dn
+					else
+						pickerTitle = pickerTitle .. (capR.streamerId or capR.rarity)
+					end
 					if filterFn then
-						showPicker("Pick a " .. (capR.streamerId or capR.rarity), filterFn, excludeSet, function(invIdx)
+						showPicker(pickerTitle, filterFn, excludeSet, function(invIdx)
 							oneTimeQueues[capId][capKey] = invIdx
+							fireQueueChanged()
 							buildContent(activeTabId)
 						end)
 					end
@@ -949,6 +1061,7 @@ local function buildOneTimeContent(oneTimeId)
 			showConfirmation("Sacrifice these streamers for " .. formatNumber(cfg.gems) .. " Gems?", function()
 				SacrificeRequest:FireServer("OneTime", capId)
 				oneTimeQueues[capId] = {}
+				fireQueueChanged()
 			end)
 		end)
 	end
@@ -1068,13 +1181,13 @@ local function buildLuckContent(luckType)
 		sb.Font = FONT; sb.TextSize = 18; sb.BorderSizePixel = 0; sb.Parent = contentFrame
 		Instance.new("UICorner", sb).CornerRadius = UDim.new(0, 12)
 		sb.MouseButton1Click:Connect(function()
-			-- Find the highest earner to show in the confirmation
-			local inv = HUDController.Data.inventory or {}
+			-- Find the highest earner across hotbar + storage
+			local allItems = getCombinedItems()
 			local bestName, bestEffect = "???", nil
 			local bestPrice = -1
-			for _, item in ipairs(inv) do
-				local id = type(item) == "table" and item.id or item
-				local eff = type(item) == "table" and item.effect or nil
+			for _, entry in ipairs(allItems) do
+				local id = type(entry.item) == "table" and entry.item.id or entry.item
+				local eff = type(entry.item) == "table" and entry.item.effect or nil
 				local info = Streamers.ById[id]
 				if info then
 					local p = info.cashPerSecond or 0
@@ -1184,19 +1297,20 @@ local function buildElementalContent(effectName)
 		local capRarity = rarity
 		local capEffect = effectName
 		afb.MouseButton1Click:Connect(function()
-			local inv = HUDController.Data.inventory or {}
+			local allItems = getCombinedItems()
 			local queued = allQueuedIndices()
 			local q = elementalQueues[capQKey]
 			local added = queueSetCount(q)
-			for i, item in ipairs(inv) do
+			for _, entry in ipairs(allItems) do
 				if added >= need then break end
-				if not q[i] and not queued[i] then
-					local id, eff, info = getItemInfo(item)
+				if not q[entry.vi] and not queued[entry.vi] then
+					local id, eff, info = getItemInfo(entry.item)
 					if info and info.rarity == capRarity and (capEffect == nil and eff == nil or eff == capEffect) then
-						q[i] = true; added = added + 1
+						q[entry.vi] = true; added = added + 1
 					end
 				end
 			end
+			fireQueueChanged()
 			buildContent(activeTabId)
 		end)
 
@@ -1209,6 +1323,7 @@ local function buildElementalContent(effectName)
 		Instance.new("UICorner", clb).CornerRadius = UDim.new(0, 8)
 		clb.MouseButton1Click:Connect(function()
 			elementalQueues[capQKey] = {}
+			fireQueueChanged()
 			buildContent(activeTabId)
 		end)
 
@@ -1226,6 +1341,7 @@ local function buildElementalContent(effectName)
 				showConfirmation(("Combine %d %s %s into 1?"):format(need, displayName, capRarity), function()
 					SacrificeRequest:FireServer("Elemental", capEffect, capRarity)
 					elementalQueues[capQKey] = {}
+					fireQueueChanged()
 				end)
 			end)
 		end
@@ -1266,19 +1382,25 @@ buildEffectOneTimeContent = function(oneTimeId, cfg, done)
 	if not effectOneTimeQueues[oneTimeId] then effectOneTimeQueues[oneTimeId] = {} end
 	local queue = effectOneTimeQueues[oneTimeId]
 
-	-- Validate queue: remove indices that are no longer valid or no longer match effect
+	-- Validate queue: remove virtual indices that are no longer valid or no longer match effect
 	local inv = HUDController.Data.inventory or {}
+	local sto = HUDController.Data.storage or {}
 	local toRemove = {}
-	for idx in pairs(queue) do
-		local item = inv[idx]
+	for vi in pairs(queue) do
+		local item
+		if vi > STORAGE_OFFSET then
+			item = sto[vi - STORAGE_OFFSET]
+		else
+			item = inv[vi]
+		end
 		if not item then
-			toRemove[idx] = true
+			toRemove[vi] = true
 		else
 			local eff = type(item) == "table" and item.effect or nil
-			if eff ~= effectName then toRemove[idx] = true end
+			if eff ~= effectName then toRemove[vi] = true end
 		end
 	end
-	for idx in pairs(toRemove) do queue[idx] = nil end
+	for vi in pairs(toRemove) do queue[vi] = nil end
 
 	local queued = queueSetCount(queue)
 
@@ -1346,18 +1468,19 @@ buildEffectOneTimeContent = function(oneTimeId, cfg, done)
 	Instance.new("UICorner", afBtn).CornerRadius = UDim.new(0, 10)
 	afBtn.MouseButton1Click:Connect(function()
 		local excluded = allQueuedIndices()
-		local curInv = HUDController.Data.inventory or {}
-		for i, item in ipairs(curInv) do
+		local allItems = getCombinedItems()
+		for _, entry in ipairs(allItems) do
 			if queueSetCount(effectOneTimeQueues[capOneTimeId] or {}) >= need then break end
-			if not excluded[i] then
-				local eff = type(item) == "table" and item.effect or nil
+			if not excluded[entry.vi] then
+				local eff = type(entry.item) == "table" and entry.item.effect or nil
 				if eff == effectName then
 					if not effectOneTimeQueues[capOneTimeId] then effectOneTimeQueues[capOneTimeId] = {} end
-					effectOneTimeQueues[capOneTimeId][i] = true
-					excluded[i] = true
+					effectOneTimeQueues[capOneTimeId][entry.vi] = true
+					excluded[entry.vi] = true
 				end
 			end
 		end
+		fireQueueChanged()
 		buildContent(activeTabId)
 	end)
 
@@ -1369,6 +1492,7 @@ buildEffectOneTimeContent = function(oneTimeId, cfg, done)
 	Instance.new("UICorner", clrBtn).CornerRadius = UDim.new(0, 10)
 	clrBtn.MouseButton1Click:Connect(function()
 		effectOneTimeQueues[capOneTimeId] = {}
+		fireQueueChanged()
 		buildContent(activeTabId)
 	end)
 
@@ -1386,6 +1510,7 @@ buildEffectOneTimeContent = function(oneTimeId, cfg, done)
 			showConfirmation("Sacrifice " .. need .. " " .. effectName .. " cards for " .. formatNumber(cfg.gems) .. " Gems?", function()
 				SacrificeRequest:FireServer("OneTime", capOneTimeId)
 				effectOneTimeQueues[capOneTimeId] = {}
+				fireQueueChanged()
 			end)
 		end)
 	end
@@ -1402,6 +1527,153 @@ buildEffectOneTimeContent = function(oneTimeId, cfg, done)
 	end, queue, function()
 		buildContent(activeTabId)
 	end, effectColor)
+end
+
+-------------------------------------------------
+-- GEM ROULETTE (wager gems, 50/50 double or gone)
+-------------------------------------------------
+
+local function buildGemRouletteContent()
+	clearContent()
+	local cfg = Sacrifice.GemRoulette
+
+	-- Big warning (same style as the other luck sacrifices)
+	local warnFrame = Instance.new("Frame")
+	warnFrame.Size = UDim2.new(1, -10, 0, 50)
+	warnFrame.BackgroundColor3 = Color3.fromRGB(80, 28, 28); warnFrame.BorderSizePixel = 0
+	warnFrame.Parent = contentFrame
+	Instance.new("UICorner", warnFrame).CornerRadius = UDim.new(0, 12)
+	Instance.new("UIStroke", warnFrame).Color = Color3.fromRGB(200, 70, 50)
+	local wl = Instance.new("TextLabel")
+	wl.Size = UDim2.new(1, -20, 1, -8); wl.Position = UDim2.new(0.5, 0, 0.5, 0)
+	wl.AnchorPoint = Vector2.new(0.5, 0.5); wl.BackgroundTransparency = 1
+	wl.Text = Sacrifice.LuckWarning; wl.TextColor3 = Color3.fromRGB(255, 200, 160)
+	wl.Font = FONT; wl.TextSize = 13; wl.TextWrapped = true; wl.Parent = warnFrame
+
+	-- Header
+	local header = Instance.new("Frame")
+	header.Size = UDim2.new(1, -10, 0, 130)
+	header.BackgroundColor3 = Color3.fromRGB(22, 22, 40)
+	header.BorderSizePixel = 0; header.Parent = contentFrame
+	Instance.new("UICorner", header).CornerRadius = UDim.new(0, 18)
+	local hs = Instance.new("UIStroke", header)
+	hs.Color = Color3.fromRGB(255, 180, 50); hs.Thickness = 2.5
+
+	local title = Instance.new("TextLabel")
+	title.Size = UDim2.new(1, -24, 0, 38)
+	title.Position = UDim2.new(0.5, 0, 0, 10); title.AnchorPoint = Vector2.new(0.5, 0)
+	title.BackgroundTransparency = 1
+	title.Text = "\u{1F3B0} GEM ROULETTE \u{1F3B0}"
+	title.TextColor3 = Color3.fromRGB(255, 200, 60)
+	title.Font = FONT; title.TextSize = 26; title.Parent = header
+	local tStk = Instance.new("UIStroke", title)
+	tStk.Color = Color3.fromRGB(0, 0, 0); tStk.Thickness = 2
+	tStk.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+
+	local desc = Instance.new("TextLabel")
+	desc.Size = UDim2.new(1, -24, 0, 22)
+	desc.Position = UDim2.new(0.5, 0, 0, 50); desc.AnchorPoint = Vector2.new(0.5, 0)
+	desc.BackgroundTransparency = 1
+	desc.Text = cfg.desc
+	desc.TextColor3 = Color3.fromRGB(200, 180, 200)
+	desc.Font = FONT; desc.TextSize = 14; desc.TextWrapped = true; desc.Parent = header
+
+	-- Charge info
+	local sacState = HUDController.Data.sacrificeState or {}
+	local chargeData = sacState["GemRoulette"]
+	local rechargeSec = cfg.rechargeMinutes * 60
+	local charges = cfg.maxCharges
+	if chargeData then
+		local now = os.time()
+		local elapsed = now - (chargeData.lastUsed or 0)
+		local recharged = math.floor(elapsed / rechargeSec)
+		charges = math.min(cfg.maxCharges, (chargeData.charges or 0) + recharged)
+	end
+
+	local chargeLabel = Instance.new("TextLabel")
+	chargeLabel.Size = UDim2.new(1, -24, 0, 20)
+	chargeLabel.Position = UDim2.new(0.5, 0, 0, 74); chargeLabel.AnchorPoint = Vector2.new(0.5, 0)
+	chargeLabel.BackgroundTransparency = 1
+	chargeLabel.Text = "Charges: " .. charges .. " / " .. cfg.maxCharges .. "  (1 every " .. cfg.rechargeMinutes .. " min)"
+	chargeLabel.TextColor3 = charges > 0 and Color3.fromRGB(100, 255, 120) or Color3.fromRGB(255, 100, 100)
+	chargeLabel.Font = FONT; chargeLabel.TextSize = 13; chargeLabel.Parent = header
+
+	-- Gem balance
+	local gems = HUDController.Data.gems or 0
+	local balLabel = Instance.new("TextLabel")
+	balLabel.Size = UDim2.new(1, -24, 0, 20)
+	balLabel.Position = UDim2.new(0.5, 0, 0, 100); balLabel.AnchorPoint = Vector2.new(0.5, 0)
+	balLabel.BackgroundTransparency = 1
+	balLabel.Text = "\u{1F48E} Your Gems: " .. formatNumber(gems)
+	balLabel.TextColor3 = Color3.fromRGB(150, 210, 255)
+	balLabel.Font = FONT; balLabel.TextSize = 16; balLabel.Parent = header
+
+	-- Wager input area
+	local inputRow = Instance.new("Frame")
+	inputRow.Size = UDim2.new(1, -10, 0, 50)
+	inputRow.BackgroundTransparency = 1; inputRow.Parent = contentFrame
+	local irl = Instance.new("UIListLayout", inputRow)
+	irl.FillDirection = Enum.FillDirection.Horizontal; irl.Padding = UDim.new(0, 10)
+	irl.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	irl.VerticalAlignment = Enum.VerticalAlignment.Center
+
+	local inputLabel = Instance.new("TextLabel")
+	inputLabel.Size = UDim2.new(0, 100, 0, 44)
+	inputLabel.BackgroundTransparency = 1
+	inputLabel.Text = "Wager:"
+	inputLabel.TextColor3 = Color3.fromRGB(200, 200, 220)
+	inputLabel.Font = FONT; inputLabel.TextSize = 20; inputLabel.Parent = inputRow
+
+	local inputBox = Instance.new("TextBox")
+	inputBox.Name = "GemWagerInput"
+	inputBox.Size = UDim2.new(0, 220, 0, 44)
+	inputBox.BackgroundColor3 = Color3.fromRGB(30, 28, 50)
+	inputBox.Text = ""; inputBox.PlaceholderText = "Enter gem amount..."
+	inputBox.PlaceholderColor3 = Color3.fromRGB(100, 100, 130)
+	inputBox.TextColor3 = Color3.fromRGB(255, 220, 80)
+	inputBox.Font = FONT; inputBox.TextSize = 20
+	inputBox.ClearTextOnFocus = true
+	inputBox.TextEditable = true
+	inputBox.BorderSizePixel = 0
+	inputBox.ZIndex = 5
+	inputBox.Parent = inputRow
+	Instance.new("UICorner", inputBox).CornerRadius = UDim.new(0, 12)
+	local ibStk = Instance.new("UIStroke", inputBox)
+	ibStk.Color = Color3.fromRGB(255, 180, 50); ibStk.Thickness = 2
+	local ibPad = Instance.new("UIPadding", inputBox)
+	ibPad.PaddingLeft = UDim.new(0, 10); ibPad.PaddingRight = UDim.new(0, 10)
+
+	-- SPIN button
+	local canSpin = charges > 0
+	local spinBtn = Instance.new("TextButton")
+	spinBtn.Size = UDim2.new(0, 300, 0, 56)
+	spinBtn.BackgroundColor3 = canSpin and Color3.fromRGB(255, 180, 50) or Color3.fromRGB(50, 50, 70)
+	spinBtn.Text = canSpin and "\u{1F3B0} SPIN THE ROULETTE" or "NO CHARGES"
+	spinBtn.TextColor3 = canSpin and Color3.fromRGB(20, 10, 0) or Color3.fromRGB(110, 110, 130)
+	spinBtn.Font = FONT; spinBtn.TextSize = 20; spinBtn.BorderSizePixel = 0; spinBtn.Parent = contentFrame
+	Instance.new("UICorner", spinBtn).CornerRadius = UDim.new(0, 14)
+	local sbStk = Instance.new("UIStroke", spinBtn)
+	sbStk.Color = canSpin and Color3.fromRGB(200, 140, 30) or Color3.fromRGB(40, 40, 55)
+	sbStk.Thickness = 2.5
+
+	if canSpin then
+		spinBtn.MouseButton1Click:Connect(function()
+			local raw = inputBox.Text:gsub(",", ""):gsub("%s+", "")
+			local amount = tonumber(raw)
+			if not amount or amount <= 0 or amount ~= math.floor(amount) then
+				showToast("Enter a valid whole number!", Color3.fromRGB(200, 50, 50), 2)
+				return
+			end
+			local g = HUDController.Data.gems or 0
+			if amount > g then
+				showToast("Not enough gems! You have " .. formatNumber(g), Color3.fromRGB(200, 50, 50), 2)
+				return
+			end
+			showConfirmation("Wager " .. formatNumber(amount) .. " Gems? 50/50 to DOUBLE or LOSE them all!", function()
+				SacrificeRequest:FireServer("GemRoulette", amount)
+			end)
+		end)
+	end
 end
 
 -------------------------------------------------
@@ -1428,6 +1700,8 @@ buildContent = function(tabId)
 		buildOneTimeContent(tabId)
 	elseif tabId == "FiftyFifty" or tabId == "FeelingLucky" or tabId == "DontDoIt" then
 		buildLuckContent(tabId)
+	elseif tabId == "GemRoulette" then
+		buildGemRouletteContent()
 	elseif tabId:sub(1, 4) == "Elem" then
 		local en = tabId:sub(6); if en == "" then en = nil end
 		buildElementalContent(en)
@@ -1557,9 +1831,19 @@ function SacrificeController.Init()
 		addTab("GemTrade_" .. i, tr.rarity .. " -> " .. formatNumber(tr.gems), DesignConfig.RarityColors[tr.rarity] or Color3.new(1, 1, 1))
 	end
 	addSection("— ONE-TIME —")
+	addTab("CommonArmy", "Common Army", Color3.fromRGB(160, 160, 190))
 	addTab("FatPeople", "Fat People", Color3.fromRGB(255, 200, 60))
 	addTab("GirlPower", "Girl Power", Color3.fromRGB(255, 130, 200))
+	addTab("RareRoundup", "Rare Roundup", Color3.fromRGB(80, 180, 255))
+	addTab("ContentHouse", "Content House", Color3.fromRGB(255, 150, 80))
+	addTab("EpicEnsemble", "Epic Ensemble", Color3.fromRGB(200, 80, 220))
+	addTab("GamblingAddicts", "Gambling Addicts", Color3.fromRGB(60, 220, 60))
+	addTab("TheOGs", "The OGs", Color3.fromRGB(180, 180, 180))
+	addTab("FPSLegends", "FPS Legends", Color3.fromRGB(255, 80, 80))
+	addTab("TwitchRoyalty", "Twitch Royalty", Color3.fromRGB(180, 120, 255))
+	addTab("TheUntouchables", "The Untouchables", Color3.fromRGB(255, 50, 50))
 	addTab("Rainbow", "Rainbow", Color3.fromRGB(120, 255, 200))
+	addTab("MythicRoyale", "Mythic Royale", Color3.fromRGB(255, 215, 0))
 	addSection("— ELEMENTAL ONE-TIME —")
 	addTab("AcidReflex", "Acid Reflex", Color3.fromRGB(50, 255, 50))
 	addTab("SnowyAvalanche", "Snowy Avalanche", Color3.fromRGB(180, 220, 255))
@@ -1574,6 +1858,7 @@ function SacrificeController.Init()
 	addTab("FiftyFifty", "50 / 50", Color3.fromRGB(255, 220, 60))
 	addTab("FeelingLucky", "Feeling Lucky?", Color3.fromRGB(100, 200, 255))
 	addTab("DontDoIt", "Don't do it", Color3.fromRGB(255, 80, 80))
+	addTab("GemRoulette", "Gem Roulette", Color3.fromRGB(255, 180, 50))
 	addSection("— ELEMENTAL —")
 	addTab("Elem_", "Default", Color3.fromRGB(170, 170, 170))
 	for _, eff in ipairs(Effects.List) do
@@ -1655,6 +1940,22 @@ function SacrificeController.Init()
 					task.defer(function() task.wait(0.3); if isOpen and activeTabId then buildContent(activeTabId) end end)
 				end)
 				return
+
+			elseif result.sacrificeType == "GemRoulette" then
+				local isGood = result.outcome == "double"
+				showBinarySpin("DOUBLE!", "GONE!", isGood, "\u{1F48E}", "\u{1F4A8}", function()
+					local msg, c
+					if isGood then
+						msg = "DOUBLED! +" .. formatNumber(result.wager or 0) .. " Gems! Now: " .. formatNumber(result.newGems or 0)
+						c = Color3.fromRGB(255, 220, 60)
+					else
+						msg = "GONE! Lost " .. formatNumber(result.wager or 0) .. " Gems... Now: " .. formatNumber(result.newGems or 0)
+						c = Color3.fromRGB(200, 80, 60)
+					end
+					showToast(msg, c, 3.5)
+					task.defer(function() task.wait(0.3); if isOpen and activeTabId then buildContent(activeTabId) end end)
+				end)
+				return
 			end
 
 			-----------------------------------------------------------
@@ -1682,6 +1983,22 @@ function SacrificeController.Init()
 	end)
 
 	modalFrame.Visible = false
+end
+
+--- Public: get the full set of queued virtual indices (for hiding from inventory/storage)
+function SacrificeController.GetQueuedIndices()
+	return allQueuedIndices()
+end
+
+-- Callbacks for when queues change (so inventory/storage can refresh visuals)
+local onQueueChanged = {}
+function SacrificeController.OnQueueChanged(cb)
+	table.insert(onQueueChanged, cb)
+end
+local function fireQueueChanged()
+	for _, cb in ipairs(onQueueChanged) do
+		task.spawn(cb)
+	end
 end
 
 return SacrificeController

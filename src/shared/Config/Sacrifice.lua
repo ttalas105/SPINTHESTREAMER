@@ -11,11 +11,11 @@ local Sacrifice = {}
 -- Sacrifice X streamers of rarity → get Y gems
 -------------------------------------------------
 Sacrifice.GemTrades = {
-	{ rarity = "Common",    count = 100, gems = 100 },
-	{ rarity = "Rare",     count = 85,  gems = 250 },
-	{ rarity = "Epic",     count = 50,  gems = 500 },
-	{ rarity = "Legendary", count = 25, gems = 750 },
-	{ rarity = "Mythic",   count = 10,  gems = 1000 },
+	{ rarity = "Common",    count = 100, gems = 300 },
+	{ rarity = "Rare",     count = 85,  gems = 600 },
+	{ rarity = "Epic",     count = 50,  gems = 2000 },
+	{ rarity = "Legendary", count = 25, gems = 3500 },
+	{ rarity = "Mythic",   count = 10,  gems = 5000 },
 }
 
 -------------------------------------------------
@@ -43,13 +43,118 @@ Sacrifice.OneTime = {
 	},
 	Rainbow = {
 		name    = "Rainbow",
-		gems    = 2000,
+		gems    = 100000,
 		req     = {
 			{ rarity = "Common",    count = 1 },
 			{ rarity = "Rare",      count = 1 },
 			{ rarity = "Epic",     count = 1 },
 			{ rarity = "Legendary", count = 1 },
 			{ rarity = "Mythic",   count = 1 },
+		},
+	},
+	-- ======== ONE-TIME SACRIFICES (ordered least → most gems) ========
+	CommonArmy = {
+		name    = "Common Army",
+		gems    = 1500,
+		req     = {
+			{ rarity = "Common", count = 5 },
+		},
+	},
+	RareRoundup = {
+		name    = "Rare Roundup",
+		gems    = 8000,
+		req     = {
+			{ streamerId = "Shroud",         effect = nil, count = 1 },
+			{ streamerId = "StableRonaldo",  effect = nil, count = 1 },
+			{ streamerId = "Train",          effect = nil, count = 1 },
+			{ streamerId = "Lacy",           effect = nil, count = 1 },
+		},
+	},
+	ContentHouse = {
+		name    = "Content House",
+		gems    = 10000,
+		req     = {
+			{ streamerId = "Adapt",          effect = "Solar",  count = 1 },
+			{ streamerId = "JasondaWeen",    effect = nil,      count = 1 },
+			{ streamerId = "Lacy",           effect = "Void",   count = 1 },
+			{ streamerId = "StableRonaldo",  effect = "Acid",   count = 1 },
+		},
+	},
+	EpicEnsemble = {
+		name    = "Epic Ensemble",
+		gems    = 15000,
+		req     = {
+			{ streamerId = "Cinna",       effect = nil, count = 1 },
+			{ streamerId = "CaseOh",      effect = nil, count = 1 },
+			{ streamerId = "Pokimane",    effect = nil, count = 1 },
+			{ streamerId = "Adapt",       effect = nil, count = 1 },
+		},
+	},
+	GamblingAddicts = {
+		name    = "Gambling Addicts",
+		gems    = 24000,
+		req     = {
+			{ streamerId = "XQC",   effect = nil,     count = 1 },
+			{ streamerId = "Train", effect = "Solar",  count = 1 },
+		},
+	},
+	TheOGs = {
+		name    = "The OGs",
+		gems    = 25000,
+		req     = {
+			{ streamerId = "XQC",       effect = nil,       count = 1 },
+			{ streamerId = "OhnePixel", effect = "Lava",    count = 1 },
+			{ streamerId = "Train",     effect = "Glitchy", count = 1 },
+			{ streamerId = "Ninja",     effect = "Snow",    count = 1 },
+		},
+	},
+	FPSLegends = {
+		name    = "FPS Legends",
+		gems    = 35000,
+		req     = {
+			{ streamerId = "Shroud", effect = "Void", count = 1 },
+			{ streamerId = "Ninja",  effect = "Void", count = 1 },
+		},
+	},
+	TwitchRoyalty = {
+		name    = "Twitch Royalty",
+		gems    = 40000,
+		req     = {
+			{ streamerId = "Ninja",     effect = "Acid",  count = 1 },
+			{ streamerId = "Kai Cenat", effect = nil,     count = 1 },
+			{ streamerId = "Jynxzi",    effect = "Lunar", count = 1 },
+		},
+	},
+	TheUntouchables = {
+		name    = "The Untouchables",
+		gems    = 100000,
+		req     = {
+			{ streamerId = "IShowSpeed", effect = nil, count = 1 },
+			{ streamerId = "XQC",        effect = nil, count = 1 },
+		},
+	},
+	MythicRoyale = {
+		name    = "Mythic Royale",
+		gems    = 3000000,
+		req     = {
+			{ streamerId = "IShowSpeed", effect = "Acid",      count = 1 },
+			{ streamerId = "IShowSpeed", effect = "Snow",      count = 1 },
+			{ streamerId = "IShowSpeed", effect = "Lava",      count = 1 },
+			{ streamerId = "IShowSpeed", effect = "Lightning", count = 1 },
+			{ streamerId = "IShowSpeed", effect = "Shadow",    count = 1 },
+			{ streamerId = "IShowSpeed", effect = "Glitchy",   count = 1 },
+			{ streamerId = "IShowSpeed", effect = "Lunar",     count = 1 },
+			{ streamerId = "IShowSpeed", effect = "Solar",     count = 1 },
+			{ streamerId = "IShowSpeed", effect = "Void",      count = 1 },
+			{ streamerId = "XQC",        effect = "Acid",      count = 1 },
+			{ streamerId = "XQC",        effect = "Snow",      count = 1 },
+			{ streamerId = "XQC",        effect = "Lava",      count = 1 },
+			{ streamerId = "XQC",        effect = "Lightning", count = 1 },
+			{ streamerId = "XQC",        effect = "Shadow",    count = 1 },
+			{ streamerId = "XQC",        effect = "Glitchy",   count = 1 },
+			{ streamerId = "XQC",        effect = "Lunar",     count = 1 },
+			{ streamerId = "XQC",        effect = "Solar",     count = 1 },
+			{ streamerId = "XQC",        effect = "Void",      count = 1 },
 		},
 	},
 	-- ELEMENTAL ONE-TIME SACRIFICES (20 cards of a specific effect, any rarity)
@@ -130,6 +235,14 @@ Sacrifice.FeelingLucky = {
 		{ rarity = "Rare",   count = 1 },
 		{ rarity = "Epic",   count = 20 },
 	},
+}
+
+-- Gem Roulette: wager any amount of gems, 50/50 double or lose them all. 1 charge, 60 min recharge.
+Sacrifice.GemRoulette = {
+	name    = "Gem Roulette",
+	desc    = "Wager your gems! 50% chance to DOUBLE, 50% chance they're GONE!",
+	maxCharges = 1,
+	rechargeMinutes = 60,
 }
 
 -- Don't do it: sacrifice your highest-earning streamer, chance to upgrade to next rarity.

@@ -30,6 +30,7 @@ local InventoryController    = require(controllers.InventoryController)
 local IndexController        = require(controllers.IndexController)
 local GemShopController      = require(controllers.GemShopController)
 local SacrificeController    = require(controllers.SacrificeController)
+local StorageController      = require(controllers.StorageController)
 local UIHelper               = require(controllers.UIHelper)
 
 local RemoteEvents = ReplicatedStorage:WaitForChild("RemoteEvents")
@@ -54,6 +55,7 @@ InventoryController.Init()
 IndexController.Init()
 GemShopController.Init()
 SacrificeController.Init()
+StorageController.Init()
 SlotPadController.Init(InventoryController)
 
 -------------------------------------------------
@@ -125,8 +127,12 @@ LeftSideNavController.OnClick("Index", function()
 	IndexController.Open()
 end)
 
-LeftSideNavController.OnClick("Pets", function()
-	print("[Client] Pets not yet implemented")
+LeftSideNavController.OnClick("Storage", function()
+	if StorageController.IsOpen() then
+		StorageController.Close()
+	else
+		StorageController.Open()
+	end
 end)
 
 LeftSideNavController.OnClick("Store", function()
@@ -155,9 +161,17 @@ end)
 
 HUDController.OnDataUpdated(function(data)
 	-- Update inventory bar
-	InventoryController.UpdateInventory(data.inventory)
+	InventoryController.UpdateInventory(data.inventory, data.storage)
+	-- Update storage UI if open
+	StorageController.Refresh()
 	-- Update pad controller cache
 	SlotPadController.Refresh(data)
+end)
+
+-- When sacrifice queues change, refresh inventory/storage visuals
+SacrificeController.OnQueueChanged(function()
+	InventoryController.RefreshVisuals()
+	StorageController.Refresh()
 end)
 
 -------------------------------------------------

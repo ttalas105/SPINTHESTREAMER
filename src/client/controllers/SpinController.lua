@@ -46,6 +46,10 @@ local currentCrateId = nil -- nil = regular spin, number = crate spin
 local skipRequested = false
 local currentAnimConnection = nil -- RenderStepped connection for current animation
 
+-- Auto-spin state
+local autoSpinEnabled = false
+local autoSpinButton = nil
+
 -- Queue: if player clicks spin during animation, queue next spin
 local queuedSpinResult = nil -- server result data waiting for current anim to finish
 local queuedSpinPending = false -- true if we sent a spin request but haven't got result yet
@@ -990,7 +994,7 @@ local function showResult(data)
 		-- If there's a queued spin result, start it immediately after a brief pause
 		if queuedSpinResult then
 			task.wait(1.0)
-			if spinGeneration ~= myGeneration then return end -- new spin already started
+			if spinGeneration ~= myGeneration then return end
 			if receivedMessage and receivedMessage.Parent then
 				receivedMessage:Destroy()
 			end
@@ -1001,7 +1005,9 @@ local function showResult(data)
 			return
 		end
 
-		task.wait(3.5) -- Show result for 3.5 seconds
+		-- Shorter wait if auto-spin is on
+		local waitTime = autoSpinEnabled and 1.5 or 3.5
+		task.wait(waitTime)
 
 		-- Bail if a new spin started while we waited
 		if spinGeneration ~= myGeneration then return end
@@ -1017,7 +1023,7 @@ local function showResult(data)
 			SpinController._startSpin(nextData)
 			return
 		end
-		
+
 		-- Bail again in case something changed
 		if spinGeneration ~= myGeneration then return end
 
@@ -1038,8 +1044,26 @@ local function showResult(data)
 				receivedMessage:Destroy()
 			end
 		end
-		
-		-- No queued spin — close the window (only if still our generation)
+
+		-- Bail again
+		if spinGeneration ~= myGeneration then return end
+
+		-- Auto-spin: trigger next spin if enabled
+		if autoSpinEnabled then
+			isSpinning = true
+			animationDone = false
+			resultFrame.Visible = false
+			spinButton.Text = "SPINNING..."
+			if currentCrateId then
+				local BuyCrateRequest = RemoteEvents:WaitForChild("BuyCrateRequest")
+				BuyCrateRequest:FireServer(currentCrateId)
+			else
+				SpinRequest:FireServer()
+			end
+			return
+		end
+
+		-- No queued spin and no auto-spin — close the window
 		if spinGeneration ~= myGeneration then return end
 		isSpinning = false
 		task.wait(0.2)
@@ -1161,6 +1185,47 @@ function SpinController.Init()
 		SpinController.RequestSpin()
 	end)
 
+	-- Auto-spin toggle button (below spin button, left side)
+	autoSpinButton = Instance.new("TextButton")
+	autoSpinButton.Name = "AutoSpinBtn"
+	autoSpinButton.Size = UDim2.new(0, 100, 0, 36)
+	autoSpinButton.Position = UDim2.new(0.5, -130, 0.94, 0)
+	autoSpinButton.AnchorPoint = Vector2.new(1, 0.5)
+	autoSpinButton.BackgroundColor3 = Color3.fromRGB(50, 50, 70)
+	autoSpinButton.Text = "AUTO"
+	autoSpinButton.TextColor3 = Color3.fromRGB(180, 180, 200)
+	autoSpinButton.Font = Enum.Font.FredokaOne
+	autoSpinButton.TextSize = 16
+	autoSpinButton.BorderSizePixel = 0
+	autoSpinButton.ZIndex = 5
+	autoSpinButton.Parent = spinContainer
+	local asBtnCorner = Instance.new("UICorner")
+	asBtnCorner.CornerRadius = UDim.new(0, 10)
+	asBtnCorner.Parent = autoSpinButton
+	local asBtnStroke = Instance.new("UIStroke")
+	asBtnStroke.Color = Color3.fromRGB(60, 60, 80)
+	asBtnStroke.Thickness = 2
+	asBtnStroke.Parent = autoSpinButton
+
+	local function updateAutoSpinVisual()
+		if autoSpinEnabled then
+			autoSpinButton.BackgroundColor3 = Color3.fromRGB(60, 200, 80)
+			autoSpinButton.Text = "AUTO: ON"
+			autoSpinButton.TextColor3 = Color3.new(1, 1, 1)
+			asBtnStroke.Color = Color3.fromRGB(40, 160, 60)
+		else
+			autoSpinButton.BackgroundColor3 = Color3.fromRGB(50, 50, 70)
+			autoSpinButton.Text = "AUTO"
+			autoSpinButton.TextColor3 = Color3.fromRGB(180, 180, 200)
+			asBtnStroke.Color = Color3.fromRGB(60, 60, 80)
+		end
+	end
+
+	autoSpinButton.MouseButton1Click:Connect(function()
+		autoSpinEnabled = not autoSpinEnabled
+		updateAutoSpinVisual()
+	end)
+
 	-- Skip button (appears during spin animation)
 	skipButton = Instance.new("TextButton")
 	skipButton.Name = "SkipButton"
@@ -1203,6 +1268,17 @@ function SpinController.Init()
 				SpinController._startSpin(data)
 			end
 		else
+			-- Disable auto-spin on error
+			if autoSpinEnabled then
+				autoSpinEnabled = false
+				if autoSpinButton then
+					autoSpinButton.BackgroundColor3 = Color3.fromRGB(50, 50, 70)
+					autoSpinButton.Text = "AUTO"
+					autoSpinButton.TextColor3 = Color3.fromRGB(180, 180, 200)
+					local asStk = autoSpinButton:FindFirstChildOfClass("UIStroke")
+					if asStk then asStk.Color = Color3.fromRGB(60, 60, 80) end
+				end
+			end
 			-- Error handling — if this was for a queued spin, just clear queue
 			if queuedSpinPending then
 				queuedSpinPending = false
@@ -1340,6 +1416,14 @@ function SpinController.Hide()
 	queuedSpinPending = false
 	isSpinning = false
 	animationDone = false
+	autoSpinEnabled = false
+	if autoSpinButton then
+		autoSpinButton.BackgroundColor3 = Color3.fromRGB(50, 50, 70)
+		autoSpinButton.Text = "AUTO"
+		autoSpinButton.TextColor3 = Color3.fromRGB(180, 180, 200)
+		local asStk = autoSpinButton:FindFirstChildOfClass("UIStroke")
+		if asStk then asStk.Color = Color3.fromRGB(60, 60, 80) end
+	end
 	if skipButton then skipButton.Visible = false end
 	if currentAnimConnection then
 		pcall(function() currentAnimConnection:Disconnect() end)

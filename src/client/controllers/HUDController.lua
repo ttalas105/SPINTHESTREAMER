@@ -29,6 +29,7 @@ HUDController.Data = {
 	cash = 0,
 	gems = 0,
 	inventory = {},
+	storage = {},
 	equippedPads = {},
 	collection = {},
 	indexCollection = {},
