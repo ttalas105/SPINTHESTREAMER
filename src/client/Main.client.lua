@@ -31,6 +31,8 @@ local IndexController        = require(controllers.IndexController)
 local GemShopController      = require(controllers.GemShopController)
 local SacrificeController    = require(controllers.SacrificeController)
 local StorageController      = require(controllers.StorageController)
+local MusicController        = require(controllers.MusicController)
+local SettingsController     = require(controllers.SettingsController)
 local UIHelper               = require(controllers.UIHelper)
 
 local RemoteEvents = ReplicatedStorage:WaitForChild("RemoteEvents")
@@ -56,6 +58,8 @@ IndexController.Init()
 GemShopController.Init()
 SacrificeController.Init()
 StorageController.Init()
+MusicController.Init()
+SettingsController.Init()
 SlotPadController.Init(InventoryController)
 
 -------------------------------------------------
@@ -152,7 +156,11 @@ RightSideNavController.OnClick("Rebirth", function()
 end)
 
 RightSideNavController.OnClick("Settings", function()
-	print("[Client] Settings not yet implemented")
+	if SettingsController.IsOpen() then
+		SettingsController.Close()
+	else
+		SettingsController.Open()
+	end
 end)
 
 -------------------------------------------------
@@ -172,6 +180,14 @@ end)
 SacrificeController.OnQueueChanged(function()
 	InventoryController.RefreshVisuals()
 	StorageController.Refresh()
+end)
+
+-- Music: pause lobby / start sacrifice music on open, reverse on close
+SacrificeController.OnOpen(function()
+	MusicController.OnSacrificeOpen()
+end)
+SacrificeController.OnClose(function()
+	MusicController.OnSacrificeClose()
 end)
 
 -------------------------------------------------

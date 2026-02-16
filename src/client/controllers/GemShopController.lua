@@ -459,7 +459,7 @@ local function buildCaseContent(caseData)
 			local cC = Instance.new("UICorner"); cC.CornerRadius = UDim.new(0, 8); cC.Parent = card
 			local cS = Instance.new("UIStroke"); cS.Color = rColor; cS.Thickness = 1.5; cS.Transparency = 0.4; cS.Parent = card
 
-			local vp = addStaticViewport(card, item.streamerId, itemW - 10, 78)
+			local vp = addSpinningViewport(card, item.streamerId, itemW - 10, 78, 0.6)
 			vp.Position = UDim2.new(0.5, 0, 0, 6); vp.AnchorPoint = Vector2.new(0.5, 0)
 
 			local nm = Instance.new("TextLabel")

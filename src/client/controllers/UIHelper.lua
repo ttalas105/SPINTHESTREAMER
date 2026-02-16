@@ -13,6 +13,26 @@ local DesignConfig = require(ReplicatedStorage.Shared.Config.DesignConfig)
 local UIHelper = {}
 
 -------------------------------------------------
+-- RESPONSIVE SCALING
+-- Reference resolution: 1080p (1920×1080).
+-- All UI is authored at 1080p pixel sizes; screens
+-- larger or smaller than that get a proportional UIScale.
+-- We use the *smaller* axis so nothing overflows.
+-------------------------------------------------
+
+local REF_WIDTH  = 1280
+local REF_HEIGHT = 720
+
+local function getViewportScale()
+	local camera = workspace.CurrentCamera
+	if not camera then return 1 end
+	local vp = camera.ViewportSize
+	local scaleX = vp.X / REF_WIDTH
+	local scaleY = vp.Y / REF_HEIGHT
+	return math.min(scaleX, scaleY)
+end
+
+-------------------------------------------------
 -- SCREEN GUI
 -------------------------------------------------
 
@@ -23,7 +43,28 @@ function UIHelper.CreateScreenGui(name: string, displayOrder: number?)
 	gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 	gui.DisplayOrder = displayOrder or 1
 	gui.IgnoreGuiInset = true
+
+	-- Auto-scale all children relative to 1080p
+	local uiScale = Instance.new("UIScale")
+	uiScale.Name = "ResponsiveScale"
+	uiScale.Scale = getViewportScale()
+	uiScale.Parent = gui
+
+	-- Update when the viewport changes (window resize, orientation flip on mobile)
+	local camera = workspace.CurrentCamera
+	if camera then
+		camera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
+			uiScale.Scale = getViewportScale()
+		end)
+	end
+
 	return gui
+end
+
+--- Utility: get the current responsive scale factor (for controllers that
+--- need to do math with pixel sizes outside of the ScreenGui tree).
+function UIHelper.GetScale()
+	return getViewportScale()
 end
 
 -------------------------------------------------
