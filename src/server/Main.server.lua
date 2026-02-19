@@ -21,6 +21,7 @@ local BaseService    = require(services.BaseService)
 local IndexService    = require(services.IndexService)
 local GemShopService  = require(services.GemShopService)
 local SacrificeService = require(services.SacrificeService)
+local ReceiptHandler   = require(services.ReceiptHandler)
 
 -- Spin stand: add ProximityPrompt so players can open the crate shop
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -287,6 +288,11 @@ do
 	local StorageResult = ReplicatedStorage.RemoteEvents:WaitForChild("StorageResult")
 
 	StorageAction.OnServerEvent:Connect(function(player, action, arg1, arg2)
+		-- SECURITY FIX: Validate action type
+		if type(action) ~= "string" then
+			StorageResult:FireClient(player, { success = false, reason = "Invalid request." })
+			return
+		end
 		if action == "swap" then
 			local hotbarIdx = tonumber(arg1)
 			local storageIdx = tonumber(arg2)
@@ -333,5 +339,6 @@ StoreService.Init(PlayerData, SpinService)
 IndexService.Init(PlayerData)
 GemShopService.Init(PlayerData)
 SacrificeService.Init(PlayerData, PotionService)
+ReceiptHandler.Init(PlayerData, SpinService)
 
 print("[Server] Spin the Streamer initialized! Map size: 400x1000 studs, 8 base slots")

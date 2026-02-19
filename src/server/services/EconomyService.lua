@@ -237,24 +237,25 @@ function EconomyService.Init(playerDataModule, potionServiceModule)
 	PlayerData = playerDataModule
 	PotionService = potionServiceModule
 
+	-- SECURITY FIX: Wrap inventory-mutating handlers in per-player locks
 	SellRequest.OnServerEvent:Connect(function(player, streamerId)
-		handleSell(player, streamerId)
+		PlayerData.WithLock(player, function() handleSell(player, streamerId) end)
 	end)
 
 	SellByIndexRequest.OnServerEvent:Connect(function(player, inventoryIndex)
-		handleSellByIndex(player, inventoryIndex)
+		PlayerData.WithLock(player, function() handleSellByIndex(player, inventoryIndex) end)
 	end)
 
 	SellAllRequest.OnServerEvent:Connect(function(player)
-		handleSellAll(player)
+		PlayerData.WithLock(player, function() handleSellAll(player) end)
 	end)
 
 	UpgradeLuckRequest.OnServerEvent:Connect(function(player)
-		handleUpgradeLuck(player)
+		PlayerData.WithLock(player, function() handleUpgradeLuck(player) end)
 	end)
 
 	UpgradeCashRequest.OnServerEvent:Connect(function(player)
-		handleUpgradeCash(player)
+		PlayerData.WithLock(player, function() handleUpgradeCash(player) end)
 	end)
 
 	startPassiveIncome()

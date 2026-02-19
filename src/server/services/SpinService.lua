@@ -26,6 +26,10 @@ local PlayerData
 local BaseService
 local PotionService
 
+-- SECURITY FIX: Per-player spin cooldown to prevent spam/exploits
+local SPIN_COOLDOWN = 1 -- seconds
+local lastSpinTime = {} -- [userId] = os.clock()
+
 -------------------------------------------------
 -- RNG: TWO-PHASE RARITY-FIRST SYSTEM
 -- Phase 1: Roll a RARITY TIER (luck crushes Common, boosts Rare+)
@@ -156,6 +160,15 @@ end
 
 local function handleSpin(player)
 	if not PlayerData then return end
+	-- SECURITY FIX: Rate limit spins (~1s cooldown)
+	local now = os.clock()
+	local userId = player.UserId
+	if lastSpinTime[userId] and (now - lastSpinTime[userId]) < SPIN_COOLDOWN then
+		SpinResult:FireClient(player, { success = false, reason = "Too fast! Wait a moment." })
+		return
+	end
+	lastSpinTime[userId] = now
+
 	local data = PlayerData.Get(player)
 	if not data then return end
 
@@ -233,6 +246,21 @@ end
 
 local function handleCrateSpin(player, crateId: number)
 	if not PlayerData then return end
+	-- SECURITY FIX: Rate limit crate spins (~1s cooldown)
+	local now = os.clock()
+	local userId = player.UserId
+	if lastSpinTime[userId] and (now - lastSpinTime[userId]) < SPIN_COOLDOWN then
+		SpinResult:FireClient(player, { success = false, reason = "Too fast! Wait a moment." })
+		return
+	end
+	lastSpinTime[userId] = now
+
+	-- SECURITY FIX: Validate crateId type
+	if type(crateId) ~= "number" or crateId ~= math.floor(crateId) then
+		SpinResult:FireClient(player, { success = false, reason = "Invalid crate!" })
+		return
+	end
+
 	local data = PlayerData.Get(player)
 	if not data then return end
 
@@ -343,6 +371,12 @@ function SpinService.Init(playerDataModule, baseServiceModule, potionServiceModu
 
 	BuyCrateRequest.OnServerEvent:Connect(function(player, crateId: number)
 		handleCrateSpin(player, crateId)
+	end)
+
+	-- Cleanup cooldown tracking on leave
+	local Players = game:GetService("Players")
+	Players.PlayerRemoving:Connect(function(player)
+		lastSpinTime[player.UserId] = nil
 	end)
 end
 

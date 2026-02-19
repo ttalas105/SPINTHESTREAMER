@@ -63,7 +63,8 @@ function StoreService.Init(playerDataModule, spinServiceModule)
 	PlayerData = playerDataModule
 	SpinService = spinServiceModule
 
-	MarketplaceService.ProcessReceipt = processReceipt
+	-- SECURITY FIX: ProcessReceipt is now handled by ReceiptHandler.lua
+	-- Do NOT set MarketplaceService.ProcessReceipt here (only one callback allowed)
 end
 
 return StoreService

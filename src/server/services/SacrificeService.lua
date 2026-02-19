@@ -217,6 +217,11 @@ end
 -- GEM TRADE (repeatable)
 -------------------------------------------------
 local function handleGemTrade(player, tradeIndex)
+	-- SECURITY FIX: Validate input
+	if type(tradeIndex) ~= "number" or tradeIndex ~= math.floor(tradeIndex) then
+		SacrificeResult:FireClient(player, { success = false, reason = "Invalid trade." })
+		return
+	end
 	local trade = Sacrifice.GemTrades[tradeIndex]
 	if not trade then
 		SacrificeResult:FireClient(player, { success = false, reason = "Invalid trade." })
@@ -238,6 +243,11 @@ end
 -- ONE-TIME
 -------------------------------------------------
 local function handleOneTime(player, oneTimeId)
+	-- SECURITY FIX: Validate input
+	if type(oneTimeId) ~= "string" then
+		SacrificeResult:FireClient(player, { success = false, reason = "Invalid request." })
+		return
+	end
 	local cfg = Sacrifice.OneTime[oneTimeId]
 	if not cfg then
 		SacrificeResult:FireClient(player, { success = false, reason = "Unknown sacrifice." })
@@ -436,6 +446,11 @@ end
 -- ELEMENTAL (X of same effect+rarity → 1 random of that rarity+effect)
 -------------------------------------------------
 local function handleElemental(player, effect, rarity)
+	-- SECURITY FIX: Validate inputs
+	if type(effect) ~= "string" or type(rarity) ~= "string" then
+		SacrificeResult:FireClient(player, { success = false, reason = "Invalid request." })
+		return
+	end
 	local need = Sacrifice.ElementalRates[rarity]
 	if not need then
 		SacrificeResult:FireClient(player, { success = false, reason = "Mythic has no conversion." })
@@ -462,6 +477,11 @@ end
 -- REQUEST HANDLER
 -------------------------------------------------
 local function onSacrificeRequest(player, sacrificeType, ...)
+	-- SECURITY FIX: Validate sacrificeType is a string
+	if type(sacrificeType) ~= "string" then
+		SacrificeResult:FireClient(player, { success = false, reason = "Invalid request." })
+		return
+	end
 	if sacrificeType == "GemTrade" then
 		handleGemTrade(player, ...)
 	elseif sacrificeType == "OneTime" then
@@ -487,7 +507,10 @@ end
 function SacrificeService.Init(playerDataModule, potionServiceModule)
 	PlayerData = playerDataModule
 	PotionService = potionServiceModule
-	SacrificeRequest.OnServerEvent:Connect(onSacrificeRequest)
+	-- SECURITY FIX: Wrap sacrifice handler in per-player lock to prevent race conditions
+	SacrificeRequest.OnServerEvent:Connect(function(player, ...)
+		PlayerData.WithLock(player, function() onSacrificeRequest(player, ...) end)
+	end)
 end
 
 return SacrificeService

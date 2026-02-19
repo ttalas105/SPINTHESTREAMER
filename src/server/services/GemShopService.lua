@@ -137,8 +137,15 @@ local function handleBuyGemCase(player, caseId)
 		return
 	end
 
-	-- Add to inventory
-	PlayerData.AddToInventory(player, wonStreamerId, wonEffect)
+	-- Add to inventory; SECURITY FIX: rollback gems if inventory is full
+	local dest = PlayerData.AddToInventory(player, wonStreamerId, wonEffect)
+	if dest == "full" then
+		-- Rollback: restore gems since item couldn't be added
+		data.gems = data.gems + caseData.cost
+		PlayerData.Replicate(player)
+		GemCaseResult:FireClient(player, { success = false, reason = "Inventory and storage are full!" })
+		return
+	end
 	PlayerData.Replicate(player)
 
 	GemCaseResult:FireClient(player, {
@@ -158,8 +165,9 @@ end
 function GemShopService.Init(playerDataModule)
 	PlayerData = playerDataModule
 
+	-- SECURITY FIX: Wrap in per-player lock to prevent race conditions
 	BuyGemCase.OnServerEvent:Connect(function(player, caseId)
-		handleBuyGemCase(player, caseId)
+		PlayerData.WithLock(player, function() handleBuyGemCase(player, caseId) end)
 	end)
 end
 

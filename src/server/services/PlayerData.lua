@@ -17,6 +17,43 @@ local SlotsConfig = require(ReplicatedStorage.Shared.Config.SlotsConfig)
 local PlayerData = {}
 PlayerData._cache = {} -- userId -> data table
 
+-------------------------------------------------
+-- SECURITY FIX: Per-player operation mutex/queue
+-- Prevents race conditions when concurrent remote events
+-- mutate the same player's data simultaneously.
+-- Usage: PlayerData.WithLock(player, function() ... end)
+-------------------------------------------------
+local playerLocks = {} -- [userId] = {locked = bool, queue = {}}
+
+function PlayerData.WithLock(player, fn)
+	local userId = player.UserId
+	if not playerLocks[userId] then
+		playerLocks[userId] = { locked = false, queue = {} }
+	end
+	local lock = playerLocks[userId]
+
+	if lock.locked then
+		-- Queue this operation and yield until it's our turn
+		local co = coroutine.running()
+		table.insert(lock.queue, co)
+		coroutine.yield()
+	end
+
+	lock.locked = true
+	local ok, err = pcall(fn)
+	lock.locked = false
+
+	-- Resume next queued operation
+	if #lock.queue > 0 then
+		local next = table.remove(lock.queue, 1)
+		task.spawn(next)
+	end
+
+	if not ok then
+		warn("[PlayerData] WithLock error for " .. player.Name .. ": " .. tostring(err))
+	end
+end
+
 -- Capacity constants
 PlayerData.HOTBAR_MAX  = 9
 PlayerData.STORAGE_MAX = 200
@@ -78,6 +115,9 @@ local DEFAULT_DATA = {
 
 local RemoteEvents = ReplicatedStorage:WaitForChild("RemoteEvents")
 local PlayerDataUpdate = RemoteEvents:WaitForChild("PlayerDataUpdate")
+
+-- OPTIMIZATION: Track last replicated state per player for delta replication
+local lastReplicated = {} -- [userId] = {field = value, ...}
 
 -------------------------------------------------
 -- INTERNAL HELPERS
@@ -182,11 +222,9 @@ end
 -- REPLICATION
 -------------------------------------------------
 
-function PlayerData.Replicate(player)
-	local data = PlayerData._cache[player.UserId]
-	if not data then return end
-
-	local payload = {
+-- OPTIMIZATION: Build full payload (used for initial send and delta comparison)
+local function buildFullPayload(player, data)
+	return {
 		cash = data.cash,
 		gems = data.gems or 0,
 		inventory = data.inventory,
@@ -214,8 +252,52 @@ function PlayerData.Replicate(player)
 			},
 		},
 	}
+end
 
-	PlayerDataUpdate:FireClient(player, payload)
+-- OPTIMIZATION: Only send changed top-level fields (delta replication)
+-- Scalar fields use == comparison; tables always resend (cheap enough for correctness)
+local SCALAR_FIELDS = {
+	"cash", "gems", "rebirthCount", "luck", "cashUpgrade",
+	"premiumSlotUnlocked", "doubleCash", "spinCredits", "totalSlots",
+}
+local SCALAR_SET = {}
+for _, f in ipairs(SCALAR_FIELDS) do SCALAR_SET[f] = true end
+
+function PlayerData.Replicate(player)
+	local data = PlayerData._cache[player.UserId]
+	if not data then return end
+
+	local full = buildFullPayload(player, data)
+	local userId = player.UserId
+	local prev = lastReplicated[userId]
+
+	if not prev then
+		-- First replication: send everything
+		lastReplicated[userId] = full
+		PlayerDataUpdate:FireClient(player, full)
+		return
+	end
+
+	-- Build delta: only changed fields
+	local delta = {}
+	local hasChange = false
+	for key, val in pairs(full) do
+		if SCALAR_SET[key] then
+			if prev[key] ~= val then
+				delta[key] = val
+				hasChange = true
+			end
+		else
+			-- Table fields: always include (comparing tables is expensive and error-prone)
+			delta[key] = val
+			hasChange = true
+		end
+	end
+
+	if hasChange then
+		lastReplicated[userId] = full
+		PlayerDataUpdate:FireClient(player, delta)
+	end
 end
 
 -------------------------------------------------
@@ -232,6 +314,8 @@ function PlayerData.Init()
 	Players.PlayerRemoving:Connect(function(player)
 		saveData(player)
 		PlayerData._cache[player.UserId] = nil
+		playerLocks[player.UserId] = nil
+		lastReplicated[player.UserId] = nil
 	end)
 
 	-- Auto-save every 120 seconds
@@ -510,7 +594,7 @@ function PlayerData.UseSacrificeCharge(player, key: string, rechargeSeconds: num
 	if not data.sacrificeCharges then data.sacrificeCharges = {} end
 	local slots = data.sacrificeCharges[key]
 	if not slots then slots = {}; data.sacrificeCharges[key] = slots end
-	local now = os.clock()
+	local now = os.time()
 	local limit = maxSlots or 3
 	for i = 1, limit do
 		if not slots[i] or slots[i] <= now then
@@ -525,7 +609,7 @@ end
 --- Get current charge count (filled slots that are recharged)
 function PlayerData.GetSacrificeChargeCount(player, key: string, maxCharges: number, rechargeSeconds: number): number
 	local slots = PlayerData.GetSacrificeChargesRaw(player, key)
-	local now = os.clock()
+	local now = os.time()
 	local count = 0
 	for i = 1, maxCharges do
 		if slots[i] and slots[i] <= now then count = count + 1 end
@@ -536,7 +620,7 @@ end
 --- Get next recharge time (when the next used slot will refill)
 function PlayerData.GetSacrificeNextRechargeAt(player, key: string, maxCharges: number): number?
 	local slots = PlayerData.GetSacrificeChargesRaw(player, key)
-	local now = os.clock()
+	local now = os.time()
 	local nextAt = nil
 	for i = 1, maxCharges do
 		if slots[i] and slots[i] > now then
