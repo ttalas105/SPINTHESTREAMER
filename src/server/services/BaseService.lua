@@ -596,7 +596,7 @@ function BaseService.UpdateBasePads(player)
 					if not touchPlayer or touchPlayer.UserId ~= player.UserId then return end
 					BaseService._collectKeysForPad(touchPlayer, idx)
 				end)
-			end
+			end (feat: add billboard displays above base pads showing streamer name, rarity color, and effect prefix)
 		end
 	end
 end
