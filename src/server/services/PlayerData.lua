@@ -635,12 +635,12 @@ end
 -------------------------------------------------
 
 --- Equip a streamer from inventory to a pad slot
-function PlayerData.EquipToPad(player, streamerId: string, padSlot: number): boolean
+function PlayerData.EquipToPad(player, streamerId: string, padSlot: number, ignoreUnlockCheck: boolean?): boolean
 	local data = PlayerData.Get(player)
 	if not data then return false end
 
 	-- Check slot is unlocked
-	if not SlotsConfig.IsSlotUnlocked(data.rebirthCount or 0, data.premiumSlotUnlocked == true, padSlot) then
+	if not ignoreUnlockCheck and not SlotsConfig.IsSlotUnlocked(data.rebirthCount or 0, data.premiumSlotUnlocked == true, padSlot) then
 		return false
 	end
 

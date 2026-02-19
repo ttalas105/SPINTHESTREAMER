@@ -14,7 +14,6 @@ local wiredPrompts = {}
 local wiredGreenParts = {}
 local myBasePosition = nil
 local cachedTouchSound = nil
-local hasDisplayedStreamer = false
 
 local function getTouchSound()
 	if cachedTouchSound and cachedTouchSound.Parent then
@@ -40,11 +39,12 @@ local function wirePrompt(prompt)
 	if wiredPrompts[prompt] then return end
 	wiredPrompts[prompt] = true
 	prompt.Triggered:Connect(function()
+		local padSlot = tonumber(prompt:GetAttribute("PadSlot")) or 1
 		local heldId, heldEffect = nil, nil
 		if HoldController and HoldController.IsHolding() then
 			heldId, heldEffect = HoldController.GetHeld()
 		end
-		DisplayInteract:FireServer(1, heldId, heldEffect)
+		DisplayInteract:FireServer(padSlot, heldId, heldEffect)
 	end)
 end
 
@@ -128,11 +128,7 @@ function SlotPadController.SetBasePosition(pos)
 end
 
 function SlotPadController.Refresh(_data)
-	if _data and _data.equippedPads then
-		hasDisplayedStreamer = _data.equippedPads["1"] ~= nil
-	else
-		hasDisplayedStreamer = false
-	end
+	-- Display state is tracked per-slot on the server.
 end
 
 return SlotPadController

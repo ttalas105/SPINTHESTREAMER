@@ -1,9 +1,9 @@
 --[[
 	BaseService.lua
-	Single-slot interaction on existing base geometry:
-	- Use one existing green box + one existing grey slot from each assigned base model.
-	- Prompt appears above green box to place/remove held streamer.
-	- Placed streamer sits centered on grey slot and faces the green box.
+	Multi-display interaction on existing base geometry:
+	- Uses all green/grey display pairs found in each assigned base model.
+	- Each display gets its own prompt, model placement, and money counter.
+	- Opposite side slot ordering is mirrored so numbering/model direction flips.
 ]]
 
 local Players = game:GetService("Players")
@@ -11,6 +11,7 @@ local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local DesignConfig = require(ReplicatedStorage.Shared.Config.DesignConfig)
+local SlotsConfig = require(ReplicatedStorage.Shared.Config.SlotsConfig)
 local Streamers = require(ReplicatedStorage.Shared.Config.Streamers)
 local Effects = require(ReplicatedStorage.Shared.Config.Effects)
 
@@ -22,16 +23,17 @@ local UnequipResult = RemoteEvents:WaitForChild("UnequipResult")
 
 local BaseService = {}
 
-BaseService._bases = {}          -- userId -> { position, slotIndex, baseModel, greenPart, greyPart, prompt }
-BaseService._occupiedSlots = {}  -- set of occupied slot indices
-BaseService._displayModels = {}  -- userId -> Model (single slot only)
-BaseService._pendingMoney = {}   -- userId -> accumulated display money
-BaseService._collectDebounce = {} -- userId -> bool
-BaseService._nextMoneyTickAt = {} -- userId -> os.clock timestamp
+BaseService._bases = {} -- userId -> { position, slotIndex, baseModel, displays = { [padSlot] = displayInfo } }
+BaseService._occupiedSlots = {} -- set of occupied slot indices
+BaseService._displayModels = {} -- userId -> { [padSlot] = Model }
+BaseService._pendingMoney = {} -- userId -> { [padSlot] = number }
+BaseService._collectDebounce = {} -- userId -> { [padSlot] = bool }
+BaseService._nextMoneyTickAt = {} -- userId -> { [padSlot] = os.clock timestamp }
 
 local BASE_POSITIONS = DesignConfig.BasePositions
 local PlayerData
 local DISPLAY_SCALE_MULT = 1.15
+local MAX_BASE_DISPLAYS = SlotsConfig.MaxTotalSlots
 
 local function formatNumber(n)
 	local s = tostring(math.floor(n))
@@ -51,6 +53,15 @@ local function color3ToHex(c: Color3): string
 	local g = math.clamp(math.floor(c.G * 255 + 0.5), 0, 255)
 	local b = math.clamp(math.floor(c.B * 255 + 0.5), 0, 255)
 	return string.format("#%02X%02X%02X", r, g, b)
+end
+
+local function getNestedTable(bucket, userId)
+	local t = bucket[userId]
+	if not t then
+		t = {}
+		bucket[userId] = t
+	end
+	return t
 end
 
 local function addDisplayBillboard(model: Model, adornee: BasePart, streamerItem)
@@ -100,13 +111,15 @@ local function addDisplayBillboard(model: Model, adornee: BasePart, streamerItem
 	stroke.Parent = label
 end
 
-local function ensureMoneyGui(baseInfo)
-	if not baseInfo or not baseInfo.greenPart then return nil end
-	local green = baseInfo.greenPart
+local function ensureMoneyGui(displayInfo)
+	if not displayInfo or not displayInfo.greenPart then return nil end
+	local green = displayInfo.greenPart
+	local labelRotation = displayInfo.isOppositeSide and 180 or 0
 	local gui = green:FindFirstChild("MoneyCounterGui")
 	if gui and gui:IsA("SurfaceGui") then
 		local label = gui:FindFirstChild("MoneyLabel")
 		if label and label:IsA("TextLabel") then
+			label.Rotation = labelRotation
 			return label
 		end
 		gui:Destroy()
@@ -130,6 +143,7 @@ local function ensureMoneyGui(baseInfo)
 	label.TextColor3 = Color3.fromRGB(255, 255, 255)
 	label.Visible = false
 	label.Text = ""
+	label.Rotation = labelRotation
 	label.Parent = gui
 
 	local stroke = Instance.new("UIStroke")
@@ -142,44 +156,56 @@ end
 
 local updateMoneyText
 
-local function tryCollectMoney(player: Player)
+local function tryCollectMoney(player: Player, padSlot: number)
+	local key = tostring(padSlot)
 	local data = PlayerData and PlayerData.Get(player)
 	if not data then return end
-	local equipped = data.equippedPads and data.equippedPads["1"]
+	local equipped = data.equippedPads and data.equippedPads[key]
 	if not equipped then return end
 
 	local userId = player.UserId
-	if BaseService._collectDebounce[userId] then return end
-	BaseService._collectDebounce[userId] = true
+	local debounceBySlot = getNestedTable(BaseService._collectDebounce, userId)
+	if debounceBySlot[padSlot] then return end
+	debounceBySlot[padSlot] = true
 
-	local amount = BaseService._pendingMoney[userId] or 0
+	local pendingBySlot = getNestedTable(BaseService._pendingMoney, userId)
+	local amount = pendingBySlot[padSlot] or 0
 	if amount > 0 then
-		local collected = math.floor(amount)
-		BaseService._pendingMoney[userId] = 0
-		PlayerData.AddCash(player, collected)
-		-- Restart income timer from now so next increment is a full second away.
-		BaseService._nextMoneyTickAt[userId] = os.clock() + 1
-		updateMoneyText(player)
+		PlayerData.AddCash(player, math.floor(amount))
+		pendingBySlot[padSlot] = 0
+		-- Restart this slot's income timer from now.
+		local nextBySlot = getNestedTable(BaseService._nextMoneyTickAt, userId)
+		nextBySlot[padSlot] = os.clock() + 1
+		updateMoneyText(player, padSlot)
 	end
 
 	task.delay(0.25, function()
-		BaseService._collectDebounce[userId] = nil
+		local slotDebounce = BaseService._collectDebounce[userId]
+		if slotDebounce then
+			slotDebounce[padSlot] = nil
+		end
 	end)
 end
 
-updateMoneyText = function(player: Player)
+updateMoneyText = function(player: Player, padSlot: number)
 	local baseInfo = BaseService._bases[player.UserId]
 	if not baseInfo then return end
-	local label = ensureMoneyGui(baseInfo)
+	local displayInfo = baseInfo.displays and baseInfo.displays[padSlot]
+	if not displayInfo then return end
+
+	local label = ensureMoneyGui(displayInfo)
 	if not label then return end
+
 	local data = PlayerData and PlayerData.Get(player)
-	local hasPlaced = data and data.equippedPads and data.equippedPads["1"] ~= nil
+	local hasPlaced = data and data.equippedPads and data.equippedPads[tostring(padSlot)] ~= nil
 	if not hasPlaced then
 		label.Visible = false
 		label.Text = ""
 		return
 	end
-	local amount = BaseService._pendingMoney[player.UserId] or 0
+
+	local pendingBySlot = BaseService._pendingMoney[player.UserId]
+	local amount = pendingBySlot and pendingBySlot[padSlot] or 0
 	label.Visible = true
 	label.Text = "$" .. formatNumber(amount)
 end
@@ -207,7 +233,61 @@ local function isGreyCandidate(part: BasePart): boolean
 	return nearGrey and part.Size.X >= 2 and part.Size.Z >= 2 and part.Material ~= Enum.Material.Neon
 end
 
-local function findBestSlotParts(baseModel: Model): (BasePart?, BasePart?)
+local function getMajorMinor(majorOnX: boolean, position: Vector3): (number, number)
+	local major = majorOnX and position.X or position.Z
+	local minor = majorOnX and position.Z or position.X
+	return major, minor
+end
+
+local function nearestGrey(green: BasePart, greys: { BasePart }, used: { [BasePart]: boolean }): BasePart?
+	local bestGrey = nil
+	local bestDist = math.huge
+	for _, grey in ipairs(greys) do
+		if not used[grey] then
+			local d = (green.Position - grey.Position).Magnitude
+			if d < bestDist then
+				bestDist = d
+				bestGrey = grey
+			end
+		end
+	end
+	return bestGrey
+end
+
+local function nearestGreyExcluding(
+	green: BasePart,
+	greys: { BasePart },
+	used: { [BasePart]: boolean },
+	blockedGrey: BasePart?
+): BasePart?
+	local bestGrey = nil
+	local bestDist = math.huge
+	for _, grey in ipairs(greys) do
+		if grey ~= blockedGrey and not used[grey] then
+			local d = (green.Position - grey.Position).Magnitude
+			if d < bestDist then
+				bestDist = d
+				bestGrey = grey
+			end
+		end
+	end
+	return bestGrey
+end
+
+local function nearestGreyAny(green: BasePart, greys: { BasePart }): BasePart?
+	local bestGrey = nil
+	local bestDist = math.huge
+	for _, grey in ipairs(greys) do
+		local d = (green.Position - grey.Position).Magnitude
+		if d < bestDist then
+			bestDist = d
+			bestGrey = grey
+		end
+	end
+	return bestGrey
+end
+
+local function buildDisplayPairs(baseModel: Model): { [number]: { padSlot: number, greenPart: BasePart, greyPart: BasePart, prompt: ProximityPrompt? } }
 	local greenParts = {}
 	local greyParts = {}
 	for _, d in ipairs(baseModel:GetDescendants()) do
@@ -220,11 +300,9 @@ local function findBestSlotParts(baseModel: Model): (BasePart?, BasePart?)
 		end
 	end
 	if #greenParts == 0 or #greyParts == 0 then
-		return nil, nil
+		return {}
 	end
 
-	-- Pick the "first" green box deterministically (one end of the row),
-	-- then pair it with the closest grey slot.
 	local minX, maxX = math.huge, -math.huge
 	local minZ, maxZ = math.huge, -math.huge
 	for _, g in ipairs(greenParts) do
@@ -233,28 +311,149 @@ local function findBestSlotParts(baseModel: Model): (BasePart?, BasePart?)
 		minZ = math.min(minZ, g.Position.Z)
 		maxZ = math.max(maxZ, g.Position.Z)
 	end
-	local useX = (maxX - minX) >= (maxZ - minZ)
-	table.sort(greenParts, function(a, b)
-		local av = useX and a.Position.X or a.Position.Z
-		local bv = useX and b.Position.X or b.Position.Z
-		if math.abs(av - bv) < 0.001 then
+	local majorOnX = (maxX - minX) >= (maxZ - minZ)
+
+	local sortedGreens = table.clone(greenParts)
+	table.sort(sortedGreens, function(a, b)
+		local aMajor, aMinor = getMajorMinor(majorOnX, a.Position)
+		local bMajor, bMinor = getMajorMinor(majorOnX, b.Position)
+		if math.abs(aMinor - bMinor) > 0.001 then
+			return aMinor < bMinor
+		end
+		if math.abs(aMajor - bMajor) < 0.001 then
 			return a.Name < b.Name
 		end
-		return av < bv
+		return aMajor < bMajor
 	end)
 
-	-- Use opposite end of the row from previous selection.
-	local chosenGreen = greenParts[#greenParts]
-	local bestGrey = nil
-	local bestDist = math.huge
-	for _, s in ipairs(greyParts) do
-		local d = (chosenGreen.Position - s.Position).Magnitude
-		if d < bestDist then
-			bestDist = d
-			bestGrey = s
+	-- Split into near/far sides by median on the minor axis.
+	local medianMinor = 0
+	do
+		local mids = {}
+		for _, g in ipairs(sortedGreens) do
+			local _, minor = getMajorMinor(majorOnX, g.Position)
+			table.insert(mids, minor)
+		end
+		table.sort(mids)
+		medianMinor = mids[math.ceil(#mids / 2)] or 0
+	end
+
+	local nearSide = {}
+	local farSide = {}
+	for _, g in ipairs(sortedGreens) do
+		local _, minor = getMajorMinor(majorOnX, g.Position)
+		if minor <= medianMinor then
+			table.insert(nearSide, g)
+		else
+			table.insert(farSide, g)
 		end
 	end
-	return chosenGreen, bestGrey
+	if #nearSide == 0 then
+		nearSide, farSide = farSide, nearSide
+	end
+
+	local function sortByMajor(list)
+		table.sort(list, function(a, b)
+			local aMajor = getMajorMinor(majorOnX, a.Position)
+			local bMajor = getMajorMinor(majorOnX, b.Position)
+			if math.abs(aMajor - bMajor) < 0.001 then
+				return a.Name < b.Name
+			end
+			return aMajor < bMajor
+		end)
+	end
+	sortByMajor(nearSide)
+	sortByMajor(farSide)
+
+	local nearGreys = {}
+	local farGreys = {}
+	for _, grey in ipairs(greyParts) do
+		local _, minor = getMajorMinor(majorOnX, grey.Position)
+		if minor <= medianMinor then
+			table.insert(nearGreys, grey)
+		else
+			table.insert(farGreys, grey)
+		end
+	end
+	sortByMajor(nearGreys)
+	sortByMajor(farGreys)
+
+	local usedGreys = {}
+	local pairs = {}
+	local slotCounter = 1
+
+	local function assignSide(sideGreens, sideGreys, reverseOrder, isOppositeSide)
+		local greensOrdered = {}
+		local greysOrdered = {}
+		if reverseOrder then
+			for i = #sideGreens, 1, -1 do
+				table.insert(greensOrdered, sideGreens[i])
+			end
+			for i = #sideGreys, 1, -1 do
+				table.insert(greysOrdered, sideGreys[i])
+			end
+		else
+			greensOrdered = table.clone(sideGreens)
+			greysOrdered = table.clone(sideGreys)
+		end
+
+		-- Reserve the middle grey on this side so adjacent slots do not consume it.
+		local reservedMiddleGrey = greysOrdered[3]
+
+		for idx, green in ipairs(greensOrdered) do
+			local grey = nil
+			-- Middle slot per side: force exact side-middle mapping first.
+			if idx == 3 then
+				if reservedMiddleGrey and not usedGreys[reservedMiddleGrey] then
+					grey = reservedMiddleGrey
+				end
+			else
+				grey = nearestGreyExcluding(green, sideGreys, usedGreys, reservedMiddleGrey)
+			end
+			if not grey then
+				grey = nearestGrey(green, sideGreys, usedGreys)
+			end
+			if not grey then
+				grey = nearestGrey(green, greyParts, usedGreys)
+			end
+			if not grey then
+				grey = nearestGreyAny(green, greyParts)
+			end
+			if grey then
+				usedGreys[grey] = true
+				pairs[slotCounter] = {
+					padSlot = slotCounter,
+					greenPart = green,
+					greyPart = grey,
+					isOppositeSide = isOppositeSide == true,
+					prompt = nil,
+				}
+				slotCounter += 1
+				if slotCounter > MAX_BASE_DISPLAYS then
+					return
+				end
+			end
+		end
+	end
+
+	assignSide(nearSide, nearGreys, false, true)
+	assignSide(farSide, farGreys, true, false) -- Mirror ordering on opposite side.
+	return pairs
+end
+
+local function findNearestGreyForGreenInModel(baseModel: Model, greenPart: BasePart): BasePart?
+	local bestGrey = nil
+	local bestDist = math.huge
+	for _, d in ipairs(baseModel:GetDescendants()) do
+		if d:IsA("BasePart") and isGreyCandidate(d) then
+			local dist = (d.Position - greenPart.Position).Magnitude
+			if dist < bestDist then
+				bestDist = dist
+				bestGrey = d
+			end
+		end
+	end
+	return bestGrey
 end
 
 local function cleanDisplayModel(model: Model)
@@ -293,17 +492,27 @@ local function cleanDisplayModel(model: Model)
 	end
 end
 
-local function clearPlacedModel(player: Player)
-	local existing = BaseService._displayModels[player.UserId]
-	if existing then
+local function clearPlacedModel(player: Player, padSlot: number?)
+	local bySlot = BaseService._displayModels[player.UserId]
+	if not bySlot then return end
+	if padSlot then
+		local existing = bySlot[padSlot]
+		if existing then
+			pcall(function() existing:Destroy() end)
+			bySlot[padSlot] = nil
+		end
+		return
+	end
+	for slot, existing in pairs(bySlot) do
 		pcall(function() existing:Destroy() end)
-		BaseService._displayModels[player.UserId] = nil
+		bySlot[slot] = nil
 	end
 end
 
-local function placeOnGreySlot(player: Player, streamerItem): boolean
+local function placeOnGreySlot(player: Player, padSlot: number, streamerItem): boolean
 	local baseInfo = BaseService._bases[player.UserId]
-	if not baseInfo or not baseInfo.greyPart or not baseInfo.greenPart then return false end
+	local displayInfo = baseInfo and baseInfo.displays and baseInfo.displays[padSlot]
+	if not displayInfo or not displayInfo.greyPart or not displayInfo.greenPart then return false end
 
 	local streamerId = type(streamerItem) == "table" and streamerItem.id or streamerItem
 	local modelsFolder = ReplicatedStorage:FindFirstChild("StreamerModels")
@@ -311,10 +520,10 @@ local function placeOnGreySlot(player: Player, streamerItem): boolean
 	local template = modelsFolder:FindFirstChild(streamerId)
 	if not template then return false end
 
-	clearPlacedModel(player)
+	clearPlacedModel(player, padSlot)
 
 	local clone = template:Clone()
-	clone.Name = "SingleSlotDisplay"
+	clone.Name = "DisplaySlot_" .. tostring(padSlot)
 	cleanDisplayModel(clone)
 
 	local primary = clone.PrimaryPart or clone:FindFirstChildWhichIsA("BasePart")
@@ -324,7 +533,6 @@ local function placeOnGreySlot(player: Player, streamerItem): boolean
 	end
 	clone.PrimaryPart = primary
 
-	-- Slight display-only upscale for all streamers.
 	local ok, _, size = pcall(function() return clone:GetBoundingBox() end)
 	if ok and size and size.Y > 0 then
 		clone:ScaleTo(DISPLAY_SCALE_MULT)
@@ -341,9 +549,15 @@ local function placeOnGreySlot(player: Player, streamerItem): boolean
 		end
 	end
 
-	local grey = baseInfo.greyPart
-	local green = baseInfo.greenPart
-	-- Keep character upright: face the green box on the horizontal plane only.
+	local grey = displayInfo.greyPart
+	-- Middle slots (3 and 8): resolve nearest grey at placement-time to avoid side pairing drift.
+	if (padSlot == 3 or padSlot == 8) and baseInfo.baseModel then
+		local runtimeGrey = findNearestGreyForGreenInModel(baseInfo.baseModel, displayInfo.greenPart)
+		if runtimeGrey then
+			grey = runtimeGrey
+		end
+	end
+	local green = displayInfo.greenPart
 	local flatTarget = Vector3.new(green.Position.X, grey.Position.Y, green.Position.Z)
 	if (flatTarget - grey.Position).Magnitude < 0.05 then
 		flatTarget = grey.Position + Vector3.new(0, 0, -1)
@@ -351,7 +565,6 @@ local function placeOnGreySlot(player: Player, streamerItem): boolean
 	local faceCF = CFrame.lookAt(grey.Position, flatTarget)
 	clone:PivotTo(faceCF)
 
-	-- Lock X/Z by root position so accessories/mesh bounds do not shift slot placement.
 	if rootPart then
 		local rootPos = rootPart.Position
 		local xzDelta = Vector3.new(grey.Position.X - rootPos.X, 0, grey.Position.Z - rootPos.Z)
@@ -361,19 +574,16 @@ local function placeOnGreySlot(player: Player, streamerItem): boolean
 	local padTopY = grey.Position.Y + (grey.Size.Y / 2)
 	local hum = clone:FindFirstChildOfClass("Humanoid")
 	if hum and rootPart then
-		-- Ground by humanoid foot plane so accessories/outfits do not cause floating.
 		local feetY = rootPart.Position.Y - (rootPart.Size.Y * 0.5 + hum.HipHeight)
 		local yLift = padTopY - feetY + 0.03
 		clone:PivotTo(clone:GetPivot() + Vector3.new(0, yLift, 0))
 	else
-		-- Fallback for non-humanoid models.
 		local boxCF, boxSize = clone:GetBoundingBox()
 		local bottomY = boxCF.Position.Y - (boxSize.Y / 2)
 		local yLift = padTopY - bottomY + 0.03
 		clone:PivotTo(clone:GetPivot() + Vector3.new(0, yLift, 0))
 	end
 
-	-- Streamer-specific correction: Cinna rig can sink; clamp by actual bounds bottom.
 	if streamerId == "Cinna" then
 		local cinnaCF, cinnaSize = clone:GetBoundingBox()
 		local cinnaBottom = cinnaCF.Position.Y - (cinnaSize.Y / 2)
@@ -383,55 +593,72 @@ local function placeOnGreySlot(player: Player, streamerItem): boolean
 		end
 	end
 
+	-- Middle slots can have asymmetric rigs; force exact X/Z center on pad.
+	if padSlot == 3 or padSlot == 8 then
+		local boxCF = clone:GetBoundingBox()
+		local xzDelta = Vector3.new(grey.Position.X - boxCF.Position.X, 0, grey.Position.Z - boxCF.Position.Z)
+		clone:PivotTo(clone:GetPivot() + xzDelta)
+	end
+
 	local parent = baseInfo.baseModel or Workspace
 	clone.Parent = parent
 	if rootPart then
 		addDisplayBillboard(clone, rootPart, streamerItem)
 	end
-	BaseService._displayModels[player.UserId] = clone
+	getNestedTable(BaseService._displayModels, player.UserId)[padSlot] = clone
 	return true
 end
 
-local function updatePromptText(player: Player)
+local function updatePromptText(player: Player, padSlot: number)
 	local baseInfo = BaseService._bases[player.UserId]
-	if not baseInfo or not baseInfo.prompt then return end
+	local displayInfo = baseInfo and baseInfo.displays and baseInfo.displays[padSlot]
+	if not displayInfo or not displayInfo.prompt then return end
 	local data = PlayerData and PlayerData.Get(player)
-	local hasPlaced = data and data.equippedPads and data.equippedPads["1"] ~= nil
-	baseInfo.prompt.ActionText = hasPlaced and "Remove Streamer" or "Place Streamer"
-	baseInfo.prompt.ObjectText = "Base Slot"
+	local hasPlaced = data and data.equippedPads and data.equippedPads[tostring(padSlot)] ~= nil
+	displayInfo.prompt.ActionText = hasPlaced and "Remove Streamer" or "Place Streamer"
+	displayInfo.prompt.ObjectText = "Base Slot " .. tostring(padSlot)
 end
 
-local function bindCollectTouch(baseInfo, player: Player)
-	if not baseInfo or not baseInfo.greenPart then return end
-	baseInfo.greenPart.Touched:Connect(function(hit)
+local function bindCollectTouch(displayInfo, player: Player)
+	if not displayInfo or not displayInfo.greenPart then return end
+	local padSlot = displayInfo.padSlot
+	displayInfo.greenPart.Touched:Connect(function(hit)
 		local char = hit.Parent
 		if not char then return end
 		local hum = char:FindFirstChildOfClass("Humanoid")
 		if not hum then return end
 		local touchPlayer = Players:GetPlayerFromCharacter(char)
 		if not touchPlayer or touchPlayer.UserId ~= player.UserId then return end
-		tryCollectMoney(touchPlayer)
+		tryCollectMoney(touchPlayer, padSlot)
 	end)
 end
 
-local function bindPrompt(baseInfo, player: Player)
-	if not baseInfo.greyPart then return end
-	local promptAttachment = Instance.new("Attachment")
-	promptAttachment.Name = "DisplayPromptAttachment"
-	promptAttachment.Position = Vector3.new(0, 4.5, 0)
-	promptAttachment.Parent = baseInfo.greyPart
+local function bindPrompt(displayInfo, player: Player)
+	if not displayInfo.greenPart then return end
+	local promptAnchor = Instance.new("Part")
+	promptAnchor.Name = "DisplayPromptAnchor_" .. tostring(displayInfo.padSlot)
+	promptAnchor.Size = Vector3.new(0.4, 0.4, 0.4)
+	promptAnchor.Transparency = 1
+	promptAnchor.Anchored = true
+	promptAnchor.CanCollide = false
+	promptAnchor.CanTouch = false
+	promptAnchor.CanQuery = false
+	promptAnchor.CFrame = CFrame.new(displayInfo.greenPart.Position + Vector3.new(0, 4.5, 0))
+	promptAnchor.Parent = displayInfo.greenPart.Parent
+	displayInfo.promptAnchor = promptAnchor
 
 	local prompt = Instance.new("ProximityPrompt")
 	prompt.Name = "BaseSingleSlotPrompt"
+	prompt:SetAttribute("PadSlot", displayInfo.padSlot)
 	prompt.KeyboardKeyCode = Enum.KeyCode.E
 	prompt.HoldDuration = 0
 	prompt.MaxActivationDistance = 10
 	prompt.RequiresLineOfSight = false
-	prompt.Parent = promptAttachment
-	baseInfo.prompt = prompt
-	updatePromptText(player)
-	updateMoneyText(player)
-	bindCollectTouch(baseInfo, player)
+	prompt.Parent = promptAnchor
+	displayInfo.prompt = prompt
+	updatePromptText(player, displayInfo.padSlot)
+	updateMoneyText(player, displayInfo.padSlot)
+	bindCollectTouch(displayInfo, player)
 end
 
 local function assignBase(player)
@@ -445,23 +672,30 @@ local function assignBase(player)
 	local slotInfo = BASE_POSITIONS[slot]
 	local playerBasesFolder = Workspace:FindFirstChild("PlayerBases")
 	local baseModel = playerBasesFolder and playerBasesFolder:FindFirstChild("BaseSlot_" .. slot)
-	local greenPart, greyPart = nil, nil
+	local displays = {}
 	if baseModel and baseModel:IsA("Model") then
-		greenPart, greyPart = findBestSlotParts(baseModel)
+		displays = buildDisplayPairs(baseModel)
 	end
+
 	BaseService._bases[player.UserId] = {
 		position = slotInfo.position,
 		slotIndex = slot,
 		baseModel = baseModel,
-		greenPart = greenPart,
-		greyPart = greyPart,
-		prompt = nil,
+		displays = displays,
 	}
-	BaseService._pendingMoney[player.UserId] = 0
-	if greenPart and greyPart then
-		bindPrompt(BaseService._bases[player.UserId], player)
+	BaseService._pendingMoney[player.UserId] = {}
+	BaseService._nextMoneyTickAt[player.UserId] = {}
+	BaseService._displayModels[player.UserId] = {}
+	BaseService._collectDebounce[player.UserId] = {}
+
+	if next(displays) ~= nil then
+		for padSlot, displayInfo in pairs(displays) do
+			bindPrompt(displayInfo, player)
+			updatePromptText(player, padSlot)
+			updateMoneyText(player, padSlot)
+		end
 	else
-		warn("[BaseService] Could not find green/grey slot parts in BaseSlot_" .. tostring(slot))
+		warn("[BaseService] Could not find green/grey display pairs in BaseSlot_" .. tostring(slot))
 	end
 
 	BaseReady:FireClient(player, {
@@ -479,19 +713,27 @@ function BaseService.Init(playerDataModule, _potionServiceModule)
 	end)
 
 	Players.PlayerRemoving:Connect(function(player)
-		local baseInfo = BaseService._bases[player.UserId]
+		local userId = player.UserId
+		local baseInfo = BaseService._bases[userId]
 		if baseInfo then
 			clearPlacedModel(player)
-			if baseInfo.prompt then
-				pcall(function() baseInfo.prompt:Destroy() end)
+			for _, displayInfo in pairs(baseInfo.displays or {}) do
+				if displayInfo.prompt then
+					pcall(function() displayInfo.prompt:Destroy() end)
+				end
+				if displayInfo.promptAnchor then
+					pcall(function() displayInfo.promptAnchor:Destroy() end)
+				end
 			end
 			BaseService._occupiedSlots[baseInfo.slotIndex] = nil
-			BaseService._bases[player.UserId] = nil
+			BaseService._bases[userId] = nil
 		end
-		BaseService._pendingMoney[player.UserId] = nil
+		BaseService._pendingMoney[userId] = nil
+		BaseService._nextMoneyTickAt[userId] = nil
+		BaseService._displayModels[userId] = nil
+		BaseService._collectDebounce[userId] = nil
 	end)
 
-	-- Handle already-connected players
 	for _, player in ipairs(Players:GetPlayers()) do
 		if not BaseService._bases[player.UserId] then
 			task.spawn(function()
@@ -500,30 +742,36 @@ function BaseService.Init(playerDataModule, _potionServiceModule)
 		end
 	end
 
-	DisplayInteract.OnServerEvent:Connect(function(player, _padSlot, heldStreamerId, _heldEffect)
+	DisplayInteract.OnServerEvent:Connect(function(player, padSlot, heldStreamerId, _heldEffect)
+		local slot = tonumber(padSlot)
+		if not slot or slot < 1 then return end
+
 		local data = PlayerData and PlayerData.Get(player)
 		local baseInfo = BaseService._bases[player.UserId]
-		if not data or not baseInfo then return end
-		if not baseInfo.greenPart or not baseInfo.greyPart then return end
+		local displayInfo = baseInfo and baseInfo.displays and baseInfo.displays[slot]
+		if not data or not baseInfo or not displayInfo then return end
+		if not displayInfo.greenPart or not displayInfo.greyPart then return end
 
-		local equipped = data.equippedPads["1"]
+		local key = tostring(slot)
+		local equipped = data.equippedPads[key]
 		if equipped then
 			local streamerId = type(equipped) == "table" and equipped.id or equipped
 			local effect = type(equipped) == "table" and equipped.effect or nil
-			local pending = BaseService._pendingMoney[player.UserId] or 0
-			local ok = PlayerData.UnequipFromPad(player, 1)
+			local pendingBySlot = getNestedTable(BaseService._pendingMoney, player.UserId)
+			local pending = pendingBySlot[slot] or 0
+			local ok = PlayerData.UnequipFromPad(player, slot)
 			if ok then
 				if pending > 0 then
 					PlayerData.AddCash(player, math.floor(pending))
 				end
-				clearPlacedModel(player)
-				BaseService._pendingMoney[player.UserId] = 0
-				BaseService._nextMoneyTickAt[player.UserId] = nil
-				updateMoneyText(player)
-				updatePromptText(player)
+				clearPlacedModel(player, slot)
+				pendingBySlot[slot] = 0
+				getNestedTable(BaseService._nextMoneyTickAt, player.UserId)[slot] = nil
+				updateMoneyText(player, slot)
+				updatePromptText(player, slot)
 				UnequipResult:FireClient(player, {
 					success = true,
-					padSlot = 1,
+					padSlot = slot,
 					streamerId = streamerId,
 					effect = effect,
 				})
@@ -535,17 +783,19 @@ function BaseService.Init(playerDataModule, _potionServiceModule)
 			return
 		end
 
-		local ok = PlayerData.EquipToPad(player, heldStreamerId, 1)
+		-- Rebirth gating intentionally bypassed for base displays (all addable for now).
+		local ok = PlayerData.EquipToPad(player, heldStreamerId, slot, true)
 		if ok then
-			local item = data.equippedPads["1"]
-			if placeOnGreySlot(player, item) then
-				BaseService._pendingMoney[player.UserId] = 0
-				BaseService._nextMoneyTickAt[player.UserId] = os.clock() + 1
-				updateMoneyText(player)
-				updatePromptText(player)
+			local item = data.equippedPads[key]
+			if placeOnGreySlot(player, slot, item) then
+				local pendingBySlot = getNestedTable(BaseService._pendingMoney, player.UserId)
+				pendingBySlot[slot] = 0
+				getNestedTable(BaseService._nextMoneyTickAt, player.UserId)[slot] = os.clock() + 1
+				updateMoneyText(player, slot)
+				updatePromptText(player, slot)
 				EquipResult:FireClient(player, {
 					success = true,
-					padSlot = 1,
+					padSlot = slot,
 					streamerId = heldStreamerId,
 				})
 			end
@@ -560,37 +810,43 @@ function BaseService.Init(playerDataModule, _potionServiceModule)
 			local now = os.clock()
 			for _, player in ipairs(Players:GetPlayers()) do
 				local data = PlayerData and PlayerData.Get(player)
-				if not data then
+				local baseInfo = BaseService._bases[player.UserId]
+				if not data or not baseInfo then
 					continue
 				end
-				local item = data.equippedPads and data.equippedPads["1"]
-				if not item then
-					BaseService._nextMoneyTickAt[player.UserId] = nil
-					continue
-				end
-				local streamerId = type(item) == "table" and item.id or item
-				local effectName = type(item) == "table" and item.effect or nil
-				local info = Streamers.ById[streamerId]
-				if not info then
-					continue
-				end
-				local perSec = info.cashPerSecond or 0
-				if effectName then
-					local eff = Effects.ByName[effectName]
-					if eff and eff.cashMultiplier then
-						perSec = perSec * eff.cashMultiplier
+				local pendingBySlot = getNestedTable(BaseService._pendingMoney, player.UserId)
+				local nextTickBySlot = getNestedTable(BaseService._nextMoneyTickAt, player.UserId)
+
+				for padSlot in pairs(baseInfo.displays or {}) do
+					local item = data.equippedPads and data.equippedPads[tostring(padSlot)]
+					if not item then
+						nextTickBySlot[padSlot] = nil
+						continue
 					end
-				end
-				local userId = player.UserId
-				local nextTick = BaseService._nextMoneyTickAt[userId]
-				if not nextTick then
-					BaseService._nextMoneyTickAt[userId] = now + 1
-					nextTick = BaseService._nextMoneyTickAt[userId]
-				end
-				if now >= nextTick then
-					BaseService._pendingMoney[userId] = (BaseService._pendingMoney[userId] or 0) + math.floor(perSec)
-					BaseService._nextMoneyTickAt[userId] = now + 1
-					updateMoneyText(player)
+					local streamerId = type(item) == "table" and item.id or item
+					local effectName = type(item) == "table" and item.effect or nil
+					local info = Streamers.ById[streamerId]
+					if not info then
+						continue
+					end
+					local perSec = info.cashPerSecond or 0
+					if effectName then
+						local eff = Effects.ByName[effectName]
+						if eff and eff.cashMultiplier then
+							perSec = perSec * eff.cashMultiplier
+						end
+					end
+
+					local nextTick = nextTickBySlot[padSlot]
+					if not nextTick then
+						nextTickBySlot[padSlot] = now + 1
+						nextTick = nextTickBySlot[padSlot]
+					end
+					if now >= nextTick then
+						pendingBySlot[padSlot] = (pendingBySlot[padSlot] or 0) + math.floor(perSec)
+						nextTickBySlot[padSlot] = now + 1
+						updateMoneyText(player, padSlot)
+					end
 				end
 			end
 		end
@@ -602,20 +858,28 @@ function BaseService.GetBasePosition(player): Vector3?
 	return baseInfo and baseInfo.position or nil
 end
 
--- Kept for compatibility; now updates single-slot prompt text.
 function BaseService.UpdateBasePads(player)
 	if not player then return end
-	updatePromptText(player)
+	local baseInfo = BaseService._bases[player.UserId]
+	if not baseInfo then return end
+	for padSlot in pairs(baseInfo.displays or {}) do
+		updatePromptText(player, padSlot)
+		updateMoneyText(player, padSlot)
+	end
 end
 
--- Kept for compatibility; clear single-slot display on rebirth.
 function BaseService.ClearDisplaysForRebirth(player)
 	if not player then return end
+	local userId = player.UserId
 	clearPlacedModel(player)
-	BaseService._pendingMoney[player.UserId] = 0
-	BaseService._nextMoneyTickAt[player.UserId] = nil
-	updateMoneyText(player)
-	updatePromptText(player)
+	BaseService._pendingMoney[userId] = {}
+	BaseService._nextMoneyTickAt[userId] = {}
+	local baseInfo = BaseService._bases[userId]
+	if not baseInfo then return end
+	for padSlot in pairs(baseInfo.displays or {}) do
+		updateMoneyText(player, padSlot)
+		updatePromptText(player, padSlot)
+	end
 end
 
 return BaseService
