@@ -640,11 +640,7 @@ function PlayerData.EquipToPad(player, streamerId: string, padSlot: number): boo
 	if not data then return false end
 
 	-- Check slot is unlocked
-	local totalSlots = SlotsConfig.GetTotalSlots(data.rebirthCount, data.premiumSlotUnlocked)
-	if padSlot < 1 or padSlot > totalSlots then return false end
-
-	-- Check premium slot
-	if padSlot == SlotsConfig.PremiumSlotIndex and not data.premiumSlotUnlocked then
+	if not SlotsConfig.IsSlotUnlocked(data.rebirthCount or 0, data.premiumSlotUnlocked == true, padSlot) then
 		return false
 	end
 

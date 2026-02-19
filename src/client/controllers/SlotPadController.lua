@@ -1,112 +1,138 @@
---[[
-	SlotPadController.lua
-	Manages interaction with the player's base display pads.
-	Uses ProximityPrompts (press E) to place/remove streamers.
-	Pads are built by the server (BaseService) — this controller
-	finds them and wires up the ProximityPrompt interaction.
-]]
-
+-- Minimal single-slot prompt interaction.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 local Players = game:GetService("Players")
-
-local RemoteEvents = ReplicatedStorage:WaitForChild("RemoteEvents")
-local DisplayInteract = RemoteEvents:WaitForChild("DisplayInteract")
-local CollectKeysResult = RemoteEvents:WaitForChild("CollectKeysResult")
+local SoundService = game:GetService("SoundService")
 
 local SlotPadController = {}
-
 local player = Players.LocalPlayer
-local pads = {}
-local basePosition = nil
-local playerData = nil
+local DisplayInteract = ReplicatedStorage:WaitForChild("RemoteEvents"):WaitForChild("DisplayInteract")
+local TOUCH_SOUND_ID = "rbxassetid://7112275565"
 
-local HoldController
-local InventoryController
+local HoldController = nil
+local wiredPrompts = {}
+local wiredGreenParts = {}
+local myBasePosition = nil
+local cachedTouchSound = nil
+local hasDisplayedStreamer = false
 
--------------------------------------------------
--- FIND PADS & WIRE PROMPTS
--------------------------------------------------
-
-local function findPadsAndConnect()
-	local basesFolder = Workspace:WaitForChild("PlayerBaseData", 15)
-	if not basesFolder then
-		warn("[SlotPadController] PlayerBaseData folder not found!")
-		return
+local function getTouchSound()
+	if cachedTouchSound and cachedTouchSound.Parent then
+		return cachedTouchSound
 	end
-
-	local baseName = "Base_" .. player.UserId
-	local baseModel = basesFolder:WaitForChild(baseName, 15)
-	if not baseModel then
-		warn("[SlotPadController] Base not found for player: " .. player.Name)
-		return
+	for _, child in ipairs(SoundService:GetChildren()) do
+		if child:IsA("Sound") and child.SoundId == TOUCH_SOUND_ID then
+			cachedTouchSound = child
+			return child
+		end
 	end
+	return nil
+end
 
-	local padsFolder = baseModel:WaitForChild("Pads", 10)
-	if not padsFolder then
-		warn("[SlotPadController] Pads folder not found in base!")
-		return
-	end
+local function isGreenCollectPart(part: BasePart): boolean
+	local c = part.Color
+	return part.Material == Enum.Material.Neon
+		and c.G > 0.6 and c.G > c.R and c.G > c.B
+		and part.Size.Y <= 1
+end
 
-	for _, pad in ipairs(padsFolder:GetChildren()) do
-		if pad:IsA("BasePart") and pad.Name:match("^Pad_") then
-			local indexStr = pad.Name:match("Pad_(%d+)")
-			local index = tonumber(indexStr)
-			if index then
-				pads[index] = pad
+local function wirePrompt(prompt)
+	if wiredPrompts[prompt] then return end
+	wiredPrompts[prompt] = true
+	prompt.Triggered:Connect(function()
+		local heldId, heldEffect = nil, nil
+		if HoldController and HoldController.IsHolding() then
+			heldId, heldEffect = HoldController.GetHeld()
+		end
+		DisplayInteract:FireServer(1, heldId, heldEffect)
+	end)
+end
 
-				local prompt = pad:FindFirstChild("DisplayPrompt")
-				if prompt and prompt:IsA("ProximityPrompt") then
-					prompt.Triggered:Connect(function()
-						local streamerId, effect = nil, nil
-						if HoldController and HoldController.IsHolding() then
-							streamerId, effect = HoldController.GetHeld()
-						end
+local function wireGreenTouch(part)
+	if wiredGreenParts[part] then return end
+	wiredGreenParts[part] = true
+	local isInside = false
 
-						DisplayInteract:FireServer(index, streamerId, effect)
-					end)
+	part.Touched:Connect(function(hit)
+		local char = player.Character
+		if not char then return end
+		local root = char:FindFirstChild("HumanoidRootPart")
+		if not root then return end
+		if hit ~= root then return end
+		-- Only play for the active green box while a streamer is displayed.
+		local gui = part:FindFirstChild("MoneyCounterGui")
+		local label = gui and gui:FindFirstChild("MoneyLabel")
+		local hasMoneyToCollect = false
+		if label and label:IsA("TextLabel") and label.Visible then
+			local raw = label.Text or ""
+			local digits = raw:gsub("[^%d]", "")
+			local amount = tonumber(digits) or 0
+			hasMoneyToCollect = amount > 0
+		end
+		if not hasMoneyToCollect then
+			return
+		end
+		if isInside then return end
+		isInside = true
+		local sfx = getTouchSound()
+		if sfx then
+			SoundService:PlayLocalSound(sfx)
+		end
+	end)
+
+	part.TouchEnded:Connect(function(hit)
+		local char = player.Character
+		if not char then return end
+		local root = char:FindFirstChild("HumanoidRootPart")
+		if not root then return end
+		if hit ~= root then return end
+		isInside = false
+	end)
+end
+
+local function scanAndWire()
+	local playerBases = Workspace:FindFirstChild("PlayerBases")
+	if not playerBases then return end
+
+	for _, inst in ipairs(playerBases:GetDescendants()) do
+		if inst:IsA("ProximityPrompt") and inst.Name == "BaseSingleSlotPrompt" then
+			wirePrompt(inst)
+		elseif inst:IsA("BasePart") and isGreenCollectPart(inst) then
+			if myBasePosition then
+				-- only wire parts near my assigned base
+				if (inst.Position - myBasePosition).Magnitude <= 80 then
+					wireGreenTouch(inst)
 				end
 			end
 		end
 	end
-
-	print("[SlotPadController] Found " .. tostring(#pads) .. " pads, prompts wired")
 end
 
--------------------------------------------------
--- COLLECT KEYS FEEDBACK
--------------------------------------------------
-
-local function setupCollectFeedback()
-	CollectKeysResult.OnClientEvent:Connect(function(data)
-		if data.success and data.amount and data.amount > 0 then
-			print("[SlotPadController] Collected $" .. tostring(data.amount) .. " from display " .. tostring(data.padSlot or "?"))
+function SlotPadController.Init(_holdCtrl, _inventoryCtrl)
+	HoldController = _holdCtrl
+	task.defer(scanAndWire)
+	Workspace.DescendantAdded:Connect(function(inst)
+		if inst:IsA("ProximityPrompt") and inst.Name == "BaseSingleSlotPrompt" then
+			wirePrompt(inst)
+		elseif inst:IsA("BasePart") and isGreenCollectPart(inst) and myBasePosition then
+			if (inst.Position - myBasePosition).Magnitude <= 80 then
+				wireGreenTouch(inst)
+			end
 		end
 	end)
 end
 
--------------------------------------------------
--- PUBLIC
--------------------------------------------------
-
-function SlotPadController.Init(holdCtrl, inventoryCtrl)
-	HoldController = holdCtrl
-	InventoryController = inventoryCtrl
-
-	setupCollectFeedback()
-
-	task.spawn(function()
-		task.wait(3)
-		findPadsAndConnect()
-	end)
-end
-
 function SlotPadController.SetBasePosition(pos)
-	basePosition = pos
+	myBasePosition = pos
+	scanAndWire()
 end
 
-function SlotPadController.Refresh(data)
-	playerData = data
+function SlotPadController.Refresh(_data)
+	if _data and _data.equippedPads then
+		hasDisplayedStreamer = _data.equippedPads["1"] ~= nil
+	else
+		hasDisplayedStreamer = false
+	end
 end
 
 return SlotPadController

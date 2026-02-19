@@ -2,7 +2,6 @@
 	InventoryController.lua
 	Bottom inventory bar showing the player's collected streamers.
 	Displays numbered slots (1–9 visible, scrollable for more).
-	Click a slot to select an item, then click a pad to equip it.
 	Backpack button opens full inventory view.
 ]]
 
@@ -32,7 +31,6 @@ local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
 local RemoteEvents = ReplicatedStorage:WaitForChild("RemoteEvents")
-local EquipRequest = RemoteEvents:WaitForChild("EquipRequest")
 local SellRequest = RemoteEvents:WaitForChild("SellRequest")
 
 -- Lazy-loaded SacrificeController to check queued indices
@@ -410,6 +408,29 @@ function InventoryController.GetSelectedItem(): (number?, string?)
 	return nil, nil
 end
 
+function InventoryController.SelectByItem(streamerId: string, effect: string?): boolean
+	if not streamerId then return false end
+	local foundIndex = nil
+	for i, item in ipairs(inventory) do
+		if getItemId(item) == streamerId then
+			if effect == nil or getItemEffect(item) == effect then
+				foundIndex = i
+				break
+			end
+		end
+	end
+	if not foundIndex then
+		return false
+	end
+
+	selectedIndex = foundIndex
+	updateSlotVisuals()
+	for _, cb in ipairs(onSelectionChanged) do
+		task.spawn(cb, selectedIndex, inventory[selectedIndex])
+	end
+	return true
+end
+
 function InventoryController.ClearSelection()
 	selectedIndex = nil
 	updateSlotVisuals()
@@ -487,20 +508,9 @@ end
 -------------------------------------------------
 
 function InventoryController.EquipSelectedToPad(padSlot: number)
-	if not selectedIndex then return false end
-	local item = inventory[selectedIndex]
-	local streamerId = getItemId(item)
-	if not streamerId then return false end
-
-	-- Fire equip request (server matches by streamer id)
-	EquipRequest:FireServer(streamerId, padSlot)
-	selectedIndex = nil
-	updateSlotVisuals()
-	-- Notify listeners (drop held model, etc.)
-	for _, cb in ipairs(onSelectionChanged) do
-		task.spawn(cb, nil, nil)
-	end
-	return true
+	-- Base placement is disabled.
+	-- Keep method for compatibility with existing callers.
+	return false
 end
 
 --- Sell the selected item

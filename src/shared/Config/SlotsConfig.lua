@@ -27,6 +27,46 @@ SlotsConfig.MaxTotalSlots = SlotsConfig.MaxRebirthSlots + SlotsConfig.PremiumSlo
 SlotsConfig.GridRows = 4
 SlotsConfig.GridCols = 5
 
+local _unlockOrderCache = nil
+
+local function getDefaultColumnOrder(cols: number)
+	if cols == 5 then
+		-- two left, two right, then center
+		return { 1, 2, 4, 5, 3 }
+	end
+	local order = {}
+	for c = 1, cols do
+		table.insert(order, c)
+	end
+	return order
+end
+
+--- Non-premium unlock order for base pads (slot indices 1..19).
+--- Row-first from entrance to back, with column priority:
+--- left pair, right pair, then center (for 5 columns).
+function SlotsConfig.GetUnlockOrder(): { number }
+	if _unlockOrderCache then
+		return _unlockOrderCache
+	end
+
+	local order = {}
+	local cols = SlotsConfig.GridCols
+	local rows = SlotsConfig.GridRows
+	local colOrder = getDefaultColumnOrder(cols)
+
+	for row = 1, rows do
+		for _, col in ipairs(colOrder) do
+			local slotIndex = (row - 1) * cols + col
+			if slotIndex ~= SlotsConfig.PremiumSlotIndex then
+				table.insert(order, slotIndex)
+			end
+		end
+	end
+
+	_unlockOrderCache = order
+	return order
+end
+
 --- Get number of rebirth-based slots for a given rebirth count.
 --- Start with 4 slots, each rebirth adds 1.
 function SlotsConfig.GetSlotsForRebirth(rebirthCount: number): number
@@ -49,11 +89,40 @@ function SlotsConfig.GetRebirthForSlot(slotIndex: number): number
 	if slotIndex == SlotsConfig.PremiumSlotIndex then
 		return -1 -- premium, not rebirth-based
 	end
-	if slotIndex <= SlotsConfig.StartingSlots then
-		return 0 -- free from the start
+	local unlockOrder = SlotsConfig.GetUnlockOrder()
+	local unlockPos = nil
+	for i, idx in ipairs(unlockOrder) do
+		if idx == slotIndex then
+			unlockPos = i
+			break
+		end
 	end
-	-- Each rebirth unlocks 1 more slot beyond the starting 4
-	return slotIndex - SlotsConfig.StartingSlots
+	if not unlockPos then
+		return SlotsConfig.MaxRebirthSlots
+	end
+	if unlockPos <= SlotsConfig.StartingSlots then
+		return 0
+	end
+	return unlockPos - SlotsConfig.StartingSlots
+end
+
+--- True if this specific slot index is unlocked for the player.
+--- Rebirth unlocks slots 1..19 progressively; premium only unlocks slot 20.
+function SlotsConfig.IsSlotUnlocked(rebirthCount: number, hasPremiumSlot: boolean, slotIndex: number): boolean
+	if slotIndex < 1 or slotIndex > SlotsConfig.MaxTotalSlots then
+		return false
+	end
+	if slotIndex == SlotsConfig.PremiumSlotIndex then
+		return hasPremiumSlot == true
+	end
+	local unlockedCount = SlotsConfig.GetSlotsForRebirth(rebirthCount)
+	local unlockOrder = SlotsConfig.GetUnlockOrder()
+	for i = 1, math.min(unlockedCount, #unlockOrder) do
+		if unlockOrder[i] == slotIndex then
+			return true
+		end
+	end
+	return false
 end
 
 return SlotsConfig

@@ -215,26 +215,31 @@ SpinController.OnSpinResult(function(data)
 	end
 end)
 
--------------------------------------------------
--- EQUIP / UNEQUIP RESULTS
--------------------------------------------------
-
+-- Base single-slot place/remove result handling
 local EquipResult = RemoteEvents:WaitForChild("EquipResult")
 EquipResult.OnClientEvent:Connect(function(data)
-	if data.success then
-		print("[Client] Equipped " .. (data.streamerId or "?") .. " to pad " .. (data.padSlot or "?"))
+	if data and data.success then
+		-- Place action: clear inventory selection -> held model drops.
 		InventoryController.ClearSelection()
-	else
-		print("[Client] Equip failed: " .. (data.reason or "unknown"))
+		HoldController.Drop()
 	end
 end)
 
 local UnequipResult = RemoteEvents:WaitForChild("UnequipResult")
 UnequipResult.OnClientEvent:Connect(function(data)
-	if data.success then
-		print("[Client] Unequipped from pad " .. (data.padSlot or "?"))
-	else
-		print("[Client] Unequip failed: " .. (data.reason or "unknown"))
+	if data and data.success and data.streamerId then
+		-- Remove action: also select returned item in inventory.
+		local selected = InventoryController.SelectByItem(data.streamerId, data.effect)
+		if not selected then
+			-- Fallback in case inventory replication arrives slightly later.
+			HoldController.Hold({
+				id = data.streamerId,
+				effect = data.effect,
+			})
+			task.delay(0.12, function()
+				InventoryController.SelectByItem(data.streamerId, data.effect)
+			end)
+		end
 	end
 end)
 

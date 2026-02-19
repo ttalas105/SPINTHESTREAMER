@@ -509,7 +509,8 @@ function SacrificeService.Init(playerDataModule, potionServiceModule)
 	PotionService = potionServiceModule
 	-- SECURITY FIX: Wrap sacrifice handler in per-player lock to prevent race conditions
 	SacrificeRequest.OnServerEvent:Connect(function(player, ...)
-		PlayerData.WithLock(player, function() onSacrificeRequest(player, ...) end)
+		local args = {...}
+		PlayerData.WithLock(player, function() onSacrificeRequest(player, unpack(args)) end)
 	end)
 end
 
