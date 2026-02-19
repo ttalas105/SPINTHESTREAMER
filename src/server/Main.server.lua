@@ -53,9 +53,9 @@ do
 		frontAnchor.CanCollide = false
 		frontAnchor.Anchored = true
 
-		-- Move a bit in front of the stand (negative Z) and slightly above ground
+		-- Move a bit in front of the stand (negative Z) at ground/player height
 		local pos = basePart.Position
-		frontAnchor.Position = pos + Vector3.new(0, 2, -3)
+		frontAnchor.Position = pos + Vector3.new(0, 0, -3)
 		frontAnchor.Parent = hub
 
 		local prompt = Instance.new("ProximityPrompt")
@@ -98,7 +98,7 @@ do
 		frontAnchor.CanCollide = false
 		frontAnchor.Anchored = true
 		local pos = basePart.Position
-		frontAnchor.Position = pos + Vector3.new(0, 2, -3)
+		frontAnchor.Position = pos + Vector3.new(0, 0, -3)
 		frontAnchor.Parent = hub
 		local prompt = Instance.new("ProximityPrompt")
 		prompt.ActionText = "Open"
@@ -138,7 +138,7 @@ do
 		frontAnchor.CanCollide = false
 		frontAnchor.Anchored = true
 		local pos = basePart.Position
-		frontAnchor.Position = pos + Vector3.new(0, 2, -3)
+		frontAnchor.Position = pos + Vector3.new(0, 0, -3)
 		frontAnchor.Parent = hub
 		local prompt = Instance.new("ProximityPrompt")
 		prompt.ActionText = "Open"
@@ -182,7 +182,7 @@ do
 		frontAnchor.CanCollide = false
 		frontAnchor.Anchored = true
 		local pos = basePart.Position
-		frontAnchor.Position = pos + Vector3.new(0, 2, -3)
+		frontAnchor.Position = pos + Vector3.new(0, 0, -3)
 		frontAnchor.Parent = hub
 		local prompt = Instance.new("ProximityPrompt")
 		prompt.ActionText = "Open"
@@ -222,7 +222,7 @@ do
 		frontAnchor.CanCollide = false
 		frontAnchor.Anchored = true
 		local pos = basePart.Position
-		frontAnchor.Position = pos + Vector3.new(0, 2, -3)
+		frontAnchor.Position = pos + Vector3.new(0, 0, -3)
 		frontAnchor.Parent = hub
 		local prompt = Instance.new("ProximityPrompt")
 		prompt.ActionText = "Open"
@@ -262,7 +262,7 @@ do
 		frontAnchor.CanCollide = false
 		frontAnchor.Anchored = true
 		local pos = basePart.Position
-		frontAnchor.Position = pos + Vector3.new(0, 2, -3)
+		frontAnchor.Position = pos + Vector3.new(0, 0, -3)
 		frontAnchor.Parent = hub
 		local prompt = Instance.new("ProximityPrompt")
 		prompt.ActionText = "Open"

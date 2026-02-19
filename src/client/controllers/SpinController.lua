@@ -644,7 +644,8 @@ local function playSpinAnimation(resultData, callback)
 		end
 	end
 
-	-- Calculate positions
+	-- Calculate positions (wait one frame so AbsoluteSize is accurate)
+	RunService.RenderStepped:Wait()
 	local frameWidth = carouselFrame.AbsoluteSize.X
 	if frameWidth == 0 then frameWidth = 700 end
 	local halfFrame = frameWidth / 2
@@ -653,8 +654,6 @@ local function playSpinAnimation(resultData, callback)
 	local targetCenterX = (targetIndex - 1) * ITEM_STEP + ITEM_WIDTH / 2
 	-- Container X that puts the target under the selector line
 	local endX = halfFrame - targetCenterX
-	-- Add a small random offset (-20..+20 px) so it doesn't always land dead center
-	endX = endX + math.random(-20, 20)
 
 	-- Starting position: at least 3 full streamer-sets to the right of the end
 	local setWidth = #Streamers.List * ITEM_STEP
