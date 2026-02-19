@@ -197,58 +197,30 @@ local function handleUpgradeCash(player)
 end
 
 -------------------------------------------------
--- BASE INCOME (equipped streamers generate cashPerSecond)
--- Ticks every 1 second. Total income = sum of cashPerSecond for all equipped pad streamers.
--- Adds Economy.PassiveIncomeRate as a flat base on top.
+-- PASSIVE INCOME (flat base rate only; equipped streamer income
+-- is now accumulated on display pads and collected manually
+-- via BaseService key collection pads)
 -------------------------------------------------
 
-local function getPlayerBaseIncome(player): number
-	local data = PlayerData.Get(player)
-	if not data then return 0 end
-	local total = 0
-	for _, item in pairs(data.equippedPads) do
-		-- item is {id = "Rakai", effect = "Acid" or nil}
-		local streamerId = type(item) == "table" and item.id or item
-		local effect = type(item) == "table" and item.effect or nil
-		local info = Streamers.ById[streamerId]
-		if info and info.cashPerSecond then
-			local income = info.cashPerSecond
-			-- Apply effect multiplier (e.g. Acid = 2x)
-			if effect then
-				local effectInfo = Effects.ByName[effect]
-				if effectInfo and effectInfo.cashMultiplier then
-					income = income * effectInfo.cashMultiplier
-				end
-			end
-			total = total + income
-		end
-	end
-	return total
-end
-
-local function startBaseIncome()
+local function startPassiveIncome()
 	task.spawn(function()
 		while true do
-			task.wait(1) -- tick every 1 second
+			task.wait(1)
 			for _, player in ipairs(Players:GetPlayers()) do
 				local data = PlayerData.Get(player)
 				if data then
-					local baseIncome = getPlayerBaseIncome(player)
-					local flatIncome = Economy.PassiveIncomeRate / Economy.PassiveIncomeInterval -- per-second flat rate
-					local total = baseIncome + flatIncome
-					if total > 0 then
-					if PlayerData.HasDoubleCash(player) then
-						total = total * Economy.DoubleCashMultiplier
-					end
-					-- Apply rebirth coin multiplier (+5% per rebirth)
-					local rebirthMult = Economy.GetRebirthCoinMultiplier(PlayerData.GetRebirthCount(player))
-					total = total * rebirthMult
-					-- Apply cash upgrade multiplier (+2% per upgrade)
-					local cashUpgradeMult = PlayerData.GetCashUpgradeMultiplier(player)
-					total = total * cashUpgradeMult
-					-- Apply cash potion multiplier
-					local potionCashMult = PotionService and PotionService.GetCashMultiplier(player) or 1
-					total = total * potionCashMult
+					local flatIncome = Economy.PassiveIncomeRate / Economy.PassiveIncomeInterval
+					if flatIncome > 0 then
+						local total = flatIncome
+						if PlayerData.HasDoubleCash(player) then
+							total = total * Economy.DoubleCashMultiplier
+						end
+						local rebirthMult = Economy.GetRebirthCoinMultiplier(PlayerData.GetRebirthCount(player))
+						total = total * rebirthMult
+						local cashUpgradeMult = PlayerData.GetCashUpgradeMultiplier(player)
+						total = total * cashUpgradeMult
+						local potionCashMult = PotionService and PotionService.GetCashMultiplier(player) or 1
+						total = total * potionCashMult
 						PlayerData.AddCash(player, math.floor(total))
 					end
 				end
@@ -285,12 +257,32 @@ function EconomyService.Init(playerDataModule, potionServiceModule)
 		handleUpgradeCash(player)
 	end)
 
-	startBaseIncome()
+	startPassiveIncome()
 end
 
 -- Expose income calculation for UI or other services
+-- (streamer income is now handled by BaseService key accumulation)
 function EconomyService.GetPlayerBaseIncome(player): number
-	return getPlayerBaseIncome(player)
+	if not PlayerData then return 0 end
+	local data = PlayerData.Get(player)
+	if not data then return 0 end
+	local total = 0
+	for _, item in pairs(data.equippedPads) do
+		local streamerId = type(item) == "table" and item.id or item
+		local effect = type(item) == "table" and item.effect or nil
+		local info = Streamers.ById[streamerId]
+		if info and info.cashPerSecond then
+			local income = info.cashPerSecond
+			if effect then
+				local effectInfo = Effects.ByName[effect]
+				if effectInfo and effectInfo.cashMultiplier then
+					income = income * effectInfo.cashMultiplier
+				end
+			end
+			total = total + income
+		end
+	end
+	return total
 end
 
 return EconomyService

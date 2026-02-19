@@ -59,8 +59,9 @@ local function handleRebirth(player)
 	local newCount = data.rebirthCount + 1
 	PlayerData.SetRebirthCount(player, newCount)
 
-	-- Update base pads to reflect new unlock count
+	-- Clear display models and pending keys, then update pads for new unlock count
 	if BaseService then
+		BaseService.ClearDisplaysForRebirth(player)
 		BaseService.UpdateBasePads(player)
 	end
 

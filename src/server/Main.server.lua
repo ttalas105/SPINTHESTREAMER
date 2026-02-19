@@ -53,9 +53,9 @@ do
 		frontAnchor.CanCollide = false
 		frontAnchor.Anchored = true
 
-		-- Move a bit in front of the stand (negative Z) at ground/player height
+		-- Move a bit in front of the stand, forced to near-ground player height
 		local pos = basePart.Position
-		frontAnchor.Position = pos + Vector3.new(0, 0, -3)
+		frontAnchor.Position = Vector3.new(pos.X, 5, pos.Z + 5)
 		frontAnchor.Parent = hub
 
 		local prompt = Instance.new("ProximityPrompt")
@@ -98,7 +98,7 @@ do
 		frontAnchor.CanCollide = false
 		frontAnchor.Anchored = true
 		local pos = basePart.Position
-		frontAnchor.Position = pos + Vector3.new(0, 0, -3)
+		frontAnchor.Position = Vector3.new(pos.X, 5, pos.Z + 5)
 		frontAnchor.Parent = hub
 		local prompt = Instance.new("ProximityPrompt")
 		prompt.ActionText = "Open"
@@ -138,7 +138,7 @@ do
 		frontAnchor.CanCollide = false
 		frontAnchor.Anchored = true
 		local pos = basePart.Position
-		frontAnchor.Position = pos + Vector3.new(0, 0, -3)
+		frontAnchor.Position = Vector3.new(pos.X, 5, pos.Z + 5)
 		frontAnchor.Parent = hub
 		local prompt = Instance.new("ProximityPrompt")
 		prompt.ActionText = "Open"
@@ -182,7 +182,7 @@ do
 		frontAnchor.CanCollide = false
 		frontAnchor.Anchored = true
 		local pos = basePart.Position
-		frontAnchor.Position = pos + Vector3.new(0, 0, -3)
+		frontAnchor.Position = Vector3.new(pos.X, 5, pos.Z + 5)
 		frontAnchor.Parent = hub
 		local prompt = Instance.new("ProximityPrompt")
 		prompt.ActionText = "Open"
@@ -222,7 +222,7 @@ do
 		frontAnchor.CanCollide = false
 		frontAnchor.Anchored = true
 		local pos = basePart.Position
-		frontAnchor.Position = pos + Vector3.new(0, 0, -3)
+		frontAnchor.Position = Vector3.new(pos.X, 5, pos.Z + 5)
 		frontAnchor.Parent = hub
 		local prompt = Instance.new("ProximityPrompt")
 		prompt.ActionText = "Open"
@@ -262,7 +262,7 @@ do
 		frontAnchor.CanCollide = false
 		frontAnchor.Anchored = true
 		local pos = basePart.Position
-		frontAnchor.Position = pos + Vector3.new(0, 0, -3)
+		frontAnchor.Position = Vector3.new(pos.X, 5, pos.Z + 5)
 		frontAnchor.Parent = hub
 		local prompt = Instance.new("ProximityPrompt")
 		prompt.ActionText = "Open"
@@ -325,7 +325,7 @@ end
 -- Initialize services (order matters: PlayerData first, then BaseService)
 PlayerData.Init()
 PotionService.Init(PlayerData)
-BaseService.Init(PlayerData)
+BaseService.Init(PlayerData, PotionService)
 SpinService.Init(PlayerData, BaseService, PotionService)
 EconomyService.Init(PlayerData, PotionService)
 RebirthService.Init(PlayerData, BaseService, PotionService)

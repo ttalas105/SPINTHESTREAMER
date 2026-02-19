@@ -60,7 +60,7 @@ SacrificeController.Init()
 StorageController.Init()
 MusicController.Init()
 SettingsController.Init()
-SlotPadController.Init(InventoryController)
+SlotPadController.Init(HoldController, InventoryController)
 
 -------------------------------------------------
 -- HIDE PLAYER HEALTH BARS
@@ -223,6 +223,7 @@ local EquipResult = RemoteEvents:WaitForChild("EquipResult")
 EquipResult.OnClientEvent:Connect(function(data)
 	if data.success then
 		print("[Client] Equipped " .. (data.streamerId or "?") .. " to pad " .. (data.padSlot or "?"))
+		InventoryController.ClearSelection()
 	else
 		print("[Client] Equip failed: " .. (data.reason or "unknown"))
 	end
