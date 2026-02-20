@@ -50,10 +50,6 @@ local currentAnimConnection = nil -- RenderStepped connection for current animat
 local autoSpinEnabled = false
 local autoSpinButton = nil
 
--- Queue: if player clicks spin during animation, queue next spin
-local queuedSpinResult = nil -- server result data waiting for current anim to finish
-local queuedSpinPending = false -- true if we sent a spin request but haven't got result yet
-
 -- Spin generation: incremented each time a new spin starts.
 -- Auto-close timers check this to avoid closing a newer spin.
 local spinGeneration = 0
@@ -646,11 +642,16 @@ local function playSpinAnimation(resultData, callback)
 
 	-- Calculate positions (wait one frame so AbsoluteSize is accurate)
 	RunService.RenderStepped:Wait()
-	local frameWidth = carouselFrame.AbsoluteSize.X
-	if frameWidth == 0 then frameWidth = 700 end
+	local frameWidthScreen = carouselFrame.AbsoluteSize.X
+	if frameWidthScreen == 0 then frameWidthScreen = 700 end
+	-- Convert screen pixels back to logical pixels (undo UIScale)
+	-- so we stay in the same coordinate space as UDim2 offsets
+	local uiScale = UIHelper.GetScale()
+	if uiScale <= 0 then uiScale = 1 end
+	local frameWidth = frameWidthScreen / uiScale
 	local halfFrame = frameWidth / 2
 
-	-- Where the target card's center sits inside the container
+	-- Where the target card's center sits inside the container (logical pixels)
 	local targetCenterX = (targetIndex - 1) * ITEM_STEP + ITEM_WIDTH / 2
 	-- Container X that puts the target under the selector line
 	local endX = halfFrame - targetCenterX
@@ -985,45 +986,13 @@ local function showResult(data)
 		task.spawn(onSpinResult, data)
 	end
 	
-	-- Auto-close or start queued spin
-	-- Capture the current generation so we can bail if a new spin started
+	-- Auto-close after result is shown
 	local myGeneration = spinGeneration
 
 	task.spawn(function()
-		-- If there's a queued spin result, start it immediately after a brief pause
-		if queuedSpinResult then
-			task.wait(1.0)
-			if spinGeneration ~= myGeneration then return end
-			if receivedMessage and receivedMessage.Parent then
-				receivedMessage:Destroy()
-			end
-			local nextData = queuedSpinResult
-			queuedSpinResult = nil
-			animationDone = false
-			SpinController._startSpin(nextData)
-			return
-		end
-
-		-- Shorter wait if auto-spin is on
 		local waitTime = autoSpinEnabled and 1.5 or 3.5
 		task.wait(waitTime)
 
-		-- Bail if a new spin started while we waited
-		if spinGeneration ~= myGeneration then return end
-
-		-- Check again if a spin was queued while we were showing result
-		if queuedSpinResult then
-			if receivedMessage and receivedMessage.Parent then
-				receivedMessage:Destroy()
-			end
-			local nextData = queuedSpinResult
-			queuedSpinResult = nil
-			animationDone = false
-			SpinController._startSpin(nextData)
-			return
-		end
-
-		-- Bail again in case something changed
 		if spinGeneration ~= myGeneration then return end
 
 		-- Fade out the received message
@@ -1044,27 +1013,20 @@ local function showResult(data)
 			end
 		end
 
-		-- Bail again
 		if spinGeneration ~= myGeneration then return end
+
+		-- Reset spinning state so the player can spin again
+		isSpinning = false
+		animationDone = false
 
 		-- Auto-spin: trigger next spin if enabled
 		if autoSpinEnabled then
-			isSpinning = true
-			animationDone = false
 			resultFrame.Visible = false
-			spinButton.Text = "SPINNING..."
-			if currentCrateId then
-				local BuyCrateRequest = RemoteEvents:WaitForChild("BuyCrateRequest")
-				BuyCrateRequest:FireServer(currentCrateId)
-			else
-				SpinRequest:FireServer()
-			end
+			SpinController.RequestSpin()
 			return
 		end
 
-		-- No queued spin and no auto-spin — close the window
-		if spinGeneration ~= myGeneration then return end
-		isSpinning = false
+		-- No auto-spin — close the window
 		task.wait(0.2)
 		SpinController.Hide()
 	end)
@@ -1255,17 +1217,7 @@ function SpinController.Init()
 	-- Listen for spin results
 	SpinResult.OnClientEvent:Connect(function(data)
 		if data.success then
-			if queuedSpinPending then
-				-- This result is for a queued spin — store it
-				queuedSpinResult = data
-				queuedSpinPending = false
-			elseif isSpinning then
-				-- We're waiting for the primary result — play animation
-				SpinController._startSpin(data)
-			else
-				-- Normal flow: start the spin animation
-				SpinController._startSpin(data)
-			end
+			SpinController._startSpin(data)
 		else
 			-- Disable auto-spin on error
 			if autoSpinEnabled then
@@ -1278,14 +1230,8 @@ function SpinController.Init()
 					if asStk then asStk.Color = Color3.fromRGB(60, 60, 80) end
 				end
 			end
-			-- Error handling — if this was for a queued spin, just clear queue
-			if queuedSpinPending then
-				queuedSpinPending = false
-				spinButton.Text = "SPIN AGAIN  ($" .. currentSpinCost .. ")"
-			else
-				isSpinning = false
-				animationDone = false
-			end
+			isSpinning = false
+			animationDone = false
 			spinButton.Text = data.reason or "ERROR"
 			task.delay(1.5, function()
 				spinButton.Text = "SPIN  ($" .. currentSpinCost .. ")"
@@ -1348,52 +1294,22 @@ function SpinController._startSpin(data)
 end
 
 function SpinController.RequestSpin()
-	-- If animation is done (result screen showing), start next spin immediately
+	-- Block during active animation (cards still scrolling)
+	if isSpinning and not animationDone then return end
+
+	-- If result screen is showing, clean it up and start fresh
 	if isSpinning and animationDone then
-		-- Clean up result display and start fresh
 		local existingMsg = spinContainer:FindFirstChild("ReceivedMessage")
 		if existingMsg then existingMsg:Destroy() end
-
-		isSpinning = true
-		animationDone = false
-		resultFrame.Visible = false
-		spinButton.Text = "SPINNING..."
-
-		-- Fire the appropriate spin request
-		if currentCrateId then
-			local BuyCrateRequest = RemoteEvents:WaitForChild("BuyCrateRequest")
-			BuyCrateRequest:FireServer(currentCrateId)
-		else
-			SpinRequest:FireServer()
-		end
-		return
 	end
 
-	-- If animation is still playing (cards scrolling), queue a next spin
-	if isSpinning and not animationDone then
-		-- Only allow one queued spin at a time
-		if queuedSpinPending then return end
-		queuedSpinPending = true
-		spinButton.Text = "QUEUED..."
-
-		-- Fire the appropriate spin request
-		if currentCrateId then
-			local BuyCrateRequest = RemoteEvents:WaitForChild("BuyCrateRequest")
-			BuyCrateRequest:FireServer(currentCrateId)
-		else
-			SpinRequest:FireServer()
-		end
-		return
-	end
-
-	-- Normal first spin (not spinning at all)
 	isSpinning = true
 	animationDone = false
+	spinGeneration = spinGeneration + 1
 	resultFrame.Visible = false
 
 	spinButton.Text = "SPINNING..."
 
-	-- Fire the appropriate spin request
 	if currentCrateId then
 		local BuyCrateRequest = RemoteEvents:WaitForChild("BuyCrateRequest")
 		BuyCrateRequest:FireServer(currentCrateId)
@@ -1410,9 +1326,6 @@ end
 
 function SpinController.Hide()
 	spinContainer.Visible = false
-	-- Reset queue state
-	queuedSpinResult = nil
-	queuedSpinPending = false
 	isSpinning = false
 	animationDone = false
 	autoSpinEnabled = false

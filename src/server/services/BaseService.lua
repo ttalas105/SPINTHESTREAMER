@@ -14,6 +14,7 @@ local DesignConfig = require(ReplicatedStorage.Shared.Config.DesignConfig)
 local SlotsConfig = require(ReplicatedStorage.Shared.Config.SlotsConfig)
 local Streamers = require(ReplicatedStorage.Shared.Config.Streamers)
 local Effects = require(ReplicatedStorage.Shared.Config.Effects)
+local VFXHelper = require(ReplicatedStorage.Shared.VFXHelper)
 
 local RemoteEvents = ReplicatedStorage:WaitForChild("RemoteEvents")
 local BaseReady = RemoteEvents:WaitForChild("BaseReady")
@@ -98,7 +99,7 @@ local function addDisplayBillboard(model: Model, adornee: BasePart, streamerItem
 	label.RichText = true
 	label.TextColor3 = Color3.fromRGB(255, 255, 255)
 	label.Text = string.format(
-		"<font color=\"%s\">%s</font>\n$%s/s",
+		"<font color=\"%s\">%s</font>\n<font color=\"#50FF78\">$%s/s</font>",
 		color3ToHex(rarityColor),
 		info.displayName or streamerId,
 		formatNumber(cps)
@@ -605,6 +606,13 @@ local function placeOnGreySlot(player: Player, padSlot: number, streamerItem): b
 	if rootPart then
 		addDisplayBillboard(clone, rootPart, streamerItem)
 	end
+
+	-- Attach element VFX/aura if the streamer has an effect
+	local effectName = type(streamerItem) == "table" and streamerItem.effect or nil
+	if effectName then
+		VFXHelper.Attach(clone, effectName)
+	end
+
 	getNestedTable(BaseService._displayModels, player.UserId)[padSlot] = clone
 	return true
 end

@@ -12,6 +12,7 @@ local RunService = game:GetService("RunService")
 local Streamers = require(ReplicatedStorage.Shared.Config.Streamers)
 local Effects = require(ReplicatedStorage.Shared.Config.Effects)
 local DesignConfig = require(ReplicatedStorage.Shared.Config.DesignConfig)
+local VFXHelper = require(ReplicatedStorage.Shared.VFXHelper)
 
 local HoldController = {}
 
@@ -215,12 +216,7 @@ local function attachModel(modelTemplate, streamerInfo, effect)
 	end
 	clone.PrimaryPart = primaryPart
 
-	-- Scale to figurine (~4 studs)
-	local TARGET_HEIGHT = 4.0
-	local ok, _, size = pcall(function() return clone:GetBoundingBox() end)
-	if ok and size and size.Y > 0 then
-		clone:ScaleTo(TARGET_HEIGHT / size.Y)
-	end
+	-- Keep the model at its original size (no shrinking)
 
 	-- Parent to Workspace (not character — no physics interaction)
 	clone.Parent = workspace
@@ -230,8 +226,13 @@ local function attachModel(modelTemplate, streamerInfo, effect)
 	local bb = createBillboard(primaryPart, streamerInfo, effect)
 	bb.Parent = clone
 
+	-- Attach element VFX/aura
+	if effect then
+		local effectName = type(effect) == "table" and effect.name or effect
+		VFXHelper.Attach(clone, effectName)
+	end
+
 	-- Follow hand every render frame. Model is anchored so PivotTo just sets CFrame.
-	-- Offset: slightly to the right of the character and in front, like holding beside them.
 	followConn = RunService.RenderStepped:Connect(function()
 		local char = player.Character
 		if not char then clearHeld() return end
@@ -242,14 +243,12 @@ local function attachModel(modelTemplate, streamerInfo, effect)
 			return
 		end
 
-		-- Position: take the hand's world position, offset slightly forward and to the right.
-		-- Use the character's root CFrame for stable orientation (doesn't wobble with arm).
 		local root = char:FindFirstChild("HumanoidRootPart")
 		if not root then clearHeld() return end
 
-		-- Offset from root: 2.5 studs to the right, 0 up (same height as hand), 2 studs forward
 		local targetCF = root.CFrame * CFrame.new(2.5, 0, -2)
 		heldModel:PivotTo(targetCF)
+		VFXHelper.Reposition(heldModel)
 	end)
 end
 
