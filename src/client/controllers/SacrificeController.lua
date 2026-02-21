@@ -177,6 +177,7 @@ local function showConfirmation(message, onYes)
 	yb.Text = "YES, DO IT"; yb.TextColor3 = Color3.new(1, 1, 1)
 	yb.Font = FONT; yb.TextSize = sx(18); yb.BorderSizePixel = 0; yb.ZIndex = 52; yb.Parent = box
 	Instance.new("UICorner", yb).CornerRadius = UDim.new(0, sx(12))
+	UIHelper.AddPuffyGradient(yb)
 	yb.MouseButton1Click:Connect(function() dismiss(); if onYes then onYes() end end)
 
 	local nb = Instance.new("TextButton")
@@ -185,6 +186,7 @@ local function showConfirmation(message, onYes)
 	nb.Text = "CANCEL"; nb.TextColor3 = Color3.new(1, 1, 1)
 	nb.Font = FONT; nb.TextSize = sx(18); nb.BorderSizePixel = 0; nb.ZIndex = 52; nb.Parent = box
 	Instance.new("UICorner", nb).CornerRadius = UDim.new(0, sx(12))
+	UIHelper.AddPuffyGradient(nb)
 	nb.MouseButton1Click:Connect(dismiss)
 
 	confirmFrame = dim
@@ -846,6 +848,7 @@ local function buildGemTradeContent(tradeIndex)
 	sacBtn.BorderSizePixel = 0; sacBtn.Parent = btnRow
 	Instance.new("UICorner", sacBtn).CornerRadius = UDim.new(0, sx(14))
 	Instance.new("UIStroke", sacBtn).Color = canSacrifice and Color3.fromRGB(40, 140, 55) or Color3.fromRGB(40, 40, 55)
+	UIHelper.AddPuffyGradient(sacBtn)
 	if canSacrifice then
 		sacBtn.MouseButton1Click:Connect(function()
 			showConfirmation(
@@ -1063,6 +1066,7 @@ local function buildOneTimeContent(oneTimeId)
 	sacBtn.Font = FONT; sacBtn.TextSize = sx(20); sacBtn.BorderSizePixel = 0; sacBtn.Parent = contentFrame
 	Instance.new("UICorner", sacBtn).CornerRadius = UDim.new(0, sx(16))
 	Instance.new("UIStroke", sacBtn).Color = allFilled and Color3.fromRGB(40, 140, 55) or Color3.fromRGB(40, 40, 55)
+	UIHelper.AddPuffyGradient(sacBtn)
 
 	if allFilled then
 		local capId = oneTimeId
@@ -1121,6 +1125,7 @@ local function buildLuckContent(luckType)
 		sb.TextColor3 = Color3.new(1, 1, 1); sb.Font = FONT; sb.TextSize = 18
 		sb.BorderSizePixel = 0; sb.Parent = contentFrame
 		Instance.new("UICorner", sb).CornerRadius = UDim.new(0, 12)
+		UIHelper.AddPuffyGradient(sb)
 		if cs.count > 0 then
 			sb.MouseButton1Click:Connect(function()
 				showConfirmation("50/50: DOUBLE your cash or LOSE HALF!\nCost: " .. table.concat(rp, ", "), function()
@@ -1158,6 +1163,7 @@ local function buildLuckContent(luckType)
 		sb.TextColor3 = Color3.new(1, 1, 1); sb.Font = FONT; sb.TextSize = 18
 		sb.BorderSizePixel = 0; sb.Parent = contentFrame
 		Instance.new("UICorner", sb).CornerRadius = UDim.new(0, 12)
+		UIHelper.AddPuffyGradient(sb)
 		if cs.count > 0 then
 			sb.MouseButton1Click:Connect(function()
 				showConfirmation("Feeling Lucky: +100% or -100% luck for 10 min!\nCost: " .. table.concat(rp, ", "), function()
@@ -1189,6 +1195,7 @@ local function buildLuckContent(luckType)
 		sb.Text = "SACRIFICE"; sb.TextColor3 = Color3.new(1, 1, 1)
 		sb.Font = FONT; sb.TextSize = 18; sb.BorderSizePixel = 0; sb.Parent = contentFrame
 		Instance.new("UICorner", sb).CornerRadius = UDim.new(0, 12)
+		UIHelper.AddPuffyGradient(sb)
 		sb.MouseButton1Click:Connect(function()
 			-- Find the highest earner across hotbar + storage
 			local allItems = getCombinedItems()
@@ -1345,6 +1352,7 @@ local function buildElementalContent(effectName)
 		cvb.TextColor3 = Color3.new(1, 1, 1); cvb.Font = FONT; cvb.TextSize = 13
 		cvb.BorderSizePixel = 0; cvb.Parent = row
 		Instance.new("UICorner", cvb).CornerRadius = UDim.new(0, 10)
+		UIHelper.AddPuffyGradient(cvb)
 		if canSacrifice then
 			cvb.MouseButton1Click:Connect(function()
 				showConfirmation(("Combine %d %s %s into 1?"):format(need, displayName, capRarity), function()
@@ -1514,6 +1522,7 @@ buildEffectOneTimeContent = function(oneTimeId, cfg, done)
 	sacBtn.TextColor3 = canSac and Color3.new(1, 1, 1) or Color3.fromRGB(110, 110, 130)
 	sacBtn.Font = FONT; sacBtn.TextSize = 14; sacBtn.BorderSizePixel = 0; sacBtn.Parent = btnRow
 	Instance.new("UICorner", sacBtn).CornerRadius = UDim.new(0, 10)
+	UIHelper.AddPuffyGradient(sacBtn)
 	if canSac then
 		sacBtn.MouseButton1Click:Connect(function()
 			showConfirmation("Sacrifice " .. need .. " " .. effectName .. " cards for " .. formatNumber(cfg.gems) .. " Gems?", function()
@@ -1665,6 +1674,7 @@ local function buildGemRouletteContent()
 	local sbStk = Instance.new("UIStroke", spinBtn)
 	sbStk.Color = canSpin and Color3.fromRGB(200, 140, 30) or Color3.fromRGB(40, 40, 55)
 	sbStk.Thickness = 2.5
+	UIHelper.AddPuffyGradient(spinBtn)
 
 	if canSpin then
 		spinBtn.MouseButton1Click:Connect(function()
@@ -1740,7 +1750,7 @@ function SacrificeController.Close()
 	closePicker()
 	cleanupBinarySpin()
 	if confirmFrame then confirmFrame:Destroy(); confirmFrame = nil end
-	if modalFrame then modalFrame.Visible = false end
+	if modalFrame then UIHelper.ScaleOut(modalFrame, 0.2) end
 	for _, cb in ipairs(onCloseCallbacks) do task.spawn(cb) end
 	-- NOTE: queues are NOT cleared — they persist for next open
 end
@@ -1761,6 +1771,7 @@ function SacrificeController.Init()
 	modalFrame.Visible = false; modalFrame.ClipsDescendants = true; modalFrame.Parent = screenGui
 	Instance.new("UICorner", modalFrame).CornerRadius = UDim.new(0, sx(24))
 	Instance.new("UIStroke", modalFrame).Color = ACCENT
+	UIHelper.CreateShadow(modalFrame)
 
 	local topBar = Instance.new("Frame")
 	topBar.Size = UDim2.new(1, 0, 0, sx(10)); topBar.BackgroundColor3 = Color3.new(1, 1, 1)

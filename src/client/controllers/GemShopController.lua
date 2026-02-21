@@ -518,8 +518,9 @@ local function buildCaseContent(caseData)
 	buyBtn.Font = FONT; buyBtn.TextSize = 16
 	buyBtn.BorderSizePixel = 0
 	buyBtn.Parent = btnRow
-	local bbCorner = Instance.new("UICorner"); bbCorner.CornerRadius = UDim.new(0, 12); bbCorner.Parent = buyBtn
-	local bbStroke = Instance.new("UIStroke"); bbStroke.Color = Color3.fromRGB(40, 120, 200); bbStroke.Thickness = 2.5; bbStroke.Parent = buyBtn
+	local bbCorner = Instance.new("UICorner"); bbCorner.CornerRadius = UDim.new(0, 14); bbCorner.Parent = buyBtn
+	local bbStroke = Instance.new("UIStroke"); bbStroke.Color = Color3.fromRGB(40, 120, 200); bbStroke.Thickness = 2.5; bbStroke.Transparency = 0.15; bbStroke.Parent = buyBtn
+	UIHelper.AddPuffyGradient(buyBtn)
 
 	buyBtn.MouseEnter:Connect(function()
 		TweenService:Create(buyBtn, TweenInfo.new(0.1), { Size = UDim2.new(0, 188, 0, 46) }):Play()
@@ -1054,7 +1055,7 @@ function GemShopController.Close()
 	closeDropRatePopup()
 	cleanupCaseAnim()
 	stopViewports()
-	if modalFrame then modalFrame.Visible = false end
+	if modalFrame then UIHelper.ScaleOut(modalFrame, 0.2) end
 end
 
 -------------------------------------------------
@@ -1076,7 +1077,8 @@ function GemShopController.Init()
 	modalFrame.ClipsDescendants = true
 	modalFrame.Parent = screenGui
 	local mCorner = Instance.new("UICorner"); mCorner.CornerRadius = UDim.new(0, 24); mCorner.Parent = modalFrame
-	local mStroke = Instance.new("UIStroke"); mStroke.Color = Color3.fromRGB(100, 200, 255); mStroke.Thickness = 3; mStroke.Parent = modalFrame
+	local mStroke = Instance.new("UIStroke"); mStroke.Color = Color3.fromRGB(100, 200, 255); mStroke.Thickness = 3; mStroke.Transparency = 0.15; mStroke.Parent = modalFrame
+	UIHelper.CreateShadow(modalFrame)
 
 	-- Top bar gradient
 	local topBar = Instance.new("Frame")

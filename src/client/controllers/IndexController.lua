@@ -42,6 +42,9 @@ local heartbeatConn = nil
 
 local FONT = Enum.Font.FredokaOne
 
+-- Book image for Index header. Upload your image in Roblox (Create > Decals & Images), then set to "rbxassetid://YOUR_ID"
+local INDEX_BOOK_ASSET_ID = "rbxassetid://0"
+
 local TABS = { { name = "Default", effect = nil, color = Color3.fromRGB(200, 200, 220) } }
 for _, eff in ipairs(Effects.List) do
 	table.insert(TABS, { name = eff.name, effect = eff.name, color = eff.color })
@@ -113,7 +116,7 @@ local function buildStreamerCard(info, effect, parent, cardIndex)
 	local rarityInfo = Rarities.ByName[info.rarity]
 	local rarityColor = rarityInfo and rarityInfo.color or Color3.fromRGB(170, 170, 170)
 	local displayColor = effectInfo and effectInfo.color or rarityColor
-	local gemReward = Economy.IndexGemRewards[info.rarity] or 2
+	local gemReward = Economy.GetIndexGemReward(info.rarity, effect)
 
 	local card = Instance.new("Frame")
 	card.Name = "IndexCard_" .. cardIndex
@@ -337,13 +340,6 @@ local function buildGrid(force)
 		local tabName = tabEffect or "Default"
 		counterLabel.Text = tabName .. ": " .. unlockedCount .. "/" .. totalCount .. " discovered"
 	end
-
-	task.defer(function()
-		local gl = contentGrid:FindFirstChildOfClass("UIGridLayout")
-		if gl then
-			contentGrid.CanvasSize = UDim2.new(0, 0, 0, gl.AbsoluteContentSize.Y + 16)
-		end
-	end)
 end
 
 -------------------------------------------------
@@ -381,7 +377,7 @@ function IndexController.Close()
 	isOpen = false
 	lastSnapshot = ""
 	stopRotations()
-	if modalFrame then modalFrame.Visible = false end
+	if modalFrame then UIHelper.ScaleOut(modalFrame, 0.2) end
 end
 
 -------------------------------------------------
@@ -403,12 +399,14 @@ function IndexController.Init()
 	modalFrame.ClipsDescendants = true
 	modalFrame.Parent = screenGui
 	local mCorner = Instance.new("UICorner")
-	mCorner.CornerRadius = UDim.new(0, 20)
+	mCorner.CornerRadius = UDim.new(0, 24)
 	mCorner.Parent = modalFrame
 	local mStroke = Instance.new("UIStroke")
 	mStroke.Color = Color3.fromRGB(100, 180, 255)
 	mStroke.Thickness = 3
+	mStroke.Transparency = 0.15
 	mStroke.Parent = modalFrame
+	UIHelper.CreateShadow(modalFrame)
 
 	-- Rainbow top bar
 	local topBar = Instance.new("Frame")
@@ -428,17 +426,44 @@ function IndexController.Init()
 	})
 	tbGrad.Parent = topBar
 
-	-- Title
+	-- Header: book image (when asset ID set) + title
+	local headerFrame = Instance.new("Frame")
+	headerFrame.Name = "HeaderFrame"
+	headerFrame.Size = UDim2.new(1, -100, 0, 52)
+	headerFrame.Position = UDim2.new(0, 0, 0, 0)
+	headerFrame.BackgroundTransparency = 1
+	headerFrame.ZIndex = 2
+	headerFrame.Parent = modalFrame
+
+	local bookIcon = Instance.new("ImageLabel")
+	bookIcon.Name = "IndexBookIcon"
+	bookIcon.Size = UDim2.new(0, 56, 0, 56)
+	bookIcon.Position = UDim2.new(0, 20, 0, 6)
+	bookIcon.AnchorPoint = Vector2.new(0, 0)
+	bookIcon.BackgroundTransparency = 1
+	bookIcon.ScaleType = Enum.ScaleType.Fit
+	bookIcon.ZIndex = 2
+	bookIcon.Parent = headerFrame
+	if INDEX_BOOK_ASSET_ID and INDEX_BOOK_ASSET_ID ~= "" and INDEX_BOOK_ASSET_ID ~= "rbxassetid://0" then
+		bookIcon.Image = INDEX_BOOK_ASSET_ID
+		bookIcon.Visible = true
+	else
+		bookIcon.Visible = false
+	end
+
+	-- Title (centered if no book, else right of book)
 	local title = Instance.new("TextLabel")
+	title.Name = "TitleLabel"
 	title.Size = UDim2.new(1, -100, 0, 40)
-	title.Position = UDim2.new(0.5, 0, 0, 8)
-	title.AnchorPoint = Vector2.new(0.5, 0)
+	title.Position = bookIcon.Visible and UDim2.new(0, 88, 0, 8) or UDim2.new(0.5, 0, 0, 8)
+	title.AnchorPoint = bookIcon.Visible and Vector2.new(0, 0) or Vector2.new(0.5, 0)
 	title.BackgroundTransparency = 1
-	title.Text = "\u{1F4D6} STREAMER INDEX \u{1F4D6}"
+	title.Text = bookIcon.Visible and "STREAMER INDEX" or "\u{1F4D6} STREAMER INDEX \u{1F4D6}"
 	title.TextColor3 = Color3.fromRGB(100, 200, 255)
 	title.Font = FONT
 	title.TextSize = 26
-	title.Parent = modalFrame
+	title.ZIndex = 2
+	title.Parent = headerFrame
 	local tStroke = Instance.new("UIStroke")
 	tStroke.Color = Color3.fromRGB(0, 0, 80)
 	tStroke.Thickness = 2.5
@@ -561,6 +586,7 @@ function IndexController.Init()
 	contentGrid.ScrollBarThickness = 5
 	contentGrid.ScrollBarImageColor3 = Color3.fromRGB(100, 180, 255)
 	contentGrid.CanvasSize = UDim2.new(0, 0, 0, 0)
+	contentGrid.AutomaticCanvasSize = Enum.AutomaticSize.Y
 	contentGrid.Parent = modalFrame
 
 	local gridLayout = Instance.new("UIGridLayout")

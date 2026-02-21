@@ -9,6 +9,7 @@ local TweenService = game:GetService("TweenService")
 
 local DesignConfig = require(ReplicatedStorage.Shared.Config.DesignConfig)
 local UIHelper = require(script.Parent.UIHelper)
+local UISounds = require(script.Parent.UISounds)
 
 local TopNavController = {}
 
@@ -71,7 +72,7 @@ function TopNavController.Init()
 			Text = tabInfo.name,
 			Font = DesignConfig.Fonts.Primary,
 			TextSize = DesignConfig.FontSizes.Header,
-			CornerRadius = UDim.new(0, 10),
+			CornerRadius = UDim.new(0, 18),
 			StrokeColor = Color3.new(
 				math.min(tabInfo.color.R + 0.2, 1),
 				math.min(tabInfo.color.G + 0.2, 1),
@@ -91,7 +92,11 @@ function TopNavController.Init()
 			color = tabInfo.color,
 		}
 
+		btn.MouseEnter:Connect(function()
+			UISounds.PlayHover()
+		end)
 		btn.MouseButton1Click:Connect(function()
+			UISounds.PlayClick()
 			TopNavController.SetActiveTab(tabInfo.name)
 		end)
 	end

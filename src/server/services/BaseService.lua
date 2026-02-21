@@ -30,9 +30,11 @@ BaseService._displayModels = {} -- userId -> { [padSlot] = Model }
 BaseService._pendingMoney = {} -- userId -> { [padSlot] = number }
 BaseService._collectDebounce = {} -- userId -> { [padSlot] = bool }
 BaseService._nextMoneyTickAt = {} -- userId -> { [padSlot] = os.clock timestamp }
+BaseService._equipDebounce = {} -- userId -> { [padSlot] = os.clock timestamp }
 
 local BASE_POSITIONS = DesignConfig.BasePositions
 local PlayerData
+local PotionService
 local DISPLAY_SCALE_MULT = 1.15
 local MAX_BASE_DISPLAYS = SlotsConfig.MaxTotalSlots
 
@@ -65,26 +67,69 @@ local function getNestedTable(bucket, userId)
 	return t
 end
 
-local function addDisplayBillboard(model: Model, adornee: BasePart, streamerItem)
+--- Effective cash/sec for a streamer item including effect, cash upgrade, and potion
+local function getEffectiveCps(player: Player, streamerItem): number
+	local streamerId = type(streamerItem) == "table" and streamerItem.id or streamerItem
+	local effectName = type(streamerItem) == "table" and streamerItem.effect or nil
+	local info = Streamers.ById[streamerId]
+	if not info then return 0 end
+	local cps = info.cashPerSecond or 0
+	if effectName then
+		local eff = Effects.ByName[effectName]
+		if eff and eff.cashMultiplier then
+			cps = cps * eff.cashMultiplier
+		end
+	end
+	local cashUpgradeMult = PlayerData and PlayerData.GetCashUpgradeMultiplier(player) or 1
+	local potionMult = PotionService and PotionService.GetCashMultiplier(player) or 1
+	return cps * cashUpgradeMult * potionMult
+end
+
+local function buildBillboardText(info, streamerId, effectName, rarityColor, cps)
+	local lines = {}
+	if effectName then
+		local eff = Effects.ByName[effectName]
+		local effColor = eff and eff.color or Color3.fromRGB(200, 200, 200)
+		table.insert(lines, string.format(
+			"<font color=\"%s\"><b>%s</b></font>",
+			color3ToHex(effColor),
+			effectName
+		))
+	end
+	table.insert(lines, string.format(
+		"<font color=\"%s\">%s</font>",
+		color3ToHex(rarityColor),
+		info.displayName or streamerId
+	))
+	table.insert(lines, string.format(
+		"<font color=\"#50FF78\">$%s/s</font>",
+		formatNumber(cps)
+	))
+	return table.concat(lines, "\n")
+end
+
+local function addDisplayBillboard(model: Model, adornee: BasePart, streamerItem, player: Player?)
 	local streamerId = type(streamerItem) == "table" and streamerItem.id or streamerItem
 	local effectName = type(streamerItem) == "table" and streamerItem.effect or nil
 	local info = Streamers.ById[streamerId]
 	if not info then return end
 
 	local rarityColor = DesignConfig.RarityColors[info.rarity] or Color3.fromRGB(255, 255, 255)
-	local cps = info.cashPerSecond or 0
-	if effectName then
-		local eff = Effects.ByName[effectName]
-		if eff and eff.cashMultiplier then
-			cps = math.floor(cps * eff.cashMultiplier)
+	local cps = (player and getEffectiveCps(player, streamerItem)) or (info.cashPerSecond or 0)
+	if not player then
+		if effectName then
+			local eff = Effects.ByName[effectName]
+			if eff and eff.cashMultiplier then cps = cps * eff.cashMultiplier end
 		end
 	end
+	cps = math.floor(cps)
 
+	local hasEffect = effectName ~= nil
 	local bb = Instance.new("BillboardGui")
 	bb.Name = "DisplayInfo"
 	bb.Adornee = adornee
-	bb.Size = UDim2.new(0, 260, 0, 70)
-	bb.StudsOffset = Vector3.new(0, 4.5, 0)
+	bb.Size = UDim2.new(0, 280, 0, hasEffect and 95 or 70)
+	bb.StudsOffset = Vector3.new(0, hasEffect and 5 or 4.5, 0)
 	bb.AlwaysOnTop = false
 	bb.MaxDistance = 60
 	bb.Parent = model
@@ -98,17 +143,12 @@ local function addDisplayBillboard(model: Model, adornee: BasePart, streamerItem
 	label.TextWrapped = true
 	label.RichText = true
 	label.TextColor3 = Color3.fromRGB(255, 255, 255)
-	label.Text = string.format(
-		"<font color=\"%s\">%s</font>\n<font color=\"#50FF78\">$%s/s</font>",
-		color3ToHex(rarityColor),
-		info.displayName or streamerId,
-		formatNumber(cps)
-	)
+	label.Text = buildBillboardText(info, streamerId, effectName, rarityColor, cps)
 	label.Parent = bb
 
 	local stroke = Instance.new("UIStroke")
 	stroke.Color = Color3.fromRGB(0, 0, 0)
-	stroke.Thickness = 2
+	stroke.Thickness = 3
 	stroke.Parent = label
 end
 
@@ -188,6 +228,32 @@ local function tryCollectMoney(player: Player, padSlot: number)
 	end)
 end
 
+--- Update the $/s display on the placed streamer model to reflect current cash upgrade + potion
+local function updateDisplayBillboardCps(player: Player, padSlot: number)
+	local bySlot = BaseService._displayModels[player.UserId]
+	if not bySlot then return end
+	local model = bySlot[padSlot]
+	if not model or not model.Parent then return end
+	local data = PlayerData and PlayerData.Get(player)
+	local item = data and data.equippedPads and data.equippedPads[tostring(padSlot)]
+	if not item then return end
+	local streamerId = type(item) == "table" and item.id or item
+	local effectName = type(item) == "table" and item.effect or nil
+	local info = Streamers.ById[streamerId]
+	if not info then return end
+	local rarityColor = DesignConfig.RarityColors[info.rarity] or Color3.fromRGB(255, 255, 255)
+	local cps = math.floor(getEffectiveCps(player, item))
+	local bb = model:FindFirstChild("DisplayInfo", true)
+	if bb and bb:IsA("BillboardGui") then
+		local label = bb:FindFirstChild("InfoLabel")
+		if label and label:IsA("TextLabel") then
+			label.Text = buildBillboardText(info, streamerId, effectName, rarityColor, cps)
+		end
+		bb.Size = UDim2.new(0, 280, 0, effectName and 95 or 70)
+		bb.StudsOffset = Vector3.new(0, effectName and 5 or 4.5, 0)
+	end
+end
+
 updateMoneyText = function(player: Player, padSlot: number)
 	local baseInfo = BaseService._bases[player.UserId]
 	if not baseInfo then return end
@@ -209,6 +275,7 @@ updateMoneyText = function(player: Player, padSlot: number)
 	local amount = pendingBySlot and pendingBySlot[padSlot] or 0
 	label.Visible = true
 	label.Text = "$" .. formatNumber(amount)
+	updateDisplayBillboardCps(player, padSlot)
 end
 
 local function findAvailableSlot(): number?
@@ -604,7 +671,7 @@ local function placeOnGreySlot(player: Player, padSlot: number, streamerItem): b
 	local parent = baseInfo.baseModel or Workspace
 	clone.Parent = parent
 	if rootPart then
-		addDisplayBillboard(clone, rootPart, streamerItem)
+		addDisplayBillboard(clone, rootPart, streamerItem, player)
 	end
 
 	-- Attach element VFX/aura if the streamer has an effect
@@ -712,8 +779,9 @@ local function assignBase(player)
 	})
 end
 
-function BaseService.Init(playerDataModule, _potionServiceModule)
+function BaseService.Init(playerDataModule, potionServiceModule)
 	PlayerData = playerDataModule
+	PotionService = potionServiceModule
 
 	Players.PlayerAdded:Connect(function(player)
 		task.wait(1)
@@ -740,6 +808,7 @@ function BaseService.Init(playerDataModule, _potionServiceModule)
 		BaseService._nextMoneyTickAt[userId] = nil
 		BaseService._displayModels[userId] = nil
 		BaseService._collectDebounce[userId] = nil
+		BaseService._equipDebounce[userId] = nil
 	end)
 
 	for _, player in ipairs(Players:GetPlayers()) do
@@ -750,66 +819,78 @@ function BaseService.Init(playerDataModule, _potionServiceModule)
 		end
 	end
 
-	DisplayInteract.OnServerEvent:Connect(function(player, padSlot, heldStreamerId, _heldEffect)
+	local EQUIP_DEBOUNCE_SEC = 0.6
+
+	DisplayInteract.OnServerEvent:Connect(function(player, padSlot, heldStreamerId, heldEffect)
 		local slot = tonumber(padSlot)
 		if not slot or slot < 1 then return end
 
-		local data = PlayerData and PlayerData.Get(player)
-		local baseInfo = BaseService._bases[player.UserId]
-		local displayInfo = baseInfo and baseInfo.displays and baseInfo.displays[slot]
-		if not data or not baseInfo or not displayInfo then return end
-		if not displayInfo.greenPart or not displayInfo.greyPart then return end
+		-- Per-player per-pad debounce to prevent rapid equip→unequip oscillation
+		local userId = player.UserId
+		local debounceBySlot = getNestedTable(BaseService._equipDebounce, userId)
+		local now = os.clock()
+		if debounceBySlot[slot] and (now - debounceBySlot[slot]) < EQUIP_DEBOUNCE_SEC then
+			return
+		end
+		debounceBySlot[slot] = now
 
-		local key = tostring(slot)
-		local equipped = data.equippedPads[key]
-		if equipped then
-			local streamerId = type(equipped) == "table" and equipped.id or equipped
-			local effect = type(equipped) == "table" and equipped.effect or nil
-			local pendingBySlot = getNestedTable(BaseService._pendingMoney, player.UserId)
-			local pending = pendingBySlot[slot] or 0
-			local ok = PlayerData.UnequipFromPad(player, slot)
-			if ok then
-				if pending > 0 then
-					PlayerData.AddCash(player, math.floor(pending))
+		PlayerData.WithLock(player, function()
+			local data = PlayerData and PlayerData.Get(player)
+			local baseInfo = BaseService._bases[userId]
+			local displayInfo = baseInfo and baseInfo.displays and baseInfo.displays[slot]
+			if not data or not baseInfo or not displayInfo then return end
+			if not displayInfo.greenPart or not displayInfo.greyPart then return end
+
+			local key = tostring(slot)
+			local equipped = data.equippedPads[key]
+			if equipped then
+				local streamerId = type(equipped) == "table" and equipped.id or equipped
+				local effect = type(equipped) == "table" and equipped.effect or nil
+				local pendingBySlot = getNestedTable(BaseService._pendingMoney, userId)
+				local pending = pendingBySlot[slot] or 0
+				local ok = PlayerData.UnequipFromPad(player, slot)
+				if ok then
+					if pending > 0 then
+						PlayerData.AddCash(player, math.floor(pending))
+					end
+					clearPlacedModel(player, slot)
+					pendingBySlot[slot] = 0
+					getNestedTable(BaseService._nextMoneyTickAt, userId)[slot] = nil
+					updateMoneyText(player, slot)
+					updatePromptText(player, slot)
+					UnequipResult:FireClient(player, {
+						success = true,
+						padSlot = slot,
+						streamerId = streamerId,
+						effect = effect,
+					})
 				end
-				clearPlacedModel(player, slot)
-				pendingBySlot[slot] = 0
-				getNestedTable(BaseService._nextMoneyTickAt, player.UserId)[slot] = nil
-				updateMoneyText(player, slot)
-				updatePromptText(player, slot)
-				UnequipResult:FireClient(player, {
-					success = true,
-					padSlot = slot,
-					streamerId = streamerId,
-					effect = effect,
-				})
+				return
 			end
-			return
-		end
 
-		if not heldStreamerId or typeof(heldStreamerId) ~= "string" then
-			return
-		end
-
-		-- Rebirth gating intentionally bypassed for base displays (all addable for now).
-		local ok = PlayerData.EquipToPad(player, heldStreamerId, slot, true)
-		if ok then
-			local item = data.equippedPads[key]
-			if placeOnGreySlot(player, slot, item) then
-				local pendingBySlot = getNestedTable(BaseService._pendingMoney, player.UserId)
-				pendingBySlot[slot] = 0
-				getNestedTable(BaseService._nextMoneyTickAt, player.UserId)[slot] = os.clock() + 1
-				updateMoneyText(player, slot)
-				updatePromptText(player, slot)
-				EquipResult:FireClient(player, {
-					success = true,
-					padSlot = slot,
-					streamerId = heldStreamerId,
-				})
+			if not heldStreamerId or typeof(heldStreamerId) ~= "string" then
+				return
 			end
-		else
-			EquipResult:FireClient(player, { success = false, reason = "Cannot place here." })
-		end
+
+			local ok = PlayerData.EquipToPad(player, heldStreamerId, slot, true, heldEffect)
+			if ok then
+				local item = data.equippedPads[key]
+				if placeOnGreySlot(player, slot, item) then
+					local pendingBySlot = getNestedTable(BaseService._pendingMoney, userId)
+					pendingBySlot[slot] = 0
+					getNestedTable(BaseService._nextMoneyTickAt, userId)[slot] = os.clock() + 1
+					updateMoneyText(player, slot)
+					updatePromptText(player, slot)
+					EquipResult:FireClient(player, {
+						success = true,
+						padSlot = slot,
+						streamerId = heldStreamerId,
+					})
+				end
+			else
+				EquipResult:FireClient(player, { success = false, reason = "Cannot place here." })
+			end
+		end)
 	end)
 
 	task.spawn(function()
@@ -879,7 +960,7 @@ end
 function BaseService.ClearDisplaysForRebirth(player)
 	if not player then return end
 	local userId = player.UserId
-	clearPlacedModel(player)
+	-- Do not clear placed models: streamers stay on pads across rebirth
 	BaseService._pendingMoney[userId] = {}
 	BaseService._nextMoneyTickAt[userId] = {}
 	local baseInfo = BaseService._bases[userId]

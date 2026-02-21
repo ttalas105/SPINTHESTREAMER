@@ -33,6 +33,7 @@ local SacrificeController    = require(controllers.SacrificeController)
 local StorageController      = require(controllers.StorageController)
 local MusicController        = require(controllers.MusicController)
 local SettingsController     = require(controllers.SettingsController)
+local TutorialController     = require(controllers.TutorialController)
 local UIHelper               = require(controllers.UIHelper)
 
 local RemoteEvents = ReplicatedStorage:WaitForChild("RemoteEvents")
@@ -60,25 +61,30 @@ SacrificeController.Init()
 StorageController.Init()
 MusicController.Init()
 SettingsController.Init()
+TutorialController.Init()
 SlotPadController.Init(HoldController, InventoryController)
 
 -------------------------------------------------
--- HIDE PLAYER HEALTH BARS
+-- HIDE PLAYER HEALTH BARS + MOVEMENT SPEED
 -------------------------------------------------
 
-local function hideCharacterHealth(character)
+local DEFAULT_WALKSPEED = 16
+local WALKSPEED_MULTIPLIER = 1.30  -- 30% faster
+
+local function setupCharacter(character)
 	local humanoid = character:FindFirstChildOfClass("Humanoid")
 	if humanoid then
 		humanoid.HealthDisplayType = Enum.HumanoidHealthDisplayType.AlwaysOff
+		humanoid.WalkSpeed = math.floor(DEFAULT_WALKSPEED * WALKSPEED_MULTIPLIER + 0.5)  -- 20
 	end
 end
 
 local localPlayer = Players.LocalPlayer
 if localPlayer.Character then
-	hideCharacterHealth(localPlayer.Character)
+	setupCharacter(localPlayer.Character)
 end
 localPlayer.CharacterAdded:Connect(function(char)
-	hideCharacterHealth(char)
+	setupCharacter(char)
 end)
 
 -------------------------------------------------
@@ -93,6 +99,7 @@ BaseReady.OnClientEvent:Connect(function(data)
 	if data.position then
 		myBasePosition = data.position
 		SlotPadController.SetBasePosition(data.position)
+		TutorialController.OnBaseReady(data)
 		print("[Client] Base assigned at position: " .. tostring(data.position))
 	end
 end)
@@ -105,6 +112,10 @@ TopNavController.OnTabChanged(function(tabName)
 	SpinController.Hide()
 	if StoreController.IsOpen() then
 		StoreController.Close()
+	end
+
+	if TutorialController.IsActive() then
+		TutorialController.OnTabChanged(tabName)
 	end
 
 	local character = Players.LocalPlayer.Character
@@ -167,13 +178,20 @@ end)
 -- DATA UPDATES -> INVENTORY + PADS
 -------------------------------------------------
 
+local tutorialStarted = false
 HUDController.OnDataUpdated(function(data)
-	-- Update inventory bar
 	InventoryController.UpdateInventory(data.inventory, data.storage)
-	-- Update storage UI if open
 	StorageController.Refresh()
-	-- Update pad controller cache
 	SlotPadController.Refresh(data)
+
+	if not tutorialStarted and data.tutorialComplete ~= nil then
+		tutorialStarted = true
+		if TutorialController.ShouldStart(data) then
+			task.delay(1.5, function()
+				TutorialController.Start()
+			end)
+		end
+	end
 end)
 
 -- When sacrifice queues change, refresh inventory/storage visuals
@@ -209,9 +227,11 @@ end)
 -------------------------------------------------
 
 SpinController.OnSpinResult(function(data)
-	-- Flash the newly added item in inventory
 	if data.streamerId then
 		InventoryController.FlashNewItem(data.streamerId)
+	end
+	if TutorialController.IsActive() then
+		TutorialController.OnSpinResult(data)
 	end
 end)
 
@@ -219,9 +239,11 @@ end)
 local EquipResult = RemoteEvents:WaitForChild("EquipResult")
 EquipResult.OnClientEvent:Connect(function(data)
 	if data and data.success then
-		-- Place action: clear inventory selection -> held model drops.
 		InventoryController.ClearSelection()
 		HoldController.Drop()
+	end
+	if TutorialController.IsActive() then
+		TutorialController.OnEquipResult(data)
 	end
 end)
 
@@ -255,6 +277,17 @@ SellResult.OnClientEvent:Connect(function(data)
 		print("[Client] Sold! +$" .. data.cashEarned)
 	else
 		print("[Client] Sell failed: " .. (data.reason or "unknown"))
+	end
+end)
+
+-------------------------------------------------
+-- TUTORIAL HOOKS
+-------------------------------------------------
+
+local OpenSpinStandGuiTutorial = RemoteEvents:WaitForChild("OpenSpinStandGui")
+OpenSpinStandGuiTutorial.OnClientEvent:Connect(function()
+	if TutorialController.IsActive() then
+		TutorialController.OnSpinStandOpened()
 	end
 end)
 

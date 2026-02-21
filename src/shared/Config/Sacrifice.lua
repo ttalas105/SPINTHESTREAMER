@@ -160,47 +160,47 @@ Sacrifice.OneTime = {
 	-- ELEMENTAL ONE-TIME SACRIFICES (20 cards of a specific effect, any rarity)
 	AcidReflex = {
 		name = "Acid Reflex",
-		gems = 1000,
+		gems = 4500,
 		req  = { { effectReq = "Acid", count = 20 } },
 	},
 	SnowyAvalanche = {
 		name = "Snowy Avalanche",
-		gems = 3000,
+		gems = 6000,
 		req  = { { effectReq = "Snow", count = 20 } },
 	},
 	LavaEruption = {
 		name = "Lava Eruption",
-		gems = 5000,
+		gems = 8000,
 		req  = { { effectReq = "Lava", count = 20 } },
 	},
 	LightningStrike = {
 		name = "Lightning Strike",
-		gems = 7000,
+		gems = 12500,
 		req  = { { effectReq = "Lightning", count = 20 } },
 	},
 	ShadowRealm = {
 		name = "Shadow Realm",
-		gems = 9000,
+		gems = 17000,
 		req  = { { effectReq = "Shadow", count = 20 } },
 	},
 	GlitchStorm = {
 		name = "Glitch Storm",
-		gems = 11000,
+		gems = 23000,
 		req  = { { effectReq = "Glitchy", count = 20 } },
 	},
 	LunarTide = {
 		name = "Lunar Tide",
-		gems = 13000,
+		gems = 50000,
 		req  = { { effectReq = "Lunar", count = 20 } },
 	},
 	SolarFlare = {
 		name = "Solar Flare",
-		gems = 15000,
+		gems = 73000,
 		req  = { { effectReq = "Solar", count = 20 } },
 	},
 	VoidAbyss = {
 		name = "Void Abyss",
-		gems = 17000,
+		gems = 100000,
 		req  = { { effectReq = "Void", count = 20 } },
 	},
 }

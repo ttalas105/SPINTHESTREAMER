@@ -328,6 +328,20 @@ do
 	print("[Server] Storage actions wired")
 end
 
+-- Tutorial completion handler
+do
+	local TutorialComplete = ReplicatedStorage.RemoteEvents:WaitForChild("TutorialComplete")
+	TutorialComplete.OnServerEvent:Connect(function(player)
+		PlayerData.WithLock(player, function()
+			local data = PlayerData._cache[player.UserId]
+			if not data then return end
+			if data.tutorialComplete then return end
+			data.tutorialComplete = true
+			PlayerData.Replicate(player)
+		end)
+	end)
+end
+
 -- Initialize services (order matters: PlayerData first, then BaseService)
 PlayerData.Init()
 PotionService.Init(PlayerData)

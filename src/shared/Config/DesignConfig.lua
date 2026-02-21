@@ -95,12 +95,15 @@ DesignConfig.FontSizes = { Title = 36, Header = 28, Body = 22, Caption = 18, Sma
 -- SPACING & LAYOUT
 -------------------------------------------------
 DesignConfig.Layout = {
-	ButtonCorner    = UDim.new(0, 12),
-	PanelCorner     = UDim.new(0, 16),
-	ModalCorner     = UDim.new(0, 20),
+	ButtonCorner    = UDim.new(0, 20),
+	PanelCorner     = UDim.new(0, 24),
+	ModalCorner     = UDim.new(0, 28),
 	Padding         = UDim.new(0, 8),
 	PaddingLarge    = UDim.new(0, 16),
-	StrokeThickness = 2,
+	StrokeThickness = 2.5,
+	ShadowColor     = Color3.fromRGB(0, 0, 0),
+	ShadowTransparency = 0.7,
+	ShadowOffset    = UDim2.new(0, 4, 0, 4),
 }
 
 -------------------------------------------------

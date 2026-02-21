@@ -2,7 +2,7 @@
 	UIHelper.lua
 	Shared UI creation utilities for the client.
 	Provides button creation, tween animations, screen scaling,
-	and common widget patterns used across all controllers.
+	shadows, gradients, and common widget patterns.
 ]]
 
 local TweenService = game:GetService("TweenService")
@@ -14,10 +14,6 @@ local UIHelper = {}
 
 -------------------------------------------------
 -- RESPONSIVE SCALING
--- Reference resolution: 1080p (1920×1080).
--- All UI is authored at 1080p pixel sizes; screens
--- larger or smaller than that get a proportional UIScale.
--- We use the *smaller* axis so nothing overflows.
 -------------------------------------------------
 
 local REF_WIDTH  = 1280
@@ -44,13 +40,11 @@ function UIHelper.CreateScreenGui(name: string, displayOrder: number?)
 	gui.DisplayOrder = displayOrder or 1
 	gui.IgnoreGuiInset = true
 
-	-- Auto-scale all children relative to 1080p
 	local uiScale = Instance.new("UIScale")
 	uiScale.Name = "ResponsiveScale"
 	uiScale.Scale = getViewportScale()
 	uiScale.Parent = gui
 
-	-- Update when the viewport changes (window resize, orientation flip on mobile)
 	local camera = workspace.CurrentCamera
 	if camera then
 		camera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
@@ -61,10 +55,47 @@ function UIHelper.CreateScreenGui(name: string, displayOrder: number?)
 	return gui
 end
 
---- Utility: get the current responsive scale factor (for controllers that
---- need to do math with pixel sizes outside of the ScreenGui tree).
 function UIHelper.GetScale()
 	return getViewportScale()
+end
+
+-------------------------------------------------
+-- PUFFY GRADIENT (lighter top, darker bottom)
+-------------------------------------------------
+
+function UIHelper.AddPuffyGradient(guiObject)
+	local grad = Instance.new("UIGradient")
+	grad.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(200, 200, 210)),
+	})
+	grad.Rotation = 90
+	grad.Parent = guiObject
+	return grad
+end
+
+-------------------------------------------------
+-- DROP SHADOW
+-------------------------------------------------
+
+function UIHelper.CreateShadow(parent)
+	local shadow = Instance.new("Frame")
+	shadow.Name = "_Shadow"
+	shadow.Size = UDim2.new(1, 8, 1, 8)
+	shadow.Position = UDim2.new(0.5, 3, 0.5, 3)
+	shadow.AnchorPoint = Vector2.new(0.5, 0.5)
+	shadow.BackgroundColor3 = DesignConfig.Layout.ShadowColor
+	shadow.BackgroundTransparency = DesignConfig.Layout.ShadowTransparency
+	shadow.BorderSizePixel = 0
+	shadow.ZIndex = -1
+
+	local corner = Instance.new("UICorner")
+	local parentCorner = parent:FindFirstChildOfClass("UICorner")
+	corner.CornerRadius = parentCorner and parentCorner.CornerRadius or DesignConfig.Layout.ModalCorner
+	corner.Parent = shadow
+
+	shadow.Parent = parent
+	return shadow
 end
 
 -------------------------------------------------
@@ -89,6 +120,7 @@ function UIHelper.CreateRoundedFrame(props)
 		local stroke = Instance.new("UIStroke")
 		stroke.Color = props.StrokeColor
 		stroke.Thickness = props.StrokeThickness or DesignConfig.Layout.StrokeThickness
+		stroke.Transparency = props.StrokeTransparency or 0.15
 		stroke.Parent = frame
 	end
 
@@ -100,7 +132,7 @@ function UIHelper.CreateRoundedFrame(props)
 end
 
 -------------------------------------------------
--- BUTTON
+-- BUTTON (bouncy + puffy gradient)
 -------------------------------------------------
 
 function UIHelper.CreateButton(props)
@@ -125,42 +157,52 @@ function UIHelper.CreateButton(props)
 		local stroke = Instance.new("UIStroke")
 		stroke.Color = props.StrokeColor
 		stroke.Thickness = props.StrokeThickness or DesignConfig.Layout.StrokeThickness
+		stroke.Transparency = 0.15
 		stroke.Parent = button
 	end
 
+	-- Puffy gradient overlay
+	if props.NoPuffy ~= true then
+		UIHelper.AddPuffyGradient(button)
+	end
+
+	local idleSize = props.Size or button.Size
 	local idleColor = props.Color or DesignConfig.Colors.ButtonIdle
 	local hoverColor = props.HoverColor or DesignConfig.Colors.ButtonHover
-	local tweenInfo = TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+
+	local hoverSize = UDim2.new(
+		idleSize.X.Scale * 1.08, idleSize.X.Offset * 1.08,
+		idleSize.Y.Scale * 1.08, idleSize.Y.Offset * 1.08
+	)
+	local clickSize = UDim2.new(
+		idleSize.X.Scale * 0.93, idleSize.X.Offset * 0.93,
+		idleSize.Y.Scale * 0.93, idleSize.Y.Offset * 0.93
+	)
+
+	local bounceTween = TweenInfo.new(0.18, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+	local clickTween  = TweenInfo.new(0.08, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 
 	button.MouseEnter:Connect(function()
-		TweenService:Create(button, tweenInfo, {
+		TweenService:Create(button, bounceTween, {
 			BackgroundColor3 = hoverColor,
-			Size = props.Size and UDim2.new(
-				props.Size.X.Scale * 1.05, props.Size.X.Offset * 1.05,
-				props.Size.Y.Scale * 1.05, props.Size.Y.Offset * 1.05
-			) or button.Size,
+			Size = hoverSize,
 		}):Play()
 	end)
 
 	button.MouseLeave:Connect(function()
-		TweenService:Create(button, tweenInfo, {
+		TweenService:Create(button, bounceTween, {
 			BackgroundColor3 = idleColor,
-			Size = props.Size or button.Size,
+			Size = idleSize,
 		}):Play()
 	end)
 
 	button.MouseButton1Down:Connect(function()
-		TweenService:Create(button, TweenInfo.new(0.08), {
-			Size = props.Size and UDim2.new(
-				props.Size.X.Scale * 0.95, props.Size.X.Offset * 0.95,
-				props.Size.Y.Scale * 0.95, props.Size.Y.Offset * 0.95
-			) or button.Size,
-		}):Play()
+		TweenService:Create(button, clickTween, { Size = clickSize }):Play()
 	end)
 
 	button.MouseButton1Up:Connect(function()
-		TweenService:Create(button, tweenInfo, {
-			Size = props.Size or button.Size,
+		TweenService:Create(button, bounceTween, {
+			Size = idleSize,
 			BackgroundColor3 = hoverColor,
 		}):Play()
 	end)
@@ -199,8 +241,7 @@ function UIHelper.CreateLabel(props)
 end
 
 -------------------------------------------------
--- ICON BUTTON (image icon + label underneath)
--- Uses ImageLabel for real asset icons
+-- ICON BUTTON (bouncy + shadow + image-ready)
 -------------------------------------------------
 
 function UIHelper.CreateIconButton(props)
@@ -215,6 +256,9 @@ function UIHelper.CreateIconButton(props)
 	local corner = Instance.new("UICorner")
 	corner.CornerRadius = props.CornerRadius or DesignConfig.Layout.ButtonCorner
 	corner.Parent = container
+
+	-- Puffy gradient
+	UIHelper.AddPuffyGradient(container)
 
 	-- Image icon (if asset ID provided) or cartoon emoji text icon
 	if props.ImageId and props.ImageId ~= "" then
@@ -234,14 +278,13 @@ function UIHelper.CreateIconButton(props)
 		icon.Position = UDim2.new(0, 0, 0.02, 0)
 		icon.BackgroundTransparency = 1
 		icon.TextColor3 = props.IconColor3 or DesignConfig.Colors.White
-		-- Cartoon-style font for emoji icons (FredokaOne is bouncy and kid-friendly)
 		icon.Font = props.IconFont or DesignConfig.Fonts.Accent
 		icon.TextScaled = true
 		icon.Text = props.Icon or "?"
 		icon.Parent = container
 	end
 
-	-- Label underneath (optional cartoon font for kid-friendly nav)
+	-- Label underneath
 	local label = Instance.new("TextLabel")
 	label.Name = "Label"
 	label.Size = UDim2.new(1, 0, 0.35, 0)
@@ -253,14 +296,13 @@ function UIHelper.CreateIconButton(props)
 	label.Text = props.Label or ""
 	label.Parent = container
 
-	-- Drop shadow / stroke on label for readability
 	local labelStroke = Instance.new("UIStroke")
 	labelStroke.Color = Color3.new(0, 0, 0)
 	labelStroke.Thickness = 1.5
 	labelStroke.Transparency = 0.3
 	labelStroke.Parent = label
 
-	-- Click detection (invisible button over the frame)
+	-- Click detection
 	local clickButton = Instance.new("TextButton")
 	clickButton.Name = "ClickZone"
 	clickButton.Size = UDim2.new(1, 0, 1, 0)
@@ -268,19 +310,49 @@ function UIHelper.CreateIconButton(props)
 	clickButton.Text = ""
 	clickButton.Parent = container
 
-	-- Hover animation
+	-- Bouncy hover + squish click
 	local idleColor = props.Color or DesignConfig.Colors.ButtonIdle
 	local hoverColor = props.HoverColor or DesignConfig.Colors.ButtonHover
-	local tweenInfo = TweenInfo.new(0.15, Enum.EasingStyle.Quad)
+	local idleSize = props.Size or DesignConfig.Sizes.SideButtonSize
+
+	local hoverSize = UDim2.new(
+		idleSize.X.Scale * 1.1, idleSize.X.Offset * 1.1,
+		idleSize.Y.Scale * 1.1, idleSize.Y.Offset * 1.1
+	)
+	local clickSize = UDim2.new(
+		idleSize.X.Scale * 0.92, idleSize.X.Offset * 0.92,
+		idleSize.Y.Scale * 0.92, idleSize.Y.Offset * 0.92
+	)
+
+	local bounceTween = TweenInfo.new(0.2, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+	local clickTween  = TweenInfo.new(0.08, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 
 	clickButton.MouseEnter:Connect(function()
-		TweenService:Create(container, tweenInfo, { BackgroundColor3 = hoverColor }):Play()
-	end)
-	clickButton.MouseLeave:Connect(function()
-		TweenService:Create(container, tweenInfo, { BackgroundColor3 = idleColor }):Play()
+		TweenService:Create(container, bounceTween, {
+			BackgroundColor3 = hoverColor,
+			Size = hoverSize,
+		}):Play()
 	end)
 
-	-- Notification badge (hidden by default)
+	clickButton.MouseLeave:Connect(function()
+		TweenService:Create(container, bounceTween, {
+			BackgroundColor3 = idleColor,
+			Size = idleSize,
+		}):Play()
+	end)
+
+	clickButton.MouseButton1Down:Connect(function()
+		TweenService:Create(container, clickTween, { Size = clickSize }):Play()
+	end)
+
+	clickButton.MouseButton1Up:Connect(function()
+		TweenService:Create(container, bounceTween, {
+			Size = idleSize,
+			BackgroundColor3 = hoverColor,
+		}):Play()
+	end)
+
+	-- Notification badge
 	local badge = UIHelper.CreateRoundedFrame({
 		Name = "Badge",
 		Size = UDim2.new(0, 20, 0, 20),
@@ -366,6 +438,26 @@ function UIHelper.ScaleIn(guiObject, duration)
 	TweenService:Create(guiObject, TweenInfo.new(duration, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
 		Size = targetSize,
 	}):Play()
+end
+
+function UIHelper.ScaleOut(guiObject, duration)
+	duration = duration or 0.25
+	local targetSize = UDim2.new(
+		guiObject.Size.X.Scale * 0.8, guiObject.Size.X.Offset * 0.8,
+		guiObject.Size.Y.Scale * 0.8, guiObject.Size.Y.Offset * 0.8
+	)
+	local tween = TweenService:Create(guiObject, TweenInfo.new(duration, Enum.EasingStyle.Back, Enum.EasingDirection.In), {
+		Size = targetSize,
+	})
+	tween:Play()
+	tween.Completed:Connect(function()
+		guiObject.Visible = false
+		-- Restore original size so ScaleIn works next open
+		guiObject.Size = UDim2.new(
+			targetSize.X.Scale / 0.8, targetSize.X.Offset / 0.8,
+			targetSize.Y.Scale / 0.8, targetSize.Y.Offset / 0.8
+		)
+	end)
 end
 
 -------------------------------------------------

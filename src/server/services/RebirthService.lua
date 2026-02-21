@@ -1,7 +1,7 @@
 --[[
 	RebirthService.lua
-	Handles rebirth: cost check, reset cash + potions,
-	(equipped items return to inventory), increment rebirth.
+	Handles rebirth: cost check, reset cash + potions, increment rebirth.
+	Equipped streamers stay on base pads (no return to inventory).
 	Max 7 rebirths. Each gives +5% coin bonus and unlocks the next case.
 ]]
 

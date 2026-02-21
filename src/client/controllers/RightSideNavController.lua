@@ -32,8 +32,8 @@ local STROKE_COLOR = Color3.fromRGB(30, 25, 50)
 -------------------------------------------------
 
 local menuItems = {
-	{ name = "Rebirth",  icon = "✨", color = Color3.fromRGB(255, 100, 140),  label = "Rebirth" },
-	{ name = "Settings", icon = "⚙️", color = Color3.fromRGB(100, 160, 220),  label = "Settings" },
+	{ name = "Rebirth",  icon = "✨", imageId = "", color = Color3.fromRGB(255, 100, 140),  label = "Rebirth"  }, -- Replace imageId with rbxassetid://YOUR_ICON_ID
+	{ name = "Settings", icon = "⚙️", imageId = "rbxassetid://136970465147454", color = Color3.fromRGB(100, 160, 220),  label = "Settings" },
 }
 
 -------------------------------------------------
@@ -71,6 +71,7 @@ function RightSideNavController.Init()
 				math.min(item.color.B + 0.12, 1)
 			),
 			Icon = item.icon,
+			ImageId = (item.imageId ~= "") and item.imageId or nil,
 			IconFont = Enum.Font.Cartoon,
 			LabelFont = Enum.Font.Cartoon,
 			Label = item.label,
@@ -78,11 +79,13 @@ function RightSideNavController.Init()
 			Parent = container,
 		})
 
-		-- Bold cartoon outline for bubbly look
 		local stroke = Instance.new("UIStroke")
 		stroke.Color = STROKE_COLOR
 		stroke.Thickness = STROKE_THICKNESS
+		stroke.Transparency = 0.15
 		stroke.Parent = iconBtn
+
+		UIHelper.CreateShadow(iconBtn)
 
 		buttons[item.name] = iconBtn
 

@@ -9,6 +9,7 @@ local Players = game:GetService("Players")
 
 local DesignConfig = require(ReplicatedStorage.Shared.Config.DesignConfig)
 local UIHelper = require(script.Parent.UIHelper)
+local UISounds = require(script.Parent.UISounds)
 
 local LeftSideNavController = {}
 
@@ -32,9 +33,9 @@ local STROKE_COLOR = Color3.fromRGB(30, 25, 50)
 -------------------------------------------------
 
 local menuItems = {
-	{ name = "Index",  icon = "📖", color = Color3.fromRGB(100, 200, 255),  label = "Index" },
-	{ name = "Storage", icon = "\u{1F4E6}", color = Color3.fromRGB(255, 165, 50), label = "Storage" },
-	{ name = "Store",  icon = "🛒", color = Color3.fromRGB(255, 90, 120),   label = "Store" },
+	{ name = "Index",   icon = "📖", imageId = "", color = Color3.fromRGB(100, 200, 255),  label = "Index"   }, -- Replace imageId with rbxassetid://YOUR_ICON_ID
+	{ name = "Storage", icon = "\u{1F4E6}", imageId = "", color = Color3.fromRGB(255, 165, 50), label = "Storage" }, -- Replace imageId with rbxassetid://YOUR_ICON_ID
+	{ name = "Store",   icon = "🛒", imageId = "rbxassetid://114090124339958", color = Color3.fromRGB(255, 90, 120),   label = "Store"   },
 }
 
 -------------------------------------------------
@@ -72,6 +73,7 @@ function LeftSideNavController.Init()
 				math.min(item.color.B + 0.12, 1)
 			),
 			Icon = item.icon,
+			ImageId = (item.imageId ~= "") and item.imageId or nil,
 			IconFont = Enum.Font.Cartoon,
 			LabelFont = Enum.Font.Cartoon,
 			Label = item.label,
@@ -79,15 +81,21 @@ function LeftSideNavController.Init()
 			Parent = container,
 		})
 
-		-- Bold cartoon outline for bubbly look
 		local stroke = Instance.new("UIStroke")
 		stroke.Color = STROKE_COLOR
 		stroke.Thickness = STROKE_THICKNESS
+		stroke.Transparency = 0.15
 		stroke.Parent = iconBtn
+
+		UIHelper.CreateShadow(iconBtn)
 
 		buttons[item.name] = iconBtn
 
+		clickZone.MouseEnter:Connect(function()
+			UISounds.PlayHover()
+		end)
 		clickZone.MouseButton1Click:Connect(function()
+			UISounds.PlayClick()
 			if onButtonClicked[item.name] then
 				onButtonClicked[item.name]()
 			end

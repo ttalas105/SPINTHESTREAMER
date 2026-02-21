@@ -87,28 +87,18 @@ else
 end
 
 local DEFAULT_DATA = {
-	cash = 1000000,
+	cash = 200,
 	gems = 0,
-	inventory = {
-		{ id = "Cinna", effect = "Acid" },
-		{ id = "Cinna", effect = "Snow" },
-		{ id = "Cinna", effect = "Lava" },
-		{ id = "Cinna", effect = "Lightning" },
-		{ id = "Cinna", effect = "Shadow" },
-		{ id = "Cinna", effect = "Glitchy" },
-		{ id = "Cinna", effect = "Lunar" },
-		{ id = "Cinna", effect = "Solar" },
-		{ id = "Cinna", effect = "Void" },
-	},
+	inventory = {},
 	storage = {},  -- overflow storage (max 200 items, same {id, effect} format)
 	equippedPads = {},
-	collection = { ["Cinna"] = true, ["Lacy"] = true, ["Fanum"] = true, ["StableRonaldo"] = true },
+	collection = {},
 	-- Index collection: tracks every unique streamer+effect combo the player has pulled
 	-- Key = "StreamerId" for base, "Effect:StreamerId" for effect variants
 	-- Value = true (unlocked) or "claimed" (gems already collected)
 	indexCollection = {},
 	rebirthCount = 0,
-	luck = 200,               -- personal luck stat; 1 luck = +1% drop luck (stacked with crate luck)
+	luck = 0,                 -- personal luck stat; 1 luck = +1% drop luck (stacked with crate luck)
 	cashUpgrade = 0,          -- coin multiplier upgrade count; each +1 = +2% cash production
 	premiumSlotUnlocked = false,
 	doubleCash = false,
@@ -116,6 +106,7 @@ local DEFAULT_DATA = {
 	-- Sacrifice: one-time completed, charge slots (rechargeAt times)
 	sacrificeOneTime = {},
 	sacrificeCharges = { FiftyFifty = {}, FeelingLucky = {} },
+	tutorialComplete = false,
 }
 
 local RemoteEvents = ReplicatedStorage:WaitForChild("RemoteEvents")
@@ -244,6 +235,7 @@ local function buildFullPayload(player, data)
 		doubleCash = data.doubleCash,
 		spinCredits = data.spinCredits,
 		totalSlots = SlotsConfig.GetTotalSlots(data.rebirthCount, data.premiumSlotUnlocked),
+		tutorialComplete = data.tutorialComplete or false,
 		sacrificeOneTime = data.sacrificeOneTime or {},
 		sacrificeCharges = data.sacrificeCharges or { FiftyFifty = {}, FeelingLucky = {} },
 		sacrificeChargeState = {
@@ -264,6 +256,7 @@ end
 local SCALAR_FIELDS = {
 	"cash", "gems", "rebirthCount", "luck", "cashUpgrade",
 	"premiumSlotUnlocked", "doubleCash", "spinCredits", "totalSlots",
+	"tutorialComplete",
 }
 local SCALAR_SET = {}
 for _, f in ipairs(SCALAR_FIELDS) do SCALAR_SET[f] = true end
@@ -380,6 +373,13 @@ local function itemId(item)
 	if type(item) == "table" then return item.id end
 	if type(item) == "string" then return item end
 	return nil
+end
+
+local function itemEffect(item)
+	if type(item) ~= "table" then return nil end
+	local e = item.effect
+	if e == nil or e == "" then return nil end
+	return e
 end
 
 --- Add a streamer to the player's hotbar or storage (with optional effect).
@@ -639,8 +639,9 @@ end
 -- EQUIP / UNEQUIP (pad slots — items are {id, effect} tables)
 -------------------------------------------------
 
---- Equip a streamer from inventory to a pad slot
-function PlayerData.EquipToPad(player, streamerId: string, padSlot: number, ignoreUnlockCheck: boolean?): boolean
+--- Equip a streamer from inventory to a pad slot.
+--- effect: optional; if provided, matches the specific instance (e.g. Acid Cinna vs base Cinna).
+function PlayerData.EquipToPad(player, streamerId: string, padSlot: number, ignoreUnlockCheck: boolean?, effect: string?): boolean
 	local data = PlayerData.Get(player)
 	if not data then return false end
 
@@ -649,11 +650,12 @@ function PlayerData.EquipToPad(player, streamerId: string, padSlot: number, igno
 		return false
 	end
 
-	-- Find and remove from inventory (match by id)
+	local wantEffect = (effect == nil or effect == "") and nil or effect
+	-- Find and remove from inventory (match by id AND effect so we remove the one in hand, not first match)
 	local foundItem = nil
 	local foundIndex = nil
 	for i, item in ipairs(data.inventory) do
-		if itemId(item) == streamerId then
+		if itemId(item) == streamerId and itemEffect(item) == wantEffect then
 			foundItem = item
 			foundIndex = i
 			break
@@ -727,16 +729,8 @@ function PlayerData.ResetForRebirth(player)
 	if not data then return end
 	data.cash = 0
 	if not data.storage then data.storage = {} end
-	-- Clear equipped pads, put equipped streamers back into inventory/storage
-	for key, item in pairs(data.equippedPads) do
-		if #data.inventory < PlayerData.HOTBAR_MAX then
-			table.insert(data.inventory, item)
-		elseif #data.storage < PlayerData.STORAGE_MAX then
-			table.insert(data.storage, item)
-		end
-	end
-	data.equippedPads = {}
-	-- Inventory, storage, and collection are kept; potions are cleared by PotionService
+	-- Keep equippedPads: streamers stay on base pads across rebirth (no return to inventory)
+	-- Inventory, storage, collection, and equippedPads are kept; potions are cleared by PotionService
 	PlayerData.Replicate(player)
 end
 

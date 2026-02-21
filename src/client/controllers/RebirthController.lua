@@ -138,12 +138,14 @@ local function buildUI()
 	modalFrame.Visible = false
 	modalFrame.Parent = screenGui
 	local modalCorner = Instance.new("UICorner")
-	modalCorner.CornerRadius = UDim.new(0, 22)
+	modalCorner.CornerRadius = UDim.new(0, 24)
 	modalCorner.Parent = modalFrame
 	local modalStroke = Instance.new("UIStroke")
 	modalStroke.Color = Color3.fromRGB(255, 140, 60)
 	modalStroke.Thickness = 3
+	modalStroke.Transparency = 0.15
 	modalStroke.Parent = modalFrame
+	UIHelper.CreateShadow(modalFrame)
 
 	-- Orange gradient accent at top
 	local topAccent = Instance.new("Frame")
@@ -415,7 +417,7 @@ end
 function RebirthController.Close()
 	if not isOpen then return end
 	isOpen = false
-	modalFrame.Visible = false
+	if modalFrame then UIHelper.ScaleOut(modalFrame, 0.2) end
 end
 
 -------------------------------------------------

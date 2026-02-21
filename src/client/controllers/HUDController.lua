@@ -141,12 +141,26 @@ function HUDController.UpdateData(payload)
 	if cashLabel then
 		cashLabel.Text = "$" .. tostring(HUDController.Data.cash)
 
-		-- Flash on change
 		if HUDController.Data.cash ~= previousCash then
 			local flashColor = HUDController.Data.cash > previousCash
 				and Color3.fromRGB(100, 255, 100)
 				or Color3.fromRGB(255, 100, 100)
 			cashLabel.TextColor3 = flashColor
+
+			local origSize = cashLabel.Size
+			local popSize = UDim2.new(
+				origSize.X.Scale * 1.06, origSize.X.Offset * 1.06,
+				origSize.Y.Scale * 1.06, origSize.Y.Offset * 1.06
+			)
+			local popInfo = TweenInfo.new(0.1, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+			local returnInfo = TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.In)
+
+			local popTween = TweenService:Create(cashLabel, popInfo, { Size = popSize })
+			popTween:Play()
+			popTween.Completed:Connect(function()
+				TweenService:Create(cashLabel, returnInfo, { Size = origSize }):Play()
+			end)
+
 			task.delay(0.2, function()
 				TweenService:Create(cashLabel, TweenInfo.new(0.3), {
 					TextColor3 = DesignConfig.Colors.Accent,

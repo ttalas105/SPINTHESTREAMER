@@ -51,8 +51,8 @@ local function handleClaimGems(player, streamerId, effect)
 		return
 	end
 
-	-- Calculate gem reward based on rarity
-	local gemReward = Economy.IndexGemRewards[info.rarity] or 2
+	-- Calculate gem reward: base by rarity, then x2 for Acid, x3 for Snow, ... x10 for Void
+	local gemReward = Economy.GetIndexGemReward(info.rarity, effect)
 
 	-- Claim
 	local claimed = PlayerData.ClaimIndexGems(player, streamerId, effect)

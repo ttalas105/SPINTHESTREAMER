@@ -12,83 +12,26 @@ local GemCases = {}
 
 -------------------------------------------------
 -- REGULAR CASES (fixed item pools, no effect)
+-- Starter Case, Rare Hunters, Epic Crate, Legendary Drop removed from gem store.
 -------------------------------------------------
-GemCases.RegularCases = {
-	{
-		id       = "GemCase1",
-		name     = "Starter Case",
-		cost     = 200,
-		color    = Color3.fromRGB(100, 200, 255),
-		items = {
-			{ streamerId = "Silky",        chance = 32,   displayName = "Silky" },
-			{ streamerId = "Emiru",        chance = 25,   displayName = "Emiru" },
-			{ streamerId = "Duke Dennis",  chance = 20,   displayName = "Duke Dennis" },
-			{ streamerId = "Marlon",       chance = 13,   displayName = "Marlon" },
-			{ streamerId = "Kreek Craft",  chance = 7,    displayName = "Kreek Craft" },
-			{ streamerId = "Valkyrae",     chance = 3,    displayName = "Valkyrae" },
-		},
-	},
-	{
-		id       = "GemCase2",
-		name     = "Rare Hunters",
-		cost     = 500,
-		color    = Color3.fromRGB(60, 150, 255),
-		items = {
-			{ streamerId = "Shroud",         chance = 32,   displayName = "Shroud" },
-			{ streamerId = "StableRonaldo",  chance = 25,   displayName = "Stable Ronaldo" },
-			{ streamerId = "Train",          chance = 18,   displayName = "Trainwrecks" },
-			{ streamerId = "Lacy",           chance = 13,   displayName = "Lacy" },
-			{ streamerId = "Cinna",          chance = 9,    displayName = "Cinna" },
-			{ streamerId = "CaseOh",         chance = 3,    displayName = "CaseOh" },
-		},
-	},
-	{
-		id       = "GemCase3",
-		name     = "Epic Crate",
-		cost     = 1500,
-		color    = Color3.fromRGB(170, 80, 255),
-		items = {
-			{ streamerId = "Cinna",        chance = 28,   displayName = "Cinna" },
-			{ streamerId = "CaseOh",       chance = 24,   displayName = "CaseOh" },
-			{ streamerId = "Pokimane",     chance = 20,   displayName = "Pokimane" },
-			{ streamerId = "Adapt",        chance = 14,   displayName = "Adapt" },
-			{ streamerId = "OhnePixel",    chance = 8,    displayName = "ohnePixel" },
-			{ streamerId = "JasondaWeen",  chance = 4.5,  displayName = "JasondaWeen" },
-			{ streamerId = "Ninja",        chance = 1.5,  displayName = "Ninja" },
-		},
-	},
-	{
-		id       = "GemCase4",
-		name     = "Legendary Drop",
-		cost     = 5000,
-		color    = Color3.fromRGB(255, 200, 40),
-		items = {
-			{ streamerId = "OhnePixel",    chance = 28,   displayName = "ohnePixel" },
-			{ streamerId = "JasondaWeen",  chance = 25,   displayName = "JasondaWeen" },
-			{ streamerId = "Ninja",        chance = 22,   displayName = "Ninja" },
-			{ streamerId = "Kai Cenat",    chance = 14,   displayName = "Kai Cenat" },
-			{ streamerId = "Jynxzi",       chance = 7,    displayName = "Jynxzi" },
-			{ streamerId = "IShowSpeed",   chance = 3,    displayName = "IShowSpeed" },
-			{ streamerId = "XQC",          chance = 1,    displayName = "xQc" },
-		},
-	},
-}
+GemCases.RegularCases = {}
 
 -------------------------------------------------
 -- EFFECT CASES
 -- Each case contains ALL streamers but with the given effect.
 -- `compression` controls how "flat" the distribution is (lower = flatter = rarer streamers more accessible).
 -------------------------------------------------
+-- All effect cases use Lightning case odds (compression = 0.42)
 GemCases.EffectCases = {
-	{ id = "AcidCase",      effect = "Acid",      name = "Acid Case",      cost = 100,   color = Color3.fromRGB(50, 255, 50),    compression = 0.70 },
-	{ id = "SnowCase",      effect = "Snow",      name = "Snow Case",      cost = 300,   color = Color3.fromRGB(180, 220, 255),   compression = 0.60 },
-	{ id = "LavaCase",      effect = "Lava",      name = "Lava Case",      cost = 700,   color = Color3.fromRGB(255, 100, 20),    compression = 0.50 },
-	{ id = "LightningCase", effect = "Lightning",  name = "Lightning Case", cost = 1000,  color = Color3.fromRGB(255, 255, 80),    compression = 0.42 },
-	{ id = "ShadowCase",    effect = "Shadow",     name = "Shadow Case",    cost = 2000,  color = Color3.fromRGB(100, 60, 140),    compression = 0.35 },
-	{ id = "GlitchyCase",   effect = "Glitchy",    name = "Glitchy Case",   cost = 3500,  color = Color3.fromRGB(0, 255, 255),     compression = 0.28 },
-	{ id = "LunarCase",     effect = "Lunar",      name = "Lunar Case",     cost = 5000,  color = Color3.fromRGB(200, 220, 255),   compression = 0.22 },
-	{ id = "SolarCase",     effect = "Solar",      name = "Solar Case",     cost = 7500,  color = Color3.fromRGB(255, 220, 60),    compression = 0.17 },
-	{ id = "VoidCase",      effect = "Void",       name = "Void Case",      cost = 10000, color = Color3.fromRGB(80, 40, 120),     compression = 0.13 },
+	{ id = "AcidCase",      effect = "Acid",      name = "Acid Case",      cost = 1200,   color = Color3.fromRGB(50, 255, 50),    compression = 0.42 },
+	{ id = "SnowCase",      effect = "Snow",      name = "Snow Case",      cost = 2500,   color = Color3.fromRGB(180, 220, 255),   compression = 0.42 },
+	{ id = "LavaCase",      effect = "Lava",      name = "Lava Case",      cost = 4000,   color = Color3.fromRGB(255, 100, 20),    compression = 0.42 },
+	{ id = "LightningCase", effect = "Lightning",  name = "Lightning Case", cost = 7000,  color = Color3.fromRGB(255, 255, 80),    compression = 0.42 },
+	{ id = "ShadowCase",    effect = "Shadow",     name = "Shadow Case",    cost = 11000, color = Color3.fromRGB(100, 60, 140),    compression = 0.42 },
+	{ id = "GlitchyCase",   effect = "Glitchy",    name = "Glitchy Case",   cost = 15000, color = Color3.fromRGB(0, 255, 255),     compression = 0.42 },
+	{ id = "LunarCase",     effect = "Lunar",      name = "Lunar Case",     cost = 30000, color = Color3.fromRGB(200, 220, 255),   compression = 0.42 },
+	{ id = "SolarCase",     effect = "Solar",      name = "Solar Case",     cost = 50000, color = Color3.fromRGB(255, 220, 60),    compression = 0.42 },
+	{ id = "VoidCase",      effect = "Void",       name = "Void Case",      cost = 75000, color = Color3.fromRGB(80, 40, 120),     compression = 0.42 },
 }
 
 -------------------------------------------------

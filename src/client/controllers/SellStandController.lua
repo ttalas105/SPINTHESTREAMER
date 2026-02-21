@@ -465,7 +465,7 @@ function SellStandController.Close()
 	isOpen = false
 	lastInventorySnapshot = ""
 	cleanViewportConns()
-	if modalFrame then modalFrame.Visible = false end
+	if modalFrame then UIHelper.ScaleOut(modalFrame, 0.2) end
 end
 
 -------------------------------------------------
@@ -476,7 +476,6 @@ function SellStandController.Init()
 	screenGui = UIHelper.CreateScreenGui("SellStandGui", 8)
 	screenGui.Parent = playerGui
 
-	-- Modal (no overlay)
 	modalFrame = Instance.new("Frame")
 	modalFrame.Name = "SellModal"
 	modalFrame.Size = UDim2.new(0, 480, 0, 520)
@@ -492,7 +491,9 @@ function SellStandController.Init()
 	local mStroke = Instance.new("UIStroke")
 	mStroke.Color = Color3.fromRGB(230, 60, 60)
 	mStroke.Thickness = 3
+	mStroke.Transparency = 0.15
 	mStroke.Parent = modalFrame
+	UIHelper.CreateShadow(modalFrame)
 
 	-- Red gradient top bar
 	local topBar = Instance.new("Frame")

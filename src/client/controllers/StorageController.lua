@@ -360,9 +360,10 @@ function StorageController.Init()
 	modalFrame.BackgroundColor3 = BG; modalFrame.BorderSizePixel = 0
 	modalFrame.Visible = false; modalFrame.ClipsDescendants = true
 	modalFrame.Parent = screenGui
-	Instance.new("UICorner", modalFrame).CornerRadius = UDim.new(0, 20)
+	Instance.new("UICorner", modalFrame).CornerRadius = UDim.new(0, 24)
 	local mStroke = Instance.new("UIStroke", modalFrame)
-	mStroke.Color = ACCENT; mStroke.Thickness = 2
+	mStroke.Color = ACCENT; mStroke.Thickness = 2.5; mStroke.Transparency = 0.15
+	UIHelper.CreateShadow(modalFrame)
 
 	-- Title bar
 	local titleBar = Instance.new("Frame")
@@ -517,7 +518,7 @@ function StorageController.Close()
 	if not isOpen then return end
 	isOpen = false
 	selectedStorageIdx = nil
-	if modalFrame then modalFrame.Visible = false end
+	if modalFrame then UIHelper.ScaleOut(modalFrame, 0.2) end
 end
 
 function StorageController.Refresh()

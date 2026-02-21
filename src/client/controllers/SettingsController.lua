@@ -26,6 +26,8 @@ local BG = Color3.fromRGB(22, 18, 42)
 local PANEL_W = 420
 local PANEL_H = 360
 
+local SETTINGS_GEAR_ASSET_ID = "rbxassetid://114090124339958"
+
 -------------------------------------------------
 -- TOGGLE SWITCH WIDGET (bubbly pill with smooth animation)
 -------------------------------------------------
@@ -139,12 +141,12 @@ function SettingsController.Init()
 	modalFrame.Parent = screenGui
 	Instance.new("UICorner", modalFrame).CornerRadius = UDim.new(0, 28)
 
-	-- Outer glow stroke
 	local outerStroke = Instance.new("UIStroke")
 	outerStroke.Color = Color3.fromRGB(120, 80, 200)
 	outerStroke.Thickness = 2.5
-	outerStroke.Transparency = 0.3
+	outerStroke.Transparency = 0.2
 	outerStroke.Parent = modalFrame
+	UIHelper.CreateShadow(modalFrame)
 
 	-- Header bar
 	local header = Instance.new("Frame")
@@ -263,7 +265,14 @@ end
 function SettingsController.Close()
 	if not isOpen then return end
 	isOpen = false
-	screenGui.Enabled = false
+	if modalFrame then
+		UIHelper.ScaleOut(modalFrame, 0.2)
+		task.delay(0.25, function()
+			screenGui.Enabled = false
+		end)
+	else
+		screenGui.Enabled = false
+	end
 end
 
 function SettingsController.IsOpen()

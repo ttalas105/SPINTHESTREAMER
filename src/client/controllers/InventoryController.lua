@@ -465,12 +465,19 @@ function InventoryController.UpdateInventory(newInventory, newStorage)
 		end
 	end
 
-	-- If selected index is now out of range, deselect
-	if selectedIndex and selectedIndex > #inventory then
+	-- If selected index is now out of range or the item at that index changed, deselect and notify
+	local wasSelected = selectedIndex
+	if selectedIndex and (selectedIndex > #inventory or not inventory[selectedIndex]) then
 		selectedIndex = nil
 	end
 
 	updateSlotVisuals()
+
+	if wasSelected and not selectedIndex then
+		for _, cb in ipairs(onSelectionChanged) do
+			task.spawn(cb, nil, nil)
+		end
+	end
 end
 
 --- Called when a new item is added to inventory (for animation)
