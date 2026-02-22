@@ -245,27 +245,30 @@ end
 -------------------------------------------------
 
 function UIHelper.CreateIconButton(props)
+	local hasImage = props.ImageId and props.ImageId ~= ""
+
 	local container = Instance.new("Frame")
 	container.Name = props.Name or "IconButton"
 	container.Size = props.Size or DesignConfig.Sizes.SideButtonSize
 	container.Position = props.Position or UDim2.new(0, 0, 0, 0)
 	container.AnchorPoint = props.AnchorPoint or Vector2.new(0, 0)
-	container.BackgroundColor3 = props.Color or DesignConfig.Colors.ButtonIdle
 	container.BorderSizePixel = 0
 
-	local corner = Instance.new("UICorner")
-	corner.CornerRadius = props.CornerRadius or DesignConfig.Layout.ButtonCorner
-	corner.Parent = container
+	if hasImage then
+		container.BackgroundTransparency = 1
+	else
+		container.BackgroundColor3 = props.Color or DesignConfig.Colors.ButtonIdle
+		local corner = Instance.new("UICorner")
+		corner.CornerRadius = props.CornerRadius or DesignConfig.Layout.ButtonCorner
+		corner.Parent = container
+		UIHelper.AddPuffyGradient(container)
+	end
 
-	-- Puffy gradient
-	UIHelper.AddPuffyGradient(container)
-
-	-- Image icon (if asset ID provided) or cartoon emoji text icon
-	if props.ImageId and props.ImageId ~= "" then
+	if hasImage then
 		local icon = Instance.new("ImageLabel")
 		icon.Name = "Icon"
-		icon.Size = UDim2.new(0.7, 0, 0.55, 0)
-		icon.Position = UDim2.new(0.5, 0, 0.05, 0)
+		icon.Size = UDim2.new(0, 130, 0, 130)
+		icon.Position = UDim2.new(0.5, 0, 0, 4)
 		icon.AnchorPoint = Vector2.new(0.5, 0)
 		icon.BackgroundTransparency = 1
 		icon.Image = props.ImageId
@@ -284,25 +287,40 @@ function UIHelper.CreateIconButton(props)
 		icon.Parent = container
 	end
 
-	-- Label underneath
 	local label = Instance.new("TextLabel")
 	label.Name = "Label"
-	label.Size = UDim2.new(1, 0, 0.35, 0)
-	label.Position = UDim2.new(0, 0, 0.65, 0)
 	label.BackgroundTransparency = 1
-	label.TextColor3 = DesignConfig.Colors.White
-	label.Font = props.LabelFont or DesignConfig.Fonts.Primary
-	label.TextScaled = true
 	label.Text = props.Label or ""
 	label.Parent = container
 
-	local labelStroke = Instance.new("UIStroke")
-	labelStroke.Color = Color3.new(0, 0, 0)
-	labelStroke.Thickness = 1.5
-	labelStroke.Transparency = 0.3
-	labelStroke.Parent = label
+	if hasImage then
+		label.Size = UDim2.new(1, 0, 0, 38)
+		label.Position = UDim2.new(0.5, 0, 1, -4)
+		label.AnchorPoint = Vector2.new(0.5, 1)
+		label.TextColor3 = Color3.new(1, 1, 1)
+		label.Font = Enum.Font.FredokaOne
+		label.TextSize = 30
+		label.TextScaled = false
 
-	-- Click detection
+		local labelStroke = Instance.new("UIStroke")
+		labelStroke.Color = Color3.new(0, 0, 0)
+		labelStroke.Thickness = 4
+		labelStroke.Transparency = 0
+		labelStroke.Parent = label
+	else
+		label.Size = UDim2.new(1, 0, 0.35, 0)
+		label.Position = UDim2.new(0, 0, 0.65, 0)
+		label.TextColor3 = DesignConfig.Colors.White
+		label.Font = props.LabelFont or DesignConfig.Fonts.Primary
+		label.TextScaled = true
+
+		local labelStroke = Instance.new("UIStroke")
+		labelStroke.Color = Color3.new(0, 0, 0)
+		labelStroke.Thickness = 1.5
+		labelStroke.Transparency = 0.3
+		labelStroke.Parent = label
+	end
+
 	local clickButton = Instance.new("TextButton")
 	clickButton.Name = "ClickZone"
 	clickButton.Size = UDim2.new(1, 0, 1, 0)
@@ -310,49 +328,54 @@ function UIHelper.CreateIconButton(props)
 	clickButton.Text = ""
 	clickButton.Parent = container
 
-	-- Bouncy hover + squish click
-	local idleColor = props.Color or DesignConfig.Colors.ButtonIdle
-	local hoverColor = props.HoverColor or DesignConfig.Colors.ButtonHover
 	local idleSize = props.Size or DesignConfig.Sizes.SideButtonSize
 
 	local hoverSize = UDim2.new(
-		idleSize.X.Scale * 1.1, idleSize.X.Offset * 1.1,
-		idleSize.Y.Scale * 1.1, idleSize.Y.Offset * 1.1
+		idleSize.X.Scale * 1.12, idleSize.X.Offset * 1.12,
+		idleSize.Y.Scale * 1.12, idleSize.Y.Offset * 1.12
 	)
 	local clickSize = UDim2.new(
-		idleSize.X.Scale * 0.92, idleSize.X.Offset * 0.92,
-		idleSize.Y.Scale * 0.92, idleSize.Y.Offset * 0.92
+		idleSize.X.Scale * 0.9, idleSize.X.Offset * 0.9,
+		idleSize.Y.Scale * 0.9, idleSize.Y.Offset * 0.9
 	)
 
 	local bounceTween = TweenInfo.new(0.2, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 	local clickTween  = TweenInfo.new(0.08, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 
-	clickButton.MouseEnter:Connect(function()
-		TweenService:Create(container, bounceTween, {
-			BackgroundColor3 = hoverColor,
-			Size = hoverSize,
-		}):Play()
-	end)
-
-	clickButton.MouseLeave:Connect(function()
-		TweenService:Create(container, bounceTween, {
-			BackgroundColor3 = idleColor,
-			Size = idleSize,
-		}):Play()
-	end)
+	if hasImage then
+		clickButton.MouseEnter:Connect(function()
+			TweenService:Create(container, bounceTween, { Size = hoverSize }):Play()
+		end)
+		clickButton.MouseLeave:Connect(function()
+			TweenService:Create(container, bounceTween, { Size = idleSize }):Play()
+		end)
+	else
+		local idleColor = props.Color or DesignConfig.Colors.ButtonIdle
+		local hoverColor = props.HoverColor or DesignConfig.Colors.ButtonHover
+		clickButton.MouseEnter:Connect(function()
+			TweenService:Create(container, bounceTween, {
+				BackgroundColor3 = hoverColor,
+				Size = hoverSize,
+			}):Play()
+		end)
+		clickButton.MouseLeave:Connect(function()
+			TweenService:Create(container, bounceTween, {
+				BackgroundColor3 = idleColor,
+				Size = idleSize,
+			}):Play()
+		end)
+		clickButton.MouseButton1Up:Connect(function()
+			TweenService:Create(container, bounceTween, {
+				Size = idleSize,
+				BackgroundColor3 = hoverColor,
+			}):Play()
+		end)
+	end
 
 	clickButton.MouseButton1Down:Connect(function()
 		TweenService:Create(container, clickTween, { Size = clickSize }):Play()
 	end)
 
-	clickButton.MouseButton1Up:Connect(function()
-		TweenService:Create(container, bounceTween, {
-			Size = idleSize,
-			BackgroundColor3 = hoverColor,
-		}):Play()
-	end)
-
-	-- Notification badge
 	local badge = UIHelper.CreateRoundedFrame({
 		Name = "Badge",
 		Size = UDim2.new(0, 20, 0, 20),

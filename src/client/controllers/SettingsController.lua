@@ -26,7 +26,7 @@ local BG = Color3.fromRGB(22, 18, 42)
 local PANEL_W = 420
 local PANEL_H = 360
 
-local SETTINGS_GEAR_ASSET_ID = "rbxassetid://114090124339958"
+local SETTINGS_GEAR_ASSET_ID = "rbxassetid://136970465147454"
 
 -------------------------------------------------
 -- TOGGLE SWITCH WIDGET (bubbly pill with smooth animation)

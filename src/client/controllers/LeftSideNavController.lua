@@ -20,22 +20,19 @@ local buttons = {}
 local onButtonClicked = {}
 
 -------------------------------------------------
--- Bubbly kid-friendly button style
+-- Nav button style
 -------------------------------------------------
-local BUTTON_SIZE = 74
+local BUTTON_W = 155
+local BUTTON_H = 180
 local BUTTON_PADDING = 14
 local BUBBLE_CORNER = 22
 local STROKE_THICKNESS = 3
 local STROKE_COLOR = Color3.fromRGB(30, 25, 50)
 
--------------------------------------------------
--- LEFT: Index, Pets, Store (cartoon emoji icons for kids)
--------------------------------------------------
-
 local menuItems = {
-	{ name = "Index",   icon = "📖", imageId = "", color = Color3.fromRGB(100, 200, 255),  label = "Index"   }, -- Replace imageId with rbxassetid://YOUR_ICON_ID
-	{ name = "Storage", icon = "\u{1F4E6}", imageId = "", color = Color3.fromRGB(255, 165, 50), label = "Storage" }, -- Replace imageId with rbxassetid://YOUR_ICON_ID
-	{ name = "Store",   icon = "🛒", imageId = "rbxassetid://114090124339958", color = Color3.fromRGB(255, 90, 120),   label = "Store"   },
+	{ name = "Index",   icon = "\u{1F4D6}", imageId = "rbxassetid://113805125234370", color = Color3.fromRGB(100, 200, 255),  label = "Index"   },
+	{ name = "Storage", icon = "\u{1F4E6}", imageId = "rbxassetid://86182968978837", color = Color3.fromRGB(255, 165, 50), label = "Storage" },
+	{ name = "Store",   icon = "\u{1F6D2}", imageId = "rbxassetid://114090124339958", color = Color3.fromRGB(255, 90, 120),   label = "Store"   },
 }
 
 -------------------------------------------------
@@ -46,10 +43,10 @@ function LeftSideNavController.Init()
 	local screenGui = UIHelper.CreateScreenGui("LeftSideNavGui", 4)
 	screenGui.Parent = playerGui
 
-	local totalHeight = (#menuItems * BUTTON_SIZE) + ((#menuItems - 1) * BUTTON_PADDING)
+	local totalHeight = (#menuItems * BUTTON_H) + ((#menuItems - 1) * BUTTON_PADDING)
 	local container = Instance.new("Frame")
 	container.Name = "LeftSideContainer"
-	container.Size = UDim2.new(0, BUTTON_SIZE + 12, 0, totalHeight)
+	container.Size = UDim2.new(0, BUTTON_W + 12, 0, totalHeight)
 	container.Position = UDim2.new(0, 12, 0.5, 0)
 	container.AnchorPoint = Vector2.new(0, 0.5)
 	container.BackgroundTransparency = 1
@@ -63,9 +60,10 @@ function LeftSideNavController.Init()
 	listLayout.Parent = container
 
 	for _, item in ipairs(menuItems) do
+		local hasImage = item.imageId ~= ""
 		local iconBtn, clickZone = UIHelper.CreateIconButton({
 			Name = item.name,
-			Size = UDim2.new(0, BUTTON_SIZE, 0, BUTTON_SIZE),
+			Size = UDim2.new(0, BUTTON_W, 0, BUTTON_H),
 			Color = item.color,
 			HoverColor = Color3.new(
 				math.min(item.color.R + 0.12, 1),
@@ -73,7 +71,7 @@ function LeftSideNavController.Init()
 				math.min(item.color.B + 0.12, 1)
 			),
 			Icon = item.icon,
-			ImageId = (item.imageId ~= "") and item.imageId or nil,
+			ImageId = hasImage and item.imageId or nil,
 			IconFont = Enum.Font.Cartoon,
 			LabelFont = Enum.Font.Cartoon,
 			Label = item.label,
@@ -81,13 +79,14 @@ function LeftSideNavController.Init()
 			Parent = container,
 		})
 
-		local stroke = Instance.new("UIStroke")
-		stroke.Color = STROKE_COLOR
-		stroke.Thickness = STROKE_THICKNESS
-		stroke.Transparency = 0.15
-		stroke.Parent = iconBtn
-
-		UIHelper.CreateShadow(iconBtn)
+		if not hasImage then
+			local stroke = Instance.new("UIStroke")
+			stroke.Color = STROKE_COLOR
+			stroke.Thickness = STROKE_THICKNESS
+			stroke.Transparency = 0.15
+			stroke.Parent = iconBtn
+			UIHelper.CreateShadow(iconBtn)
+		end
 
 		buttons[item.name] = iconBtn
 
