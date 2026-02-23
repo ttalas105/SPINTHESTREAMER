@@ -253,6 +253,8 @@ EquipResult.OnClientEvent:Connect(function(data)
 	if data and data.success then
 		InventoryController.ClearSelection()
 		HoldController.Drop()
+	elseif data and data.reason then
+		warn("[Client] Place failed: " .. tostring(data.reason))
 	end
 	if TutorialController.IsActive() then
 		TutorialController.OnEquipResult(data)

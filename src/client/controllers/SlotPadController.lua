@@ -3,6 +3,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 local Players = game:GetService("Players")
 local SoundService = game:GetService("SoundService")
+local ProximityPromptService = game:GetService("ProximityPromptService")
 
 local SlotPadController = {}
 local player = Players.LocalPlayer
@@ -10,7 +11,6 @@ local DisplayInteract = ReplicatedStorage:WaitForChild("RemoteEvents"):WaitForCh
 local TOUCH_SOUND_ID = "rbxassetid://7112275565"
 
 local HoldController = nil
-local wiredPrompts = {}
 local wiredGreenParts = {}
 local myBasePosition = nil
 local cachedTouchSound = nil
@@ -33,19 +33,6 @@ local function isGreenCollectPart(part: BasePart): boolean
 	return part.Material == Enum.Material.Neon
 		and c.G > 0.6 and c.G > c.R and c.G > c.B
 		and part.Size.Y <= 1
-end
-
-local function wirePrompt(prompt)
-	if wiredPrompts[prompt] then return end
-	wiredPrompts[prompt] = true
-	prompt.Triggered:Connect(function()
-		local padSlot = tonumber(prompt:GetAttribute("PadSlot")) or 1
-		local heldId, heldEffect = nil, nil
-		if HoldController and HoldController.IsHolding() then
-			heldId, heldEffect = HoldController.GetHeld()
-		end
-		DisplayInteract:FireServer(padSlot, heldId, heldEffect)
-	end)
 end
 
 local function wireGreenTouch(part)
@@ -95,9 +82,7 @@ local function scanAndWire()
 	if not playerBases then return end
 
 	for _, inst in ipairs(playerBases:GetDescendants()) do
-		if inst:IsA("ProximityPrompt") and inst.Name == "BaseSingleSlotPrompt" then
-			wirePrompt(inst)
-		elseif inst:IsA("BasePart") and isGreenCollectPart(inst) then
+		if inst:IsA("BasePart") and isGreenCollectPart(inst) then
 			if myBasePosition then
 				-- only wire parts near my assigned base
 				if (inst.Position - myBasePosition).Magnitude <= 80 then
@@ -110,11 +95,18 @@ end
 
 function SlotPadController.Init(_holdCtrl, _inventoryCtrl)
 	HoldController = _holdCtrl
+	ProximityPromptService.PromptTriggered:Connect(function(prompt, _inputType)
+		if not prompt or prompt.Name ~= "BaseSingleSlotPrompt" then return end
+		local padSlot = tonumber(prompt:GetAttribute("PadSlot")) or 1
+		local heldId, heldEffect = nil, nil
+		if HoldController and HoldController.IsHolding() then
+			heldId, heldEffect = HoldController.GetHeld()
+		end
+		DisplayInteract:FireServer(padSlot, heldId, heldEffect)
+	end)
 	task.defer(scanAndWire)
 	Workspace.DescendantAdded:Connect(function(inst)
-		if inst:IsA("ProximityPrompt") and inst.Name == "BaseSingleSlotPrompt" then
-			wirePrompt(inst)
-		elseif inst:IsA("BasePart") and isGreenCollectPart(inst) and myBasePosition then
+		if inst:IsA("BasePart") and isGreenCollectPart(inst) and myBasePosition then
 			if (inst.Position - myBasePosition).Magnitude <= 80 then
 				wireGreenTouch(inst)
 			end

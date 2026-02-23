@@ -252,6 +252,32 @@ local function attachModel(modelTemplate, streamerInfo, effect)
 	end)
 end
 
+local function normalizeModelKey(value: string): string
+	local s = string.lower(value or "")
+	s = string.gsub(s, "[%s_%-%./]", "")
+	return s
+end
+
+local function findStreamerModelTemplate(streamerId: string)
+	if not modelsFolder then
+		modelsFolder = ReplicatedStorage:FindFirstChild("StreamerModels")
+	end
+	if not modelsFolder or not streamerId then
+		return nil
+	end
+	local exact = modelsFolder:FindFirstChild(streamerId)
+	if exact then
+		return exact
+	end
+	local wanted = normalizeModelKey(streamerId)
+	for _, child in ipairs(modelsFolder:GetChildren()) do
+		if normalizeModelKey(child.Name) == wanted then
+			return child
+		end
+	end
+	return nil
+end
+
 -------------------------------------------------
 -- PUBLIC API
 -------------------------------------------------
@@ -268,16 +294,7 @@ function HoldController.Hold(item)
 	-- Always clear and re-hold; toggle logic is handled by InventoryController.SelectSlot
 	clearHeld()
 
-	if not modelsFolder then
-		modelsFolder = ReplicatedStorage:FindFirstChild("StreamerModels")
-	end
-	if not modelsFolder then
-		heldStreamerId = streamerId
-		heldEffect = effect
-		return
-	end
-
-	local modelTemplate = modelsFolder:FindFirstChild(streamerId)
+	local modelTemplate = findStreamerModelTemplate(streamerId)
 	if not modelTemplate then
 		heldStreamerId = streamerId
 		heldEffect = effect

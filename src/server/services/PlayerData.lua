@@ -86,6 +86,7 @@ else
 	end
 end
 
+
 local DEFAULT_DATA = {
 	cash = 200,
 	gems = 0,

@@ -520,7 +520,16 @@ function TutorialController.Init()
 end
 
 function TutorialController.ShouldStart(data)
-	return data.tutorialComplete == false
+	if data.tutorialComplete ~= false then
+		return false
+	end
+	local hasItems = data.inventory and #data.inventory > 0
+	local hasCollection = data.collection and next(data.collection) ~= nil
+	local hasRebirths = (data.rebirthCount or 0) > 0
+	if hasItems or hasCollection or hasRebirths then
+		return false
+	end
+	return true
 end
 
 function TutorialController.Start()
