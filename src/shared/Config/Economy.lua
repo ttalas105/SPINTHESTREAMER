@@ -224,10 +224,10 @@ Economy.SellPrices = {
 Economy.EffectSellMultiplier = 1.5
 
 -------------------------------------------------
--- PASSIVE INCOME (meaningful safety net: 50/sec)
+-- PASSIVE INCOME (disabled — players earn from streamers/selling only)
 -------------------------------------------------
-Economy.PassiveIncomeRate   = 50   -- cash per second (flat)
-Economy.PassiveIncomeInterval = 1  -- every second
+Economy.PassiveIncomeRate   = 0   -- no passive cash
+Economy.PassiveIncomeInterval = 1  -- every second (unused when rate is 0)
 
 -------------------------------------------------
 -- LUCK (server-wide boost from Robux purchase)
