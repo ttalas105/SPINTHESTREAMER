@@ -59,54 +59,65 @@ function HUDController.Init()
 	local screenGui = UIHelper.CreateScreenGui("HUDGui", 3)
 	screenGui.Parent = playerGui
 
-	-- Bottom-left currency display (cash + gems + luck)
 	local hudContainer = Instance.new("Frame")
 	hudContainer.Name = "HUDContainer"
-	hudContainer.Size = UDim2.new(0, 220, 0, 72)
-	hudContainer.Position = UDim2.new(0, 12, 1, -12)
+	hudContainer.Size = UDim2.new(0, 240, 0, 100)
+	hudContainer.Position = UDim2.new(0, 14, 1, -14)
 	hudContainer.AnchorPoint = Vector2.new(0, 1)
 	hudContainer.BackgroundTransparency = 1
 	hudContainer.BorderSizePixel = 0
 	hudContainer.Parent = screenGui
 
-	-- Cash
 	cashLabel = Instance.new("TextLabel")
 	cashLabel.Name = "CashLabel"
-	cashLabel.Size = UDim2.new(1, 0, 0, 24)
+	cashLabel.Size = UDim2.new(1, 0, 0, 30)
 	cashLabel.Position = UDim2.new(0, 0, 0, 0)
 	cashLabel.BackgroundTransparency = 1
-	cashLabel.TextColor3 = DesignConfig.Colors.Accent
-	cashLabel.Font = DesignConfig.Fonts.Primary
-	cashLabel.TextSize = DesignConfig.FontSizes.Header
+	cashLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
+	cashLabel.Font = Enum.Font.FredokaOne
+	cashLabel.TextSize = 26
 	cashLabel.Text = "$0"
 	cashLabel.TextXAlignment = Enum.TextXAlignment.Left
 	cashLabel.Parent = hudContainer
 
-	-- Gems
+	local cashStroke = Instance.new("UIStroke")
+	cashStroke.Color = Color3.fromRGB(0, 0, 0)
+	cashStroke.Thickness = 3
+	cashStroke.Parent = cashLabel
+
 	gemsLabel = Instance.new("TextLabel")
 	gemsLabel.Name = "GemsLabel"
-	gemsLabel.Size = UDim2.new(1, 0, 0, 20)
-	gemsLabel.Position = UDim2.new(0, 0, 0, 24)
+	gemsLabel.Size = UDim2.new(1, 0, 0, 24)
+	gemsLabel.Position = UDim2.new(0, 0, 0, 32)
 	gemsLabel.BackgroundTransparency = 1
 	gemsLabel.TextColor3 = Color3.fromRGB(100, 200, 255)
-	gemsLabel.Font = DesignConfig.Fonts.Primary
-	gemsLabel.TextSize = 16
+	gemsLabel.Font = Enum.Font.FredokaOne
+	gemsLabel.TextSize = 20
 	gemsLabel.Text = "\u{1F48E} 0 Gems"
 	gemsLabel.TextXAlignment = Enum.TextXAlignment.Left
 	gemsLabel.Parent = hudContainer
 
-	-- Luck (1 luck = +1% drop luck; upgrade at the Upgrade stand)
+	local gemsStroke = Instance.new("UIStroke")
+	gemsStroke.Color = Color3.fromRGB(0, 0, 0)
+	gemsStroke.Thickness = 2.5
+	gemsStroke.Parent = gemsLabel
+
 	luckLabel = Instance.new("TextLabel")
 	luckLabel.Name = "LuckLabel"
-	luckLabel.Size = UDim2.new(1, 0, 0, 20)
-	luckLabel.Position = UDim2.new(0, 0, 0, 46)
+	luckLabel.Size = UDim2.new(1, 0, 0, 22)
+	luckLabel.Position = UDim2.new(0, 0, 0, 58)
 	luckLabel.BackgroundTransparency = 1
-	luckLabel.TextColor3 = Color3.fromRGB(200, 180, 255)
-	luckLabel.Font = DesignConfig.Fonts.Primary
-	luckLabel.TextSize = 16
+	luckLabel.TextColor3 = Color3.fromRGB(220, 200, 255)
+	luckLabel.Font = Enum.Font.FredokaOne
+	luckLabel.TextSize = 18
 	luckLabel.Text = "Luck: 0 (+0%)"
 	luckLabel.TextXAlignment = Enum.TextXAlignment.Left
 	luckLabel.Parent = hudContainer
+
+	local luckStroke = Instance.new("UIStroke")
+	luckStroke.Color = Color3.fromRGB(0, 0, 0)
+	luckStroke.Thickness = 2
+	luckStroke.Parent = luckLabel
 
 	-- Listen for data updates from server
 	local RemoteEvents = ReplicatedStorage:WaitForChild("RemoteEvents")

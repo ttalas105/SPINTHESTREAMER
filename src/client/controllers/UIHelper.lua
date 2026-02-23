@@ -246,6 +246,18 @@ end
 
 function UIHelper.CreateIconButton(props)
 	local hasImage = props.ImageId and props.ImageId ~= ""
+	local DEFAULT_BTN_BG = Color3.fromRGB(120, 200, 245)
+	local btnBg = (hasImage and props.BgColor) or DEFAULT_BTN_BG
+	local btnBgHover = Color3.new(
+		math.min(btnBg.R + 0.08, 1),
+		math.min(btnBg.G + 0.08, 1),
+		math.min(btnBg.B + 0.08, 1)
+	)
+	local btnStrokeColor = Color3.new(
+		math.max(btnBg.R - 0.15, 0),
+		math.max(btnBg.G - 0.15, 0),
+		math.max(btnBg.B - 0.15, 0)
+	)
 
 	local container = Instance.new("Frame")
 	container.Name = props.Name or "IconButton"
@@ -255,7 +267,16 @@ function UIHelper.CreateIconButton(props)
 	container.BorderSizePixel = 0
 
 	if hasImage then
-		container.BackgroundTransparency = 1
+		container.BackgroundColor3 = btnBg
+		local corner = Instance.new("UICorner")
+		corner.CornerRadius = UDim.new(0, 18)
+		corner.Parent = container
+
+		local bgStroke = Instance.new("UIStroke")
+		bgStroke.Color = btnStrokeColor
+		bgStroke.Thickness = 3
+		bgStroke.Transparency = 0.1
+		bgStroke.Parent = container
 	else
 		container.BackgroundColor3 = props.Color or DesignConfig.Colors.ButtonIdle
 		local corner = Instance.new("UICorner")
@@ -267,9 +288,9 @@ function UIHelper.CreateIconButton(props)
 	if hasImage then
 		local icon = Instance.new("ImageLabel")
 		icon.Name = "Icon"
-		icon.Size = UDim2.new(0, 130, 0, 130)
-		icon.Position = UDim2.new(0.5, 0, 0, 4)
-		icon.AnchorPoint = Vector2.new(0.5, 0)
+		icon.Size = UDim2.new(0, 90, 0, 90)
+		icon.Position = UDim2.new(0.5, 0, 0.5, -12)
+		icon.AnchorPoint = Vector2.new(0.5, 0.5)
 		icon.BackgroundTransparency = 1
 		icon.Image = props.ImageId
 		icon.ScaleType = Enum.ScaleType.Fit
@@ -294,16 +315,16 @@ function UIHelper.CreateIconButton(props)
 	label.Parent = container
 
 	if hasImage then
-		label.Size = UDim2.new(1, 0, 0, 38)
-		label.Position = UDim2.new(0.5, 0, 1, -4)
+		label.Size = UDim2.new(1, 0, 0, 30)
+		label.Position = UDim2.new(0.5, 0, 1, -6)
 		label.AnchorPoint = Vector2.new(0.5, 1)
 		label.TextColor3 = Color3.new(1, 1, 1)
 		label.Font = Enum.Font.FredokaOne
-		label.TextSize = 30
+		label.TextSize = 24
 		label.TextScaled = false
 
 		local labelStroke = Instance.new("UIStroke")
-		labelStroke.Color = Color3.new(0, 0, 0)
+		labelStroke.Color = Color3.fromRGB(30, 30, 30)
 		labelStroke.Thickness = 4
 		labelStroke.Transparency = 0
 		labelStroke.Parent = label
@@ -331,12 +352,12 @@ function UIHelper.CreateIconButton(props)
 	local idleSize = props.Size or DesignConfig.Sizes.SideButtonSize
 
 	local hoverSize = UDim2.new(
-		idleSize.X.Scale * 1.12, idleSize.X.Offset * 1.12,
-		idleSize.Y.Scale * 1.12, idleSize.Y.Offset * 1.12
+		idleSize.X.Scale * 1.08, idleSize.X.Offset * 1.08,
+		idleSize.Y.Scale * 1.08, idleSize.Y.Offset * 1.08
 	)
 	local clickSize = UDim2.new(
-		idleSize.X.Scale * 0.9, idleSize.X.Offset * 0.9,
-		idleSize.Y.Scale * 0.9, idleSize.Y.Offset * 0.9
+		idleSize.X.Scale * 0.93, idleSize.X.Offset * 0.93,
+		idleSize.Y.Scale * 0.93, idleSize.Y.Offset * 0.93
 	)
 
 	local bounceTween = TweenInfo.new(0.2, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
@@ -344,10 +365,16 @@ function UIHelper.CreateIconButton(props)
 
 	if hasImage then
 		clickButton.MouseEnter:Connect(function()
-			TweenService:Create(container, bounceTween, { Size = hoverSize }):Play()
+			TweenService:Create(container, bounceTween, {
+				Size = hoverSize,
+				BackgroundColor3 = btnBgHover,
+			}):Play()
 		end)
 		clickButton.MouseLeave:Connect(function()
-			TweenService:Create(container, bounceTween, { Size = idleSize }):Play()
+			TweenService:Create(container, bounceTween, {
+				Size = idleSize,
+				BackgroundColor3 = btnBg,
+			}):Play()
 		end)
 	else
 		local idleColor = props.Color or DesignConfig.Colors.ButtonIdle
@@ -378,23 +405,25 @@ function UIHelper.CreateIconButton(props)
 
 	local badge = UIHelper.CreateRoundedFrame({
 		Name = "Badge",
-		Size = UDim2.new(0, 20, 0, 20),
-		Position = UDim2.new(1, -5, 0, -5),
+		Size = UDim2.new(0, 24, 0, 24),
+		Position = UDim2.new(1, -2, 0, -4),
 		AnchorPoint = Vector2.new(1, 0),
-		Color = DesignConfig.Colors.NotificationBadge,
+		Color = Color3.fromRGB(255, 50, 50),
 		CornerRadius = UDim.new(1, 0),
 		Parent = container,
 	})
 	badge.Visible = false
+	badge.ZIndex = 10
 
 	local badgeText = Instance.new("TextLabel")
 	badgeText.Name = "Count"
 	badgeText.Size = UDim2.new(1, 0, 1, 0)
 	badgeText.BackgroundTransparency = 1
-	badgeText.TextColor3 = DesignConfig.Colors.White
-	badgeText.Font = DesignConfig.Fonts.Primary
+	badgeText.TextColor3 = Color3.new(1, 1, 1)
+	badgeText.Font = Enum.Font.FredokaOne
 	badgeText.TextScaled = true
-	badgeText.Text = "0"
+	badgeText.Text = "!"
+	badgeText.ZIndex = 11
 	badgeText.Parent = badge
 
 	if props.Parent then

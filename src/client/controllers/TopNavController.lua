@@ -25,8 +25,8 @@ local onTabChanged = {}
 -------------------------------------------------
 
 local tabs = {
-	{ name = "BASE",  color = Color3.fromRGB(255, 165, 40) },   -- orange
-	{ name = "SHOP",  color = Color3.fromRGB(60, 140, 255) },   -- blue
+	{ name = "BASE",  color = Color3.fromRGB(120, 210, 120) },  -- green
+	{ name = "SHOP",  color = Color3.fromRGB(255, 180, 60) },   -- warm orange
 }
 
 -------------------------------------------------
@@ -37,64 +37,73 @@ function TopNavController.Init()
 	local screenGui = UIHelper.CreateScreenGui("TopNavGui", 5)
 	screenGui.Parent = playerGui
 
-	-- Container
 	local container = Instance.new("Frame")
 	container.Name = "TopNavContainer"
-	container.Size = UDim2.new(0.42, 0, 0, 48)
-	container.Position = UDim2.new(0.5, 0, 0, 10)
+	container.Size = UDim2.new(0, 380, 0, 56)
+	container.Position = UDim2.new(0.5, 0, 0, 8)
 	container.AnchorPoint = Vector2.new(0.5, 0)
 	container.BackgroundTransparency = 1
 	container.BorderSizePixel = 0
 	container.Parent = screenGui
 
-	-- Layout
 	local listLayout = Instance.new("UIListLayout")
 	listLayout.FillDirection = Enum.FillDirection.Horizontal
 	listLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 	listLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-	listLayout.Padding = UDim.new(0, 10)
+	listLayout.Padding = UDim.new(0, 14)
 	listLayout.Parent = container
 
-	-- Create tab buttons
 	for _, tabInfo in ipairs(tabs) do
 		local isActive = tabInfo.name == activeTab
 
-		local btn = UIHelper.CreateButton({
-			Name = "Tab_" .. tabInfo.name,
-			Size = UDim2.new(0, 130, 0, 44),
-			Color = tabInfo.color,
-			HoverColor = Color3.new(
-				math.min(tabInfo.color.R + 0.1, 1),
-				math.min(tabInfo.color.G + 0.1, 1),
-				math.min(tabInfo.color.B + 0.1, 1)
-			),
-			TextColor = DesignConfig.Colors.White,
-			Text = tabInfo.name,
-			Font = DesignConfig.Fonts.Primary,
-			TextSize = DesignConfig.FontSizes.Header,
-			CornerRadius = UDim.new(0, 18),
-			StrokeColor = Color3.new(
-				math.min(tabInfo.color.R + 0.2, 1),
-				math.min(tabInfo.color.G + 0.2, 1),
-				math.min(tabInfo.color.B + 0.2, 1)
-			),
-			Parent = container,
-		})
+		local btn = Instance.new("TextButton")
+		btn.Name = "Tab_" .. tabInfo.name
+		btn.Size = UDim2.new(0, 160, 0, 50)
+		btn.BackgroundColor3 = tabInfo.color
+		btn.BorderSizePixel = 0
+		btn.Text = tabInfo.name
+		btn.TextColor3 = Color3.new(1, 1, 1)
+		btn.Font = Enum.Font.FredokaOne
+		btn.TextSize = 26
+		btn.AutoButtonColor = false
+		btn.Parent = container
 
-		-- Bold stroke on active
-		local borderStroke = btn:FindFirstChildOfClass("UIStroke")
-		if borderStroke then
-			borderStroke.Thickness = isActive and 3 or 1.5
-		end
+		Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 22)
+
+		local btnStroke = Instance.new("UIStroke")
+		btnStroke.Color = Color3.fromRGB(255, 255, 255)
+		btnStroke.Thickness = isActive and 3.5 or 2
+		btnStroke.Transparency = 0.3
+		btnStroke.Parent = btn
+
+		local textStroke = Instance.new("UIStroke")
+		textStroke.Color = Color3.fromRGB(30, 30, 30)
+		textStroke.Thickness = 3
+		textStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+		textStroke.Parent = btn
+
+		local bounceTween = TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+		local idleSize = btn.Size
+		local hoverSize = UDim2.new(0, 170, 0, 54)
+		local hoverColor = Color3.new(
+			math.min(tabInfo.color.R + 0.1, 1),
+			math.min(tabInfo.color.G + 0.1, 1),
+			math.min(tabInfo.color.B + 0.1, 1)
+		)
+
+		btn.MouseEnter:Connect(function()
+			UISounds.PlayHover()
+			TweenService:Create(btn, bounceTween, { Size = hoverSize, BackgroundColor3 = hoverColor }):Play()
+		end)
+		btn.MouseLeave:Connect(function()
+			TweenService:Create(btn, bounceTween, { Size = idleSize, BackgroundColor3 = tabInfo.color }):Play()
+		end)
 
 		tabButtons[tabInfo.name] = {
 			button = btn,
 			color = tabInfo.color,
 		}
 
-		btn.MouseEnter:Connect(function()
-			UISounds.PlayHover()
-		end)
 		btn.MouseButton1Click:Connect(function()
 			UISounds.PlayClick()
 			TopNavController.SetActiveTab(tabInfo.name)
@@ -112,11 +121,12 @@ function TopNavController.SetActiveTab(tabName: string)
 
 	for name, data in pairs(tabButtons) do
 		local isActive = name == tabName
-		local stroke = data.button:FindFirstChildOfClass("UIStroke")
-		if stroke then
-			TweenService:Create(stroke, tweenInfo, {
-				Thickness = isActive and 3 or 1.5,
-			}):Play()
+		for _, child in ipairs(data.button:GetChildren()) do
+			if child:IsA("UIStroke") and child.ApplyStrokeMode ~= Enum.ApplyStrokeMode.Contextual then
+				TweenService:Create(child, tweenInfo, {
+					Thickness = isActive and 3.5 or 2,
+				}):Play()
+			end
 		end
 	end
 

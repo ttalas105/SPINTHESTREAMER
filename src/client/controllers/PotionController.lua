@@ -290,304 +290,473 @@ end
 -- SHOP MODAL
 -------------------------------------------------
 
+local MODAL_BG     = Color3.fromRGB(28, 26, 34)
+local CARD_BG      = Color3.fromRGB(42, 38, 50)
+local CARD_HOVER   = Color3.fromRGB(55, 50, 65)
+local FONT_SUB     = Enum.Font.GothamBold
+local ROW_H        = 130
+local IMG_SIZE     = 100
+local MODAL_W      = 500
+local MODAL_H      = 540
+
+local RARITY_COLORS = {
+	Common  = Color3.fromRGB(180, 180, 190),
+	Rare    = Color3.fromRGB(80, 170, 255),
+	Epic    = Color3.fromRGB(180, 80, 255),
+}
+
+local function buildPotionRow(potionType, potion, parent)
+	local rarityColor = RARITY_COLORS[potion.rarity] or RARITY_COLORS.Common
+
+	local row = Instance.new("Frame")
+	row.Name = potionType .. "Row_" .. potion.tier
+	row.Size = UDim2.new(1, 0, 0, ROW_H)
+	row.BackgroundColor3 = CARD_BG
+	row.BorderSizePixel = 0
+	row.ZIndex = 52
+	row.Parent = parent
+
+	local rowCorner = Instance.new("UICorner")
+	rowCorner.CornerRadius = UDim.new(0, 14)
+	rowCorner.Parent = row
+	local rowStroke = Instance.new("UIStroke")
+	rowStroke.Color = Color3.fromRGB(60, 55, 75)
+	rowStroke.Thickness = 1.5
+	rowStroke.Transparency = 0.3
+	rowStroke.Parent = row
+
+	-- Potion image (left side, bordered)
+	local imgFrame = Instance.new("Frame")
+	imgFrame.Name = "ImageFrame"
+	imgFrame.Size = UDim2.new(0, IMG_SIZE, 0, IMG_SIZE)
+	imgFrame.Position = UDim2.new(0, 14, 0.5, 0)
+	imgFrame.AnchorPoint = Vector2.new(0, 0.5)
+	imgFrame.BackgroundColor3 = Color3.fromRGB(35, 32, 45)
+	imgFrame.BorderSizePixel = 0
+	imgFrame.ZIndex = 53
+	imgFrame.Parent = row
+	local imgCorner = Instance.new("UICorner")
+	imgCorner.CornerRadius = UDim.new(0, 10)
+	imgCorner.Parent = imgFrame
+	local imgStroke = Instance.new("UIStroke")
+	imgStroke.Color = Color3.fromRGB(70, 65, 90)
+	imgStroke.Thickness = 1.5
+	imgStroke.Parent = imgFrame
+
+	if potion.imageId and potion.imageId ~= "" then
+		local img = Instance.new("ImageLabel")
+		img.Size = UDim2.new(1, -8, 1, -8)
+		img.Position = UDim2.new(0.5, 0, 0.5, 0)
+		img.AnchorPoint = Vector2.new(0.5, 0.5)
+		img.BackgroundTransparency = 1
+		img.Image = potion.imageId
+		img.ScaleType = Enum.ScaleType.Fit
+		img.ZIndex = 54
+		img.Parent = imgFrame
+	else
+		local icon = createPotionIcon(imgFrame, potion.color, IMG_SIZE - 16)
+		icon.Position = UDim2.new(0.5, 0, 0.5, 0)
+		icon.AnchorPoint = Vector2.new(0.5, 0.5)
+		icon.ZIndex = 54
+	end
+
+	-- Tier number overlay on image
+	local tierBadge = Instance.new("TextLabel")
+	tierBadge.Name = "TierBadge"
+	tierBadge.Size = UDim2.new(0, 28, 0, 28)
+	tierBadge.Position = UDim2.new(0, -2, 1, 2)
+	tierBadge.AnchorPoint = Vector2.new(0, 1)
+	tierBadge.BackgroundColor3 = Color3.fromRGB(50, 45, 65)
+	tierBadge.Text = tostring(potion.tier)
+	tierBadge.TextColor3 = Color3.new(1, 1, 1)
+	tierBadge.Font = BUBBLE_FONT
+	tierBadge.TextSize = 18
+	tierBadge.ZIndex = 55
+	tierBadge.Parent = imgFrame
+	local tbCorner = Instance.new("UICorner")
+	tbCorner.CornerRadius = UDim.new(0, 8)
+	tbCorner.Parent = tierBadge
+	local tbStroke = Instance.new("UIStroke")
+	tbStroke.Color = Color3.fromRGB(0, 0, 0)
+	tbStroke.Thickness = 1.5
+	tbStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+	tbStroke.Parent = tierBadge
+
+	local textX = IMG_SIZE + 30
+
+	-- Potion name
+	local nameLabel = Instance.new("TextLabel")
+	nameLabel.Name = "NameLabel"
+	nameLabel.Size = UDim2.new(1, -(textX + 14), 0, 28)
+	nameLabel.Position = UDim2.new(0, textX, 0, 14)
+	nameLabel.BackgroundTransparency = 1
+	nameLabel.Text = potion.name
+	nameLabel.TextColor3 = Color3.new(1, 1, 1)
+	nameLabel.Font = BUBBLE_FONT
+	nameLabel.TextSize = 22
+	nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+	nameLabel.ZIndex = 53
+	nameLabel.Parent = row
+	local nameStroke = Instance.new("UIStroke")
+	nameStroke.Color = Color3.fromRGB(0, 0, 0)
+	nameStroke.Thickness = 2
+	nameStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+	nameStroke.Parent = nameLabel
+
+	-- Description
+	local descLabel = Instance.new("TextLabel")
+	descLabel.Name = "DescLabel"
+	descLabel.Size = UDim2.new(1, -(textX + 14), 0, 20)
+	descLabel.Position = UDim2.new(0, textX, 0, 42)
+	descLabel.BackgroundTransparency = 1
+	descLabel.Text = potion.desc or ("x" .. potion.multiplier .. " multiplier for 5m")
+	descLabel.TextColor3 = potion.color
+	descLabel.Font = FONT_SUB
+	descLabel.TextSize = 13
+	descLabel.TextXAlignment = Enum.TextXAlignment.Left
+	descLabel.ZIndex = 53
+	descLabel.Parent = row
+
+	-- Rarity label
+	local rarityLabel = Instance.new("TextLabel")
+	rarityLabel.Name = "RarityLabel"
+	rarityLabel.Size = UDim2.new(0, 100, 0, 20)
+	rarityLabel.Position = UDim2.new(0, textX, 0, 64)
+	rarityLabel.BackgroundTransparency = 1
+	rarityLabel.Text = potion.rarity or "Common"
+	rarityLabel.TextColor3 = rarityColor
+	rarityLabel.Font = BUBBLE_FONT
+	rarityLabel.TextSize = 14
+	rarityLabel.TextXAlignment = Enum.TextXAlignment.Left
+	rarityLabel.ZIndex = 53
+	rarityLabel.Parent = row
+
+	-- Buy button (bottom right of row)
+	local buyBtn = Instance.new("TextButton")
+	buyBtn.Name = "BuyBtn"
+	buyBtn.Size = UDim2.new(0, 80, 0, 34)
+	buyBtn.Position = UDim2.new(1, -14, 1, -14)
+	buyBtn.AnchorPoint = Vector2.new(1, 1)
+	buyBtn.BackgroundColor3 = Color3.fromRGB(60, 200, 90)
+	buyBtn.Text = "BUY"
+	buyBtn.TextColor3 = Color3.new(1, 1, 1)
+	buyBtn.Font = BUBBLE_FONT
+	buyBtn.TextSize = 16
+	buyBtn.BorderSizePixel = 0
+	buyBtn.AutoButtonColor = false
+	buyBtn.ZIndex = 53
+	buyBtn.Parent = row
+	local buyCorner = Instance.new("UICorner")
+	buyCorner.CornerRadius = UDim.new(0, 10)
+	buyCorner.Parent = buyBtn
+	local buyStroke = Instance.new("UIStroke")
+	buyStroke.Color = Color3.fromRGB(30, 140, 50)
+	buyStroke.Thickness = 2
+	buyStroke.Parent = buyBtn
+	local buyTextStroke = Instance.new("UIStroke")
+	buyTextStroke.Color = Color3.fromRGB(10, 50, 20)
+	buyTextStroke.Thickness = 1.5
+	buyTextStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+	buyTextStroke.Parent = buyBtn
+
+	local bounceTI = TweenInfo.new(0.12, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+	buyBtn.MouseEnter:Connect(function()
+		TweenService:Create(row, bounceTI, { BackgroundColor3 = CARD_HOVER }):Play()
+		TweenService:Create(buyBtn, bounceTI, { BackgroundColor3 = Color3.fromRGB(80, 235, 115) }):Play()
+	end)
+	buyBtn.MouseLeave:Connect(function()
+		TweenService:Create(row, bounceTI, { BackgroundColor3 = CARD_BG }):Play()
+		TweenService:Create(buyBtn, bounceTI, { BackgroundColor3 = Color3.fromRGB(60, 200, 90) }):Play()
+	end)
+
+	buyBtn.MouseButton1Click:Connect(function()
+		BuyPotionRequest:FireServer(potionType, potion.tier)
+	end)
+
+	return row
+end
+
 local function buildShopModal()
 	local modal = Instance.new("Frame")
 	modal.Name = "PotionShop"
-	modal.Size = UDim2.new(0, 540, 0, 520)
+	modal.Size = UDim2.new(0, MODAL_W, 0, MODAL_H)
 	modal.Position = UDim2.new(0.5, 0, 0.5, 0)
 	modal.AnchorPoint = Vector2.new(0.5, 0.5)
-	modal.BackgroundColor3 = Color3.fromRGB(20, 18, 35)
+	modal.BackgroundColor3 = MODAL_BG
 	modal.BorderSizePixel = 0
 	modal.Visible = false
 	modal.ZIndex = 50
 	modal.ClipsDescendants = true
 	modal.Parent = screenGui
+
 	local mCorner = Instance.new("UICorner")
-	mCorner.CornerRadius = UDim.new(0, 18)
+	mCorner.CornerRadius = UDim.new(0, 20)
 	mCorner.Parent = modal
 	local mStroke = Instance.new("UIStroke")
-	mStroke.Color = Color3.fromRGB(100, 200, 150)
-	mStroke.Thickness = 3
+	mStroke.Color = Color3.fromRGB(70, 60, 100)
+	mStroke.Thickness = 2.5
+	mStroke.Transparency = 0.2
 	mStroke.Parent = modal
+	UIHelper.CreateShadow(modal)
 
-	-- Title
+	-- Header area
+	local header = Instance.new("Frame")
+	header.Name = "Header"
+	header.Size = UDim2.new(1, 0, 0, 60)
+	header.BackgroundTransparency = 1
+	header.ZIndex = 52
+	header.Parent = modal
+
+	-- Title: "Potion Shop"
 	local title = Instance.new("TextLabel")
 	title.Name = "Title"
-	title.Size = UDim2.new(1, 0, 0, 40)
-	title.Position = UDim2.new(0.5, 0, 0, 8)
-	title.AnchorPoint = Vector2.new(0.5, 0)
+	title.Size = UDim2.new(0.6, 0, 0, 36)
+	title.Position = UDim2.new(0, 20, 0, 10)
 	title.BackgroundTransparency = 1
-	title.Text = "\u{1F9EA} POTIONS \u{1F9EA}"
-	title.TextColor3 = Color3.fromRGB(150, 255, 180)
+	title.Text = "Potion Shop"
+	title.TextColor3 = Color3.new(1, 1, 1)
 	title.Font = BUBBLE_FONT
-	title.TextSize = 28
+	title.TextSize = 30
+	title.TextXAlignment = Enum.TextXAlignment.Left
 	title.ZIndex = 52
-	title.Parent = modal
+	title.Parent = header
 	local titleStroke = Instance.new("UIStroke")
 	titleStroke.Color = Color3.fromRGB(0, 0, 0)
-	titleStroke.Thickness = 2
+	titleStroke.Thickness = 2.5
 	titleStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
 	titleStroke.Parent = title
 
-	-- Close button
+	-- Subtitle
+	local subtitle = Instance.new("TextLabel")
+	subtitle.Size = UDim2.new(0.5, 0, 0, 16)
+	subtitle.Position = UDim2.new(0, 22, 0, 44)
+	subtitle.BackgroundTransparency = 1
+	subtitle.Text = "5 min per use • stacks time (max 3h)"
+	subtitle.TextColor3 = Color3.fromRGB(140, 135, 160)
+	subtitle.Font = FONT_SUB
+	subtitle.TextSize = 11
+	subtitle.TextXAlignment = Enum.TextXAlignment.Left
+	subtitle.ZIndex = 52
+	subtitle.Parent = header
+
+	-- Close button (red X)
 	local closeBtn = Instance.new("TextButton")
 	closeBtn.Name = "CloseBtn"
-	closeBtn.Size = UDim2.new(0, 36, 0, 36)
-	closeBtn.Position = UDim2.new(1, -8, 0, 8)
+	closeBtn.Size = UDim2.new(0, 42, 0, 42)
+	closeBtn.Position = UDim2.new(1, -14, 0, 10)
 	closeBtn.AnchorPoint = Vector2.new(1, 0)
-	closeBtn.BackgroundColor3 = Color3.fromRGB(200, 60, 60)
+	closeBtn.BackgroundColor3 = Color3.fromRGB(220, 55, 55)
 	closeBtn.Text = "X"
 	closeBtn.TextColor3 = Color3.new(1, 1, 1)
 	closeBtn.Font = BUBBLE_FONT
-	closeBtn.TextSize = 20
-	closeBtn.ZIndex = 53
+	closeBtn.TextSize = 22
+	closeBtn.BorderSizePixel = 0
+	closeBtn.AutoButtonColor = false
+	closeBtn.ZIndex = 55
 	closeBtn.Parent = modal
-	local closeBtnCorner = Instance.new("UICorner")
-	closeBtnCorner.CornerRadius = UDim.new(0, 8)
-	closeBtnCorner.Parent = closeBtn
+	local closeCorner = Instance.new("UICorner")
+	closeCorner.CornerRadius = UDim.new(0, 10)
+	closeCorner.Parent = closeBtn
+	local closeStroke = Instance.new("UIStroke")
+	closeStroke.Color = Color3.fromRGB(160, 30, 30)
+	closeStroke.Thickness = 2
+	closeStroke.Parent = closeBtn
+	local closeTextStroke = Instance.new("UIStroke")
+	closeTextStroke.Color = Color3.fromRGB(80, 0, 0)
+	closeTextStroke.Thickness = 1.5
+	closeTextStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+	closeTextStroke.Parent = closeBtn
+
+	local closeBounce = TweenInfo.new(0.12, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+	closeBtn.MouseEnter:Connect(function()
+		TweenService:Create(closeBtn, closeBounce, { Size = UDim2.new(0, 48, 0, 48), BackgroundColor3 = Color3.fromRGB(255, 75, 75) }):Play()
+	end)
+	closeBtn.MouseLeave:Connect(function()
+		TweenService:Create(closeBtn, closeBounce, { Size = UDim2.new(0, 42, 0, 42), BackgroundColor3 = Color3.fromRGB(220, 55, 55) }):Play()
+	end)
 	closeBtn.MouseButton1Click:Connect(function()
 		PotionController.CloseShop()
 	end)
 
-	-- Subtitle (fixed at top)
-	local subtitle = Instance.new("TextLabel")
-	subtitle.Size = UDim2.new(1, -20, 0, 18)
-	subtitle.Position = UDim2.new(0.5, 0, 0, 48)
-	subtitle.AnchorPoint = Vector2.new(0.5, 0)
-	subtitle.BackgroundTransparency = 1
-	subtitle.Text = "5 min each use  \u{2022}  Stacks time (max 3h)  \u{2022}  Cannot stack different tiers"
-	subtitle.TextColor3 = Color3.fromRGB(180, 180, 200)
-	subtitle.Font = Enum.Font.GothamBold
-	subtitle.TextSize = 11
-	subtitle.ZIndex = 52
-	subtitle.Parent = modal
+	-- Divider line
+	local divider = Instance.new("Frame")
+	divider.Size = UDim2.new(1, -30, 0, 1)
+	divider.Position = UDim2.new(0.5, 0, 0, 62)
+	divider.AnchorPoint = Vector2.new(0.5, 0)
+	divider.BackgroundColor3 = Color3.fromRGB(65, 60, 80)
+	divider.BorderSizePixel = 0
+	divider.ZIndex = 52
+	divider.Parent = modal
 
-	-- Scrollable content area (below title/subtitle)
-	local scrollFrame = Instance.new("ScrollingFrame")
-	scrollFrame.Name = "ContentScroll"
-	scrollFrame.Size = UDim2.new(1, 0, 1, -70)
-	scrollFrame.Position = UDim2.new(0, 0, 0, 70)
-	scrollFrame.BackgroundTransparency = 1
-	scrollFrame.BorderSizePixel = 0
-	scrollFrame.ScrollBarThickness = 5
-	scrollFrame.ScrollBarImageColor3 = Color3.fromRGB(100, 200, 150)
-	scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 520)
-	scrollFrame.ZIndex = 51
-	scrollFrame.Parent = modal
-	scrollFrame.AutomaticCanvasSize = Enum.AutomaticSize.None
+	-- Scrollable potion list
+	local scroll = Instance.new("ScrollingFrame")
+	scroll.Name = "PotionScroll"
+	scroll.Size = UDim2.new(1, -24, 1, -78)
+	scroll.Position = UDim2.new(0.5, 0, 0, 70)
+	scroll.AnchorPoint = Vector2.new(0.5, 0)
+	scroll.BackgroundTransparency = 1
+	scroll.BorderSizePixel = 0
+	scroll.ScrollBarThickness = 6
+	scroll.ScrollBarImageColor3 = Color3.fromRGB(100, 90, 140)
+	scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+	scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+	scroll.ZIndex = 51
+	scroll.Parent = modal
 
-	-- Luck and Cash rows (inside scroll area)
-	local yStart = 4
-	local categories = {
-		{ type = "Luck", label = "\u{1F340} LUCK POTIONS", color = Color3.fromRGB(80, 255, 100), desc = "Multiply your luck" },
-		{ type = "Cash", label = "\u{1F4B0} CASH POTIONS", color = Color3.fromRGB(255, 220, 60), desc = "Multiply streamer income" },
-	}
+	local listLayout = Instance.new("UIListLayout")
+	listLayout.FillDirection = Enum.FillDirection.Vertical
+	listLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	listLayout.Padding = UDim.new(0, 10)
+	listLayout.Parent = scroll
 
-	for ci, cat in ipairs(categories) do
-		local y = yStart + (ci - 1) * 155
+	local scrollPad = Instance.new("UIPadding")
+	scrollPad.PaddingTop = UDim.new(0, 4)
+	scrollPad.PaddingBottom = UDim.new(0, 12)
+	scrollPad.Parent = scroll
 
-		local catLabel = Instance.new("TextLabel")
-		catLabel.Size = UDim2.new(1, -20, 0, 22)
-		catLabel.Position = UDim2.new(0.5, 0, 0, y)
-		catLabel.AnchorPoint = Vector2.new(0.5, 0)
-		catLabel.BackgroundTransparency = 1
-		catLabel.Text = cat.label .. "  \u{2014}  " .. cat.desc
-		catLabel.TextColor3 = cat.color
-		catLabel.Font = BUBBLE_FONT
-		catLabel.TextSize = 14
-		catLabel.ZIndex = 52
-		catLabel.Parent = scrollFrame
-		local cStroke = Instance.new("UIStroke")
-		cStroke.Color = Color3.fromRGB(0, 0, 0)
-		cStroke.Thickness = 1.5
-		cStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
-		cStroke.Parent = catLabel
+	-------------------------------------------------
+	-- PRISMATIC POTION (featured at top, special card)
+	-------------------------------------------------
+	local prisData = Potions.Prismatic
+	local prisRow = Instance.new("Frame")
+	prisRow.Name = "PrismaticRow"
+	prisRow.Size = UDim2.new(1, 0, 0, 180)
+	prisRow.BackgroundColor3 = Color3.fromRGB(40, 30, 55)
+	prisRow.BorderSizePixel = 0
+	prisRow.LayoutOrder = 0
+	prisRow.ZIndex = 52
+	prisRow.Parent = scroll
+	local prCorner = Instance.new("UICorner")
+	prCorner.CornerRadius = UDim.new(0, 14)
+	prCorner.Parent = prisRow
+	local prStroke = Instance.new("UIStroke")
+	prStroke.Color = Color3.fromRGB(200, 100, 255)
+	prStroke.Thickness = 2
+	prStroke.Parent = prisRow
 
-		local potionList = Potions.Types[cat.type]
-		for pi, potion in ipairs(potionList) do
-			local cardX = 20 + (pi - 1) * 168
-			local card = Instance.new("Frame")
-			card.Name = cat.type .. "Card" .. pi
-			card.Size = UDim2.new(0, 160, 0, 110)
-			card.Position = UDim2.new(0, cardX, 0, y + 26)
-			card.BackgroundColor3 = Color3.fromRGB(35, 35, 55)
-			card.BorderSizePixel = 0
-			card.ZIndex = 52
-			card.Parent = scrollFrame
-			local cardCorner = Instance.new("UICorner")
-			cardCorner.CornerRadius = UDim.new(0, 10)
-			cardCorner.Parent = card
-			local cardStroke = Instance.new("UIStroke")
-			cardStroke.Color = potion.color
-			cardStroke.Thickness = 2
-			cardStroke.Parent = card
+	-- Rainbow gradient bg
+	local prisGrad = Instance.new("UIGradient")
+	prisGrad.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(50, 30, 70)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(35, 25, 50)),
+	})
+	prisGrad.Rotation = 90
+	prisGrad.Parent = prisRow
 
-			local icon = createPotionIcon(card, potion.color, 36)
-			icon.Position = UDim2.new(0.15, 0, 0.05, 0)
-			icon.ZIndex = 53
+	-- Prismatic image
+	local prisImgFrame = Instance.new("Frame")
+	prisImgFrame.Size = UDim2.new(0, IMG_SIZE, 0, IMG_SIZE)
+	prisImgFrame.Position = UDim2.new(0, 14, 0, 14)
+	prisImgFrame.BackgroundColor3 = Color3.fromRGB(30, 22, 45)
+	prisImgFrame.BorderSizePixel = 0
+	prisImgFrame.ZIndex = 53
+	prisImgFrame.Parent = prisRow
+	local piCorner = Instance.new("UICorner")
+	piCorner.CornerRadius = UDim.new(0, 10)
+	piCorner.Parent = prisImgFrame
+	local piStroke = Instance.new("UIStroke")
+	piStroke.Color = Color3.fromRGB(150, 80, 200)
+	piStroke.Thickness = 1.5
+	piStroke.Parent = prisImgFrame
 
-			local nameLabel = Instance.new("TextLabel")
-			nameLabel.Size = UDim2.new(0.55, 0, 0, 16)
-			nameLabel.Position = UDim2.new(0.95, 0, 0, 6)
-			nameLabel.AnchorPoint = Vector2.new(1, 0)
-			nameLabel.BackgroundTransparency = 1
-			nameLabel.Text = potion.name
-			nameLabel.TextColor3 = potion.color
-			nameLabel.Font = BUBBLE_FONT
-			nameLabel.TextSize = 11
-			nameLabel.ZIndex = 53
-			nameLabel.Parent = card
-
-			local multLabel = Instance.new("TextLabel")
-			multLabel.Size = UDim2.new(0.55, 0, 0, 20)
-			multLabel.Position = UDim2.new(0.95, 0, 0, 22)
-			multLabel.AnchorPoint = Vector2.new(1, 0)
-			multLabel.BackgroundTransparency = 1
-			multLabel.Text = "x" .. potion.multiplier
-			multLabel.TextColor3 = Color3.new(1, 1, 1)
-			multLabel.Font = BUBBLE_FONT
-			multLabel.TextSize = 18
-			multLabel.ZIndex = 53
-			multLabel.Parent = card
-
-			local durLabel = Instance.new("TextLabel")
-			durLabel.Size = UDim2.new(1, -10, 0, 14)
-			durLabel.Position = UDim2.new(0.5, 0, 0, 46)
-			durLabel.AnchorPoint = Vector2.new(0.5, 0)
-			durLabel.BackgroundTransparency = 1
-			durLabel.Text = "5 min per use"
-			durLabel.TextColor3 = Color3.fromRGB(160, 160, 180)
-			durLabel.Font = Enum.Font.GothamBold
-			durLabel.TextSize = 10
-			durLabel.ZIndex = 53
-			durLabel.Parent = card
-
-			local buyBtn = Instance.new("TextButton")
-			buyBtn.Name = "BuyBtn"
-			buyBtn.Size = UDim2.new(0.8, 0, 0, 28)
-			buyBtn.Position = UDim2.new(0.5, 0, 1, -6)
-			buyBtn.AnchorPoint = Vector2.new(0.5, 1)
-			buyBtn.BackgroundColor3 = potion.color
-			buyBtn.Text = "$" .. potion.cost
-			buyBtn.TextColor3 = Color3.fromRGB(20, 20, 30)
-			buyBtn.Font = BUBBLE_FONT
-			buyBtn.TextSize = 15
-			buyBtn.ZIndex = 53
-			buyBtn.Parent = card
-			local btnCorner = Instance.new("UICorner")
-			btnCorner.CornerRadius = UDim.new(0, 8)
-			btnCorner.Parent = buyBtn
-
-			buyBtn.MouseButton1Click:Connect(function()
-				BuyPotionRequest:FireServer(cat.type, potion.tier)
-			end)
-		end
+	if prisData.imageId and prisData.imageId ~= "" then
+		local pImg = Instance.new("ImageLabel")
+		pImg.Size = UDim2.new(1, -8, 1, -8)
+		pImg.Position = UDim2.new(0.5, 0, 0.5, 0)
+		pImg.AnchorPoint = Vector2.new(0.5, 0.5)
+		pImg.BackgroundTransparency = 1
+		pImg.Image = prisData.imageId
+		pImg.ScaleType = Enum.ScaleType.Fit
+		pImg.ZIndex = 54
+		pImg.Parent = prisImgFrame
+	else
+		local pIcon = createPotionIcon(prisImgFrame, prisData.color, IMG_SIZE - 16, true)
+		pIcon.Position = UDim2.new(0.5, 0, 0.5, 0)
+		pIcon.AnchorPoint = Vector2.new(0.5, 0.5)
+		pIcon.ZIndex = 54
 	end
 
-	-------------------------------------------------
-	-- PRISMATIC SECTION (rainbow premium potion)
-	-------------------------------------------------
-	local prisY = yStart + 2 * 155 + 8
+	local prisTextX = IMG_SIZE + 30
 
-	-- Separator line (rainbow)
-	local sepLine = Instance.new("Frame")
-	sepLine.Size = UDim2.new(1, -40, 0, 3)
-	sepLine.Position = UDim2.new(0.5, 0, 0, prisY - 6)
-	sepLine.AnchorPoint = Vector2.new(0.5, 0)
-	sepLine.BackgroundColor3 = Color3.new(1, 1, 1)
-	sepLine.BorderSizePixel = 0
-	sepLine.ZIndex = 52
-	sepLine.Parent = scrollFrame
-	local sepGrad = Instance.new("UIGradient")
-	sepGrad.Color = RAINBOW_SEQUENCE
-	sepGrad.Parent = sepLine
-
-	-- Prismatic title
-	local prisTitle = Instance.new("TextLabel")
-	prisTitle.Size = UDim2.new(1, -20, 0, 28)
-	prisTitle.Position = UDim2.new(0.5, 0, 0, prisY + 2)
-	prisTitle.AnchorPoint = Vector2.new(0.5, 0)
-	prisTitle.BackgroundTransparency = 1
-	prisTitle.Text = "\u{1F308} PRISMATIC POTION \u{1F308}"
-	prisTitle.TextColor3 = Color3.fromRGB(255, 200, 255)
-	prisTitle.Font = BUBBLE_FONT
-	prisTitle.TextSize = 20
-	prisTitle.ZIndex = 52
-	prisTitle.Parent = scrollFrame
-	local pTStroke = Instance.new("UIStroke")
-	pTStroke.Color = Color3.fromRGB(100, 0, 100)
-	pTStroke.Thickness = 2
-	pTStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
-	pTStroke.Parent = prisTitle
+	-- Prismatic name
+	local prisName = Instance.new("TextLabel")
+	prisName.Size = UDim2.new(1, -(prisTextX + 14), 0, 28)
+	prisName.Position = UDim2.new(0, prisTextX, 0, 10)
+	prisName.BackgroundTransparency = 1
+	prisName.Text = prisData.name
+	prisName.TextColor3 = Color3.new(1, 1, 1)
+	prisName.Font = BUBBLE_FONT
+	prisName.TextSize = 24
+	prisName.TextXAlignment = Enum.TextXAlignment.Left
+	prisName.ZIndex = 53
+	prisName.Parent = prisRow
+	local pnStroke = Instance.new("UIStroke")
+	pnStroke.Color = Color3.fromRGB(0, 0, 0)
+	pnStroke.Thickness = 2
+	pnStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+	pnStroke.Parent = prisName
 
 	-- Prismatic description
 	local prisDesc = Instance.new("TextLabel")
-	prisDesc.Size = UDim2.new(1, -20, 0, 16)
-	prisDesc.Position = UDim2.new(0.5, 0, 0, prisY + 30)
-	prisDesc.AnchorPoint = Vector2.new(0.5, 0)
+	prisDesc.Size = UDim2.new(1, -(prisTextX + 14), 0, 20)
+	prisDesc.Position = UDim2.new(0, prisTextX, 0, 38)
 	prisDesc.BackgroundTransparency = 1
-	prisDesc.Text = "x7 Luck AND x7 Cash  \u{2022}  5 min each  \u{2022}  The ULTIMATE potion!"
-	prisDesc.TextColor3 = Color3.fromRGB(200, 180, 220)
-	prisDesc.Font = Enum.Font.GothamBold
-	prisDesc.TextSize = 11
-	prisDesc.ZIndex = 52
-	prisDesc.Parent = scrollFrame
+	prisDesc.Text = prisData.desc
+	prisDesc.TextColor3 = Color3.fromRGB(100, 255, 140)
+	prisDesc.Font = FONT_SUB
+	prisDesc.TextSize = 12
+	prisDesc.TextXAlignment = Enum.TextXAlignment.Left
+	prisDesc.TextWrapped = true
+	prisDesc.ZIndex = 53
+	prisDesc.Parent = prisRow
 
-	-- Prismatic potion count + USE button
-	local prisInfoRow = Instance.new("Frame")
-	prisInfoRow.Size = UDim2.new(1, -40, 0, 36)
-	prisInfoRow.Position = UDim2.new(0.5, 0, 0, prisY + 48)
-	prisInfoRow.AnchorPoint = Vector2.new(0.5, 0)
-	prisInfoRow.BackgroundColor3 = Color3.fromRGB(40, 30, 55)
-	prisInfoRow.BorderSizePixel = 0
-	prisInfoRow.ZIndex = 52
-	prisInfoRow.Parent = scrollFrame
-	local pirCorner = Instance.new("UICorner")
-	pirCorner.CornerRadius = UDim.new(0, 10)
-	pirCorner.Parent = prisInfoRow
-	local pirStroke = Instance.new("UIStroke")
-	pirStroke.Color = Color3.fromRGB(255, 120, 255)
-	pirStroke.Thickness = 2
-	pirStroke.Parent = prisInfoRow
+	-- "Prismatic" rarity label
+	local prisRarity = Instance.new("TextLabel")
+	prisRarity.Size = UDim2.new(0, 100, 0, 20)
+	prisRarity.Position = UDim2.new(0, prisTextX, 0, 60)
+	prisRarity.BackgroundTransparency = 1
+	prisRarity.Text = "Prismatic"
+	prisRarity.TextColor3 = Color3.fromRGB(220, 140, 255)
+	prisRarity.Font = BUBBLE_FONT
+	prisRarity.TextSize = 14
+	prisRarity.TextXAlignment = Enum.TextXAlignment.Left
+	prisRarity.ZIndex = 53
+	prisRarity.Parent = prisRow
 
-	-- Potion icon in info row
-	local prisIcon = createPotionIcon(prisInfoRow, Color3.fromRGB(255, 120, 255), 30, true)
-	prisIcon.Position = UDim2.new(0, 6, 0.5, 0)
-	prisIcon.AnchorPoint = Vector2.new(0, 0.5)
-	prisIcon.ZIndex = 53
-
+	-- Prismatic count + USE
 	prismaticCountLabel = Instance.new("TextLabel")
 	prismaticCountLabel.Name = "PrisCount"
-	prismaticCountLabel.Size = UDim2.new(0, 160, 1, 0)
-	prismaticCountLabel.Position = UDim2.new(0, 42, 0, 0)
+	prismaticCountLabel.Size = UDim2.new(0, 120, 0, 18)
+	prismaticCountLabel.Position = UDim2.new(0, prisTextX, 0, 82)
 	prismaticCountLabel.BackgroundTransparency = 1
-	prismaticCountLabel.Text = "You have: 0 potions"
-	prismaticCountLabel.TextColor3 = Color3.fromRGB(255, 200, 255)
-	prismaticCountLabel.Font = BUBBLE_FONT
-	prismaticCountLabel.TextSize = 13
+	prismaticCountLabel.Text = "Owned: 0"
+	prismaticCountLabel.TextColor3 = Color3.fromRGB(200, 180, 230)
+	prismaticCountLabel.Font = FONT_SUB
+	prismaticCountLabel.TextSize = 12
 	prismaticCountLabel.TextXAlignment = Enum.TextXAlignment.Left
 	prismaticCountLabel.ZIndex = 53
-	prismaticCountLabel.Parent = prisInfoRow
+	prismaticCountLabel.Parent = prisRow
 
 	local useBtn = Instance.new("TextButton")
 	useBtn.Name = "UseBtn"
-	useBtn.Size = UDim2.new(0, 100, 0, 28)
-	useBtn.Position = UDim2.new(1, -6, 0.5, 0)
-	useBtn.AnchorPoint = Vector2.new(1, 0.5)
+	useBtn.Size = UDim2.new(0, 70, 0, 28)
+	useBtn.Position = UDim2.new(0, prisTextX + 90, 0, 78)
 	useBtn.BackgroundColor3 = Color3.fromRGB(180, 80, 220)
-	useBtn.Text = "\u{2728} USE"
+	useBtn.Text = "USE"
 	useBtn.TextColor3 = Color3.new(1, 1, 1)
 	useBtn.Font = BUBBLE_FONT
-	useBtn.TextSize = 15
+	useBtn.TextSize = 14
+	useBtn.BorderSizePixel = 0
+	useBtn.AutoButtonColor = false
 	useBtn.ZIndex = 53
-	useBtn.Parent = prisInfoRow
-	local useBtnCorner = Instance.new("UICorner")
-	useBtnCorner.CornerRadius = UDim.new(0, 8)
-	useBtnCorner.Parent = useBtn
-	local useBtnStroke = Instance.new("UIStroke")
-	useBtnStroke.Color = Color3.fromRGB(120, 40, 160)
-	useBtnStroke.Thickness = 2
-	useBtnStroke.Parent = useBtn
+	useBtn.Parent = prisRow
+	local ubCorner = Instance.new("UICorner")
+	ubCorner.CornerRadius = UDim.new(0, 8)
+	ubCorner.Parent = useBtn
+	local ubStroke = Instance.new("UIStroke")
+	ubStroke.Color = Color3.fromRGB(120, 40, 160)
+	ubStroke.Thickness = 2
+	ubStroke.Parent = useBtn
 
 	useBtn.MouseButton1Click:Connect(function()
 		BuyPotionRequest:FireServer("UsePrismatic", 0)
@@ -599,110 +768,96 @@ local function buildShopModal()
 		TweenService:Create(useBtn, TweenInfo.new(0.1), { BackgroundColor3 = Color3.fromRGB(180, 80, 220) }):Play()
 	end)
 
-	-- Pack purchase cards (Robux)
-	local packY = prisY + 90
-	local packs = Potions.Prismatic.packs
+	-- Purchase pack buttons (bottom of prismatic card, horizontal)
+	local packRow = Instance.new("Frame")
+	packRow.Name = "PackRow"
+	packRow.Size = UDim2.new(1, -28, 0, 44)
+	packRow.Position = UDim2.new(0.5, 0, 1, -10)
+	packRow.AnchorPoint = Vector2.new(0.5, 1)
+	packRow.BackgroundTransparency = 1
+	packRow.ZIndex = 53
+	packRow.Parent = prisRow
 
-	for pi, pack in ipairs(packs) do
-		local cardX = 20 + (pi - 1) * 168
-		local card = Instance.new("Frame")
-		card.Name = "PrismaticPack" .. pi
-		card.Size = UDim2.new(0, 160, 0, 100)
-		card.Position = UDim2.new(0, cardX, 0, packY)
-		card.BackgroundColor3 = Color3.fromRGB(30, 20, 45)
-		card.BorderSizePixel = 0
-		card.ZIndex = 52
-		card.Parent = scrollFrame
-		local pcCorner = Instance.new("UICorner")
-		pcCorner.CornerRadius = UDim.new(0, 12)
-		pcCorner.Parent = card
-		local pcStroke = Instance.new("UIStroke")
-		pcStroke.Color = Color3.fromRGB(255, 120, 255)
-		pcStroke.Thickness = 2
-		pcStroke.Parent = card
+	local packLayout = Instance.new("UIListLayout")
+	packLayout.FillDirection = Enum.FillDirection.Horizontal
+	packLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	packLayout.Padding = UDim.new(0, 12)
+	packLayout.Parent = packRow
 
-		-- Rainbow gradient background
-		local cardGrad = Instance.new("UIGradient")
-		cardGrad.Color = ColorSequence.new({
-			ColorSequenceKeypoint.new(0, Color3.fromRGB(50, 30, 70)),
-			ColorSequenceKeypoint.new(1, Color3.fromRGB(30, 20, 50)),
-		})
-		cardGrad.Rotation = 90
-		cardGrad.Parent = card
+	for _, pack in ipairs(prisData.packs) do
+		local packBtn = Instance.new("TextButton")
+		packBtn.Name = "Pack_" .. pack.amount
+		packBtn.Size = UDim2.new(0, 120, 0, 40)
+		packBtn.BackgroundColor3 = Color3.fromRGB(60, 45, 85)
+		packBtn.BorderSizePixel = 0
+		packBtn.AutoButtonColor = false
+		packBtn.ZIndex = 54
+		packBtn.Parent = packRow
 
-		-- Pack icon (potion with number)
-		local packIcon = createPotionIcon(card, Color3.fromRGB(255, 120, 255), 34, true)
-		packIcon.Position = UDim2.new(0.5, 0, 0, 4)
-		packIcon.AnchorPoint = Vector2.new(0.5, 0)
-		packIcon.ZIndex = 53
+		local pbCorner = Instance.new("UICorner")
+		pbCorner.CornerRadius = UDim.new(0, 10)
+		pbCorner.Parent = packBtn
+		local pbStroke = Instance.new("UIStroke")
+		pbStroke.Color = Color3.fromRGB(200, 100, 255)
+		pbStroke.Thickness = 1.5
+		pbStroke.Parent = packBtn
 
-		-- Pack label
-		local packLabel = Instance.new("TextLabel")
-		packLabel.Size = UDim2.new(1, -8, 0, 16)
-		packLabel.Position = UDim2.new(0.5, 0, 0, 40)
-		packLabel.AnchorPoint = Vector2.new(0.5, 0)
-		packLabel.BackgroundTransparency = 1
-		packLabel.Text = pack.label
-		packLabel.TextColor3 = Color3.fromRGB(255, 220, 255)
-		packLabel.Font = BUBBLE_FONT
-		packLabel.TextSize = 13
-		packLabel.ZIndex = 53
-		packLabel.Parent = card
+		-- Gem icon + price
+		local priceLabel = Instance.new("TextLabel")
+		priceLabel.Size = UDim2.new(0.55, 0, 1, 0)
+		priceLabel.Position = UDim2.new(0, 8, 0, 0)
+		priceLabel.BackgroundTransparency = 1
+		priceLabel.Text = "💎 " .. pack.robux
+		priceLabel.TextColor3 = Color3.fromRGB(100, 220, 255)
+		priceLabel.Font = BUBBLE_FONT
+		priceLabel.TextSize = 15
+		priceLabel.TextXAlignment = Enum.TextXAlignment.Left
+		priceLabel.ZIndex = 55
+		priceLabel.Parent = packBtn
 
-		-- Sale tag (if present)
-		if pack.tag then
-			local tagLabel = Instance.new("TextLabel")
-			tagLabel.Size = UDim2.new(1, -8, 0, 14)
-			tagLabel.Position = UDim2.new(0.5, 0, 0, 55)
-			tagLabel.AnchorPoint = Vector2.new(0.5, 0)
-			tagLabel.BackgroundTransparency = 1
-			tagLabel.Text = "\u{1F525} " .. pack.tag
-			tagLabel.TextColor3 = Color3.fromRGB(255, 255, 100)
-			tagLabel.Font = BUBBLE_FONT
-			tagLabel.TextSize = 11
-			tagLabel.ZIndex = 53
-			tagLabel.Parent = card
-		end
+		-- Amount label
+		local amtLabel = Instance.new("TextLabel")
+		amtLabel.Size = UDim2.new(0.4, 0, 1, 0)
+		amtLabel.Position = UDim2.new(1, -8, 0, 0)
+		amtLabel.AnchorPoint = Vector2.new(1, 0)
+		amtLabel.BackgroundTransparency = 1
+		amtLabel.Text = pack.label
+		amtLabel.TextColor3 = Color3.fromRGB(220, 200, 255)
+		amtLabel.Font = BUBBLE_FONT
+		amtLabel.TextSize = 14
+		amtLabel.TextXAlignment = Enum.TextXAlignment.Right
+		amtLabel.ZIndex = 55
+		amtLabel.Parent = packBtn
 
-		-- Robux buy button
-		local robuxBtn = Instance.new("TextButton")
-		robuxBtn.Name = "RobuxBtn"
-		robuxBtn.Size = UDim2.new(0.85, 0, 0, 26)
-		robuxBtn.Position = UDim2.new(0.5, 0, 1, -5)
-		robuxBtn.AnchorPoint = Vector2.new(0.5, 1)
-		robuxBtn.BackgroundColor3 = Color3.fromRGB(0, 180, 0)
-		robuxBtn.Text = "\u{1F4B2} R$ " .. pack.robux
-		robuxBtn.TextColor3 = Color3.new(1, 1, 1)
-		robuxBtn.Font = BUBBLE_FONT
-		robuxBtn.TextSize = 14
-		robuxBtn.ZIndex = 53
-		robuxBtn.Parent = card
-		local rbCorner = Instance.new("UICorner")
-		rbCorner.CornerRadius = UDim.new(0, 8)
-		rbCorner.Parent = robuxBtn
-		local rbStroke = Instance.new("UIStroke")
-		rbStroke.Color = Color3.fromRGB(0, 120, 0)
-		rbStroke.Thickness = 2
-		rbStroke.Parent = robuxBtn
-
-		robuxBtn.MouseEnter:Connect(function()
-			TweenService:Create(robuxBtn, TweenInfo.new(0.1), { BackgroundColor3 = Color3.fromRGB(0, 220, 0) }):Play()
-		end)
-		robuxBtn.MouseLeave:Connect(function()
-			TweenService:Create(robuxBtn, TweenInfo.new(0.1), { BackgroundColor3 = Color3.fromRGB(0, 180, 0) }):Play()
-		end)
-
-		-- Prompt Robux purchase
 		local capturedAmount = pack.amount
-		robuxBtn.MouseButton1Click:Connect(function()
+		packBtn.MouseEnter:Connect(function()
+			TweenService:Create(packBtn, TweenInfo.new(0.1), { BackgroundColor3 = Color3.fromRGB(80, 60, 110) }):Play()
+		end)
+		packBtn.MouseLeave:Connect(function()
+			TweenService:Create(packBtn, TweenInfo.new(0.1), { BackgroundColor3 = Color3.fromRGB(60, 45, 85) }):Play()
+		end)
+		packBtn.MouseButton1Click:Connect(function()
 			local productId = Potions.PrismaticProductIds[capturedAmount]
 			if productId and productId > 0 then
 				MarketplaceService:PromptProductPurchase(player, productId)
-			else
-				-- Product IDs not set yet — show a toast
-				BuyPotionResult.OnClientEvent:Wait() -- won't fire, just show a manual toast
 			end
 		end)
+	end
+
+	-------------------------------------------------
+	-- LUCK POTIONS
+	-------------------------------------------------
+	for _, potion in ipairs(Potions.Types.Luck) do
+		local r = buildPotionRow("Luck", potion, scroll)
+		r.LayoutOrder = potion.tier
+	end
+
+	-------------------------------------------------
+	-- MONEY POTIONS
+	-------------------------------------------------
+	for _, potion in ipairs(Potions.Types.Cash) do
+		local r = buildPotionRow("Cash", potion, scroll)
+		r.LayoutOrder = 10 + potion.tier
 	end
 
 	return modal

@@ -1,14 +1,13 @@
 --[[
 	SpinStandController.lua
-	Crate shop UI — vibrant, bubbly, kid-friendly.
-	Cases 1–3 unlocked before Rebirth 1; Cases 4+ require Rebirth 1+.
+	Case Shop UI — dark themed, vertical list like Spin the Baddies Dice Shop.
+	18 cases, unlocked by rebirths.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 
-local DesignConfig = require(ReplicatedStorage.Shared.Config.DesignConfig)
 local Economy = require(ReplicatedStorage.Shared.Config.Economy)
 local UIHelper = require(script.Parent.UIHelper)
 
@@ -27,29 +26,30 @@ local overlay
 local isOpen = false
 
 -------------------------------------------------
--- STYLE CONSTANTS
+-- STYLE
 -------------------------------------------------
-local BUBBLE_CORNER = 28
-local CARD_CORNER   = 22
-local BTN_CORNER    = 16
-local FONT          = Enum.Font.FredokaOne
-local FONT_SUB      = Enum.Font.GothamBold
+local FONT        = Enum.Font.FredokaOne
+local FONT_SUB    = Enum.Font.GothamBold
+local MODAL_BG    = Color3.fromRGB(28, 26, 34)
+local CARD_BG     = Color3.fromRGB(42, 38, 50)
+local CARD_HOVER  = Color3.fromRGB(55, 50, 65)
+local CARD_LOCKED = Color3.fromRGB(30, 28, 36)
+local ACCENT      = Color3.fromRGB(100, 220, 120)
+local LOCKED_TEXT = Color3.fromRGB(180, 160, 200)
 
-local BG_TOP    = Color3.fromRGB(45, 25, 80)
-local BG_BOT    = Color3.fromRGB(20, 12, 50)
-local STROKE_BG = Color3.fromRGB(140, 80, 255)
+local ROW_H       = 100
+local IMAGE_SIZE  = 80
+local MODAL_W     = 480
+local MODAL_H     = 520
 
--------------------------------------------------
--- CRATE DEFINITIONS
--------------------------------------------------
-local crates = {
-	{ id = 1, name = "Crate 1", emoji = "📦", cost = Economy.Crate1Cost, luckPercent = 0,   desc = "+0% Luck",   color = Color3.fromRGB(80, 180, 255), colorBot = Color3.fromRGB(40, 110, 200),  strokeColor = Color3.fromRGB(130, 210, 255) },
-	{ id = 2, name = "Crate 2", emoji = "🎁", cost = Economy.Crate2Cost, luckPercent = 5,   desc = "+5% Luck",   color = Color3.fromRGB(255, 120, 170), colorBot = Color3.fromRGB(200, 60, 120), strokeColor = Color3.fromRGB(255, 170, 210) },
-	{ id = 3, name = "Crate 3", emoji = "📫", cost = Economy.Crate3Cost, luckPercent = 15,  desc = "+15% Luck",  color = Color3.fromRGB(100, 230, 130), colorBot = Color3.fromRGB(40, 160, 70),  strokeColor = Color3.fromRGB(160, 255, 180) },
-	{ id = 4, name = "Crate 4", emoji = "🎀", cost = Economy.Crate4Cost, luckPercent = 100, desc = "+100% Luck", color = Color3.fromRGB(255, 190, 70),  colorBot = Color3.fromRGB(210, 130, 20), strokeColor = Color3.fromRGB(255, 220, 130) },
-	{ id = 5, name = "Crate 5", emoji = "✨", cost = Economy.Crate5Cost, luckPercent = 200, desc = "+200% Luck", color = Color3.fromRGB(180, 130, 255), colorBot = Color3.fromRGB(110, 60, 200), strokeColor = Color3.fromRGB(210, 180, 255) },
-	{ id = 6, name = "Crate 6", emoji = "🌟", cost = Economy.Crate6Cost, luckPercent = 150, desc = "+150% Luck", color = Color3.fromRGB(255, 200, 100), colorBot = Color3.fromRGB(210, 140, 30), strokeColor = Color3.fromRGB(255, 230, 160) },
-	{ id = 7, name = "Crate 7", emoji = "💎", cost = Economy.Crate7Cost, luckPercent = 250, desc = "+250% Luck", color = Color3.fromRGB(120, 200, 255), colorBot = Color3.fromRGB(50, 120, 220), strokeColor = Color3.fromRGB(180, 230, 255) },
+local RARITY_COLORS = {
+	Common    = Color3.fromRGB(180, 180, 190),
+	Uncommon  = Color3.fromRGB(100, 220, 120),
+	Rare      = Color3.fromRGB(80, 170, 255),
+	Epic      = Color3.fromRGB(180, 80, 255),
+	Legendary = Color3.fromRGB(255, 180, 40),
+	Mythic    = Color3.fromRGB(255, 80, 120),
+	Godly     = Color3.fromRGB(255, 60, 60),
 }
 
 local cardRefs = {}
@@ -63,6 +63,11 @@ local function getRebirthCount()
 end
 
 local function formatCash(n)
+	if n >= 1e9 then
+		return "$" .. string.format("%.1fB", n / 1e9)
+	elseif n >= 1e6 then
+		return "$" .. string.format("%.1fM", n / 1e6)
+	end
 	local s = tostring(math.floor(n))
 	local out, len = "", #s
 	for i = 1, len do
@@ -72,278 +77,217 @@ local function formatCash(n)
 	return "$" .. out
 end
 
-local function addOutlinedText(parent, props)
-	local label = Instance.new("TextLabel")
-	label.Name = props.Name or "Label"
-	label.Size = props.Size or UDim2.new(1, 0, 0, 24)
-	label.Position = props.Position or UDim2.new(0, 0, 0, 0)
-	label.AnchorPoint = props.AnchorPoint or Vector2.new(0, 0)
-	label.BackgroundTransparency = 1
-	label.Text = props.Text or ""
-	label.TextColor3 = props.Color or Color3.new(1, 1, 1)
-	label.Font = props.Font or FONT
-	label.TextSize = props.TextSize or 20
-	label.TextScaled = props.TextScaled or false
-	label.TextWrapped = true
-	label.RichText = props.RichText or false
-	label.Parent = parent
-	local stroke = Instance.new("UIStroke")
-	stroke.Color = props.StrokeColor or Color3.fromRGB(0, 0, 0)
-	stroke.Thickness = props.StrokeThickness or 2
-	stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
-	stroke.Parent = label
-	return label
+local function luckString(bonus)
+	return "+" .. math.floor(bonus * 100) .. "% Luck"
 end
 
 -------------------------------------------------
--- BUILD CRATE CARD
+-- BUILD SINGLE CASE ROW
 -------------------------------------------------
-local function buildCrateCard(crate, parent)
-	local card = Instance.new("Frame")
-	card.Name = "CrateCard_" .. crate.id
-	card.Size = UDim2.new(0, 190, 0, 260)
-	card.BackgroundColor3 = crate.color
-	card.BorderSizePixel = 0
-	card.Parent = parent
+local function buildCaseRow(crateId, parent)
+	local cost = Economy.CrateCosts[crateId]
+	local luck = Economy.CrateLuckBonuses[crateId]
+	local imageId = Economy.CrateImageIds[crateId]
+	local name = Economy.CrateNames[crateId]
+	local rarity = Economy.CrateRarities[crateId]
+	local rarityColor = RARITY_COLORS[rarity] or RARITY_COLORS.Common
 
-	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0, CARD_CORNER)
-	corner.Parent = card
+	local row = Instance.new("Frame")
+	row.Name = "CaseRow_" .. crateId
+	row.Size = UDim2.new(1, 0, 0, ROW_H)
+	row.BackgroundColor3 = CARD_BG
+	row.BorderSizePixel = 0
+	row.Parent = parent
 
-	-- Card gradient (top lighter, bottom darker) for depth
-	local cardGrad = Instance.new("UIGradient")
-	cardGrad.Color = ColorSequence.new({
-		ColorSequenceKeypoint.new(0, Color3.new(1, 1, 1)),
-		ColorSequenceKeypoint.new(0.6, Color3.new(1, 1, 1)),
-		ColorSequenceKeypoint.new(1, Color3.fromRGB(60, 60, 80)),
-	})
-	cardGrad.Transparency = NumberSequence.new({
-		NumberSequenceKeypoint.new(0, 0.15),
-		NumberSequenceKeypoint.new(0.5, 0.3),
-		NumberSequenceKeypoint.new(1, 0),
-	})
-	cardGrad.Rotation = 90
-	cardGrad.Parent = card
+	local rowCorner = Instance.new("UICorner")
+	rowCorner.CornerRadius = UDim.new(0, 14)
+	rowCorner.Parent = row
 
-	-- Glow stroke
-	local cardStroke = Instance.new("UIStroke")
-	cardStroke.Name = "CardStroke"
-	cardStroke.Color = crate.strokeColor
-	cardStroke.Thickness = 3
-	cardStroke.Transparency = 0.2
-	cardStroke.Parent = card
+	local rowStroke = Instance.new("UIStroke")
+	rowStroke.Name = "RowStroke"
+	rowStroke.Color = Color3.fromRGB(60, 55, 75)
+	rowStroke.Thickness = 1.5
+	rowStroke.Transparency = 0.3
+	rowStroke.Parent = row
 
-	-- Inner shadow frame at top for "puffy" feel
-	local innerHighlight = Instance.new("Frame")
-	innerHighlight.Name = "InnerHL"
-	innerHighlight.Size = UDim2.new(1, -8, 0, 50)
-	innerHighlight.Position = UDim2.new(0.5, 0, 0, 4)
-	innerHighlight.AnchorPoint = Vector2.new(0.5, 0)
-	innerHighlight.BackgroundColor3 = Color3.new(1, 1, 1)
-	innerHighlight.BackgroundTransparency = 0.75
-	innerHighlight.BorderSizePixel = 0
-	innerHighlight.Parent = card
-	local hlCorner = Instance.new("UICorner")
-	hlCorner.CornerRadius = UDim.new(0, CARD_CORNER - 4)
-	hlCorner.Parent = innerHighlight
-	local hlGrad = Instance.new("UIGradient")
-	hlGrad.Transparency = NumberSequence.new({
-		NumberSequenceKeypoint.new(0, 0.5),
-		NumberSequenceKeypoint.new(1, 1),
-	})
-	hlGrad.Rotation = 90
-	hlGrad.Parent = innerHighlight
+	-- Case image (left)
+	local caseImage = Instance.new("ImageLabel")
+	caseImage.Name = "CaseImage"
+	caseImage.Size = UDim2.new(0, IMAGE_SIZE, 0, IMAGE_SIZE)
+	caseImage.Position = UDim2.new(0, 10, 0.5, 0)
+	caseImage.AnchorPoint = Vector2.new(0, 0.5)
+	caseImage.BackgroundTransparency = 1
+	caseImage.Image = imageId or ""
+	caseImage.ScaleType = Enum.ScaleType.Fit
+	caseImage.Parent = row
 
-	-- Big emoji icon
-	local icon = Instance.new("TextLabel")
-	icon.Name = "Icon"
-	icon.Size = UDim2.new(1, 0, 0, 70)
-	icon.Position = UDim2.new(0.5, 0, 0, 10)
-	icon.AnchorPoint = Vector2.new(0.5, 0)
-	icon.BackgroundTransparency = 1
-	icon.Text = crate.emoji
-	icon.TextSize = 52
-	icon.Font = Enum.Font.SourceSans
-	icon.TextScaled = false
-	icon.Parent = card
+	-- Name (right of image)
+	local nameLabel = Instance.new("TextLabel")
+	nameLabel.Name = "NameLabel"
+	nameLabel.Size = UDim2.new(1, -(IMAGE_SIZE + 140), 0, 30)
+	nameLabel.Position = UDim2.new(0, IMAGE_SIZE + 20, 0, 12)
+	nameLabel.BackgroundTransparency = 1
+	nameLabel.Text = name
+	nameLabel.TextColor3 = Color3.new(1, 1, 1)
+	nameLabel.Font = FONT
+	nameLabel.TextSize = 22
+	nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+	nameLabel.TextTruncate = Enum.TextTruncate.AtEnd
+	nameLabel.Parent = row
+	local nameStroke = Instance.new("UIStroke")
+	nameStroke.Color = Color3.fromRGB(0, 0, 0)
+	nameStroke.Thickness = 2
+	nameStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+	nameStroke.Parent = nameLabel
 
-	-- Crate name
-	addOutlinedText(card, {
-		Name = "Name",
-		Size = UDim2.new(1, -12, 0, 32),
-		Position = UDim2.new(0.5, 0, 0, 82),
-		AnchorPoint = Vector2.new(0.5, 0),
-		Text = crate.name,
-		Color = Color3.new(1, 1, 1),
-		Font = FONT,
-		TextSize = 24,
-		StrokeThickness = 2.5,
-	})
+	-- Rarity + Luck line
+	local infoLabel = Instance.new("TextLabel")
+	infoLabel.Name = "InfoLabel"
+	infoLabel.Size = UDim2.new(1, -(IMAGE_SIZE + 140), 0, 22)
+	infoLabel.Position = UDim2.new(0, IMAGE_SIZE + 20, 0, 42)
+	infoLabel.BackgroundTransparency = 1
+	infoLabel.Text = rarity .. " - " .. luckString(luck)
+	infoLabel.TextColor3 = rarityColor
+	infoLabel.Font = FONT_SUB
+	infoLabel.TextSize = 15
+	infoLabel.TextXAlignment = Enum.TextXAlignment.Left
+	infoLabel.Parent = row
+	local infoStroke = Instance.new("UIStroke")
+	infoStroke.Color = Color3.fromRGB(0, 0, 0)
+	infoStroke.Thickness = 1
+	infoStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+	infoStroke.Parent = infoLabel
 
-	-- Luck badge (colored pill)
-	local luckBadge = Instance.new("Frame")
-	luckBadge.Name = "LuckBadge"
-	luckBadge.Size = UDim2.new(0.75, 0, 0, 28)
-	luckBadge.Position = UDim2.new(0.5, 0, 0, 118)
-	luckBadge.AnchorPoint = Vector2.new(0.5, 0)
-	luckBadge.BackgroundColor3 = Color3.fromRGB(255, 255, 80)
-	luckBadge.BackgroundTransparency = 0.15
-	luckBadge.BorderSizePixel = 0
-	luckBadge.Parent = card
-	local lbCorner = Instance.new("UICorner")
-	lbCorner.CornerRadius = UDim.new(0, 14)
-	lbCorner.Parent = luckBadge
-	local lbGrad = Instance.new("UIGradient")
-	lbGrad.Color = ColorSequence.new({
-		ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 120)),
-		ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 200, 40)),
-	})
-	lbGrad.Rotation = 90
-	lbGrad.Parent = luckBadge
+	-- Cost label
+	local costLabel = Instance.new("TextLabel")
+	costLabel.Name = "CostLabel"
+	costLabel.Size = UDim2.new(1, -(IMAGE_SIZE + 140), 0, 20)
+	costLabel.Position = UDim2.new(0, IMAGE_SIZE + 20, 0, 64)
+	costLabel.BackgroundTransparency = 1
+	costLabel.Text = formatCash(cost)
+	costLabel.TextColor3 = Color3.fromRGB(100, 255, 130)
+	costLabel.Font = FONT
+	costLabel.TextSize = 16
+	costLabel.TextXAlignment = Enum.TextXAlignment.Left
+	costLabel.Parent = row
+	local costStroke = Instance.new("UIStroke")
+	costStroke.Color = Color3.fromRGB(0, 0, 0)
+	costStroke.Thickness = 1
+	costStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+	costStroke.Parent = costLabel
 
-	addOutlinedText(luckBadge, {
-		Name = "LuckText",
-		Size = UDim2.new(1, 0, 1, 0),
-		Position = UDim2.new(0.5, 0, 0.5, 0),
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Text = "🍀 " .. crate.desc,
-		Color = Color3.fromRGB(30, 80, 10),
-		Font = FONT,
-		TextSize = 16,
-		StrokeColor = Color3.fromRGB(200, 230, 100),
-		StrokeThickness = 1,
-	})
-
-	-- Price label
-	addOutlinedText(card, {
-		Name = "Price",
-		Size = UDim2.new(1, -12, 0, 30),
-		Position = UDim2.new(0.5, 0, 0, 152),
-		AnchorPoint = Vector2.new(0.5, 0),
-		Text = formatCash(crate.cost),
-		Color = Color3.fromRGB(80, 255, 130),
-		Font = FONT,
-		TextSize = 24,
-		StrokeThickness = 2.5,
-	})
-
-	-- BUY button (vibrant green pill)
+	-- BUY button (right side)
 	local buyBtn = Instance.new("TextButton")
 	buyBtn.Name = "BuyBtn"
-	buyBtn.Size = UDim2.new(0.82, 0, 0, 48)
-	buyBtn.Position = UDim2.new(0.5, 0, 1, -14)
-	buyBtn.AnchorPoint = Vector2.new(0.5, 1)
-	buyBtn.BackgroundColor3 = Color3.fromRGB(60, 220, 100)
-	buyBtn.Text = "BUY"
+	buyBtn.Size = UDim2.new(0, 90, 0, 40)
+	buyBtn.Position = UDim2.new(1, -14, 0.5, 0)
+	buyBtn.AnchorPoint = Vector2.new(1, 0.5)
+	buyBtn.BackgroundColor3 = Color3.fromRGB(60, 200, 90)
+	buyBtn.Text = "SPIN"
 	buyBtn.TextColor3 = Color3.new(1, 1, 1)
 	buyBtn.Font = FONT
-	buyBtn.TextSize = 22
+	buyBtn.TextSize = 18
 	buyBtn.BorderSizePixel = 0
 	buyBtn.AutoButtonColor = false
-	buyBtn.Parent = card
+	buyBtn.Parent = row
+
 	local buyCorner = Instance.new("UICorner")
-	buyCorner.CornerRadius = UDim.new(0, BTN_CORNER)
+	buyCorner.CornerRadius = UDim.new(0, 12)
 	buyCorner.Parent = buyBtn
 	local buyStroke = Instance.new("UIStroke")
-	buyStroke.Color = Color3.fromRGB(30, 160, 70)
-	buyStroke.Thickness = 2.5
-	buyStroke.Transparency = 0.1
+	buyStroke.Color = Color3.fromRGB(30, 140, 50)
+	buyStroke.Thickness = 2
 	buyStroke.Parent = buyBtn
-	local buyGrad = Instance.new("UIGradient")
-	buyGrad.Color = ColorSequence.new({
-		ColorSequenceKeypoint.new(0, Color3.fromRGB(100, 255, 150)),
-		ColorSequenceKeypoint.new(1, Color3.fromRGB(40, 190, 80)),
-	})
-	buyGrad.Rotation = 90
-	buyGrad.Parent = buyBtn
 	local buyTextStroke = Instance.new("UIStroke")
-	buyTextStroke.Color = Color3.fromRGB(10, 60, 20)
-	buyTextStroke.Thickness = 2
+	buyTextStroke.Color = Color3.fromRGB(10, 50, 20)
+	buyTextStroke.Thickness = 1.5
 	buyTextStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
 	buyTextStroke.Parent = buyBtn
 
-	-- Bounce on hover
+	-- Hover effects (row + button)
+	local bounceTI = TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 	local idleSize = buyBtn.Size
-	local hoverSize = UDim2.new(idleSize.X.Scale * 1.08, 0, 0, math.floor(idleSize.Y.Offset * 1.08))
-	local clickSize = UDim2.new(idleSize.X.Scale * 0.93, 0, 0, math.floor(idleSize.Y.Offset * 0.93))
-	local bounceTI = TweenInfo.new(0.18, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
-	local clickTI  = TweenInfo.new(0.08, Enum.EasingStyle.Quad)
+	local hoverSize = UDim2.new(0, 98, 0, 44)
+
 	buyBtn.MouseEnter:Connect(function()
-		TweenService:Create(buyBtn, bounceTI, { Size = hoverSize, BackgroundColor3 = Color3.fromRGB(90, 255, 140) }):Play()
+		TweenService:Create(row, bounceTI, { BackgroundColor3 = CARD_HOVER }):Play()
+		TweenService:Create(buyBtn, bounceTI, { Size = hoverSize, BackgroundColor3 = Color3.fromRGB(80, 235, 115) }):Play()
 	end)
 	buyBtn.MouseLeave:Connect(function()
-		TweenService:Create(buyBtn, bounceTI, { Size = idleSize, BackgroundColor3 = Color3.fromRGB(60, 220, 100) }):Play()
-	end)
-	buyBtn.MouseButton1Down:Connect(function()
-		TweenService:Create(buyBtn, clickTI, { Size = clickSize }):Play()
-	end)
-	buyBtn.MouseButton1Up:Connect(function()
-		TweenService:Create(buyBtn, bounceTI, { Size = idleSize }):Play()
+		TweenService:Create(row, bounceTI, { BackgroundColor3 = CARD_BG }):Play()
+		TweenService:Create(buyBtn, bounceTI, { Size = idleSize, BackgroundColor3 = Color3.fromRGB(60, 200, 90) }):Play()
 	end)
 
-	-- Lock overlay
+	-- Lock overlay (for rebirth-gated cases)
 	local lockOverlay = Instance.new("Frame")
 	lockOverlay.Name = "LockOverlay"
 	lockOverlay.Size = UDim2.new(1, 0, 1, 0)
-	lockOverlay.BackgroundColor3 = Color3.fromRGB(15, 10, 30)
-	lockOverlay.BackgroundTransparency = 0.35
+	lockOverlay.BackgroundColor3 = Color3.fromRGB(15, 12, 25)
+	lockOverlay.BackgroundTransparency = 0.3
 	lockOverlay.BorderSizePixel = 0
 	lockOverlay.ZIndex = 5
 	lockOverlay.Visible = false
-	lockOverlay.Parent = card
+	lockOverlay.Parent = row
 	local lockCorner = Instance.new("UICorner")
-	lockCorner.CornerRadius = UDim.new(0, CARD_CORNER)
+	lockCorner.CornerRadius = UDim.new(0, 14)
 	lockCorner.Parent = lockOverlay
 
 	local lockIcon = Instance.new("TextLabel")
-	lockIcon.Size = UDim2.new(1, 0, 0, 60)
-	lockIcon.Position = UDim2.new(0.5, 0, 0.3, 0)
+	lockIcon.Size = UDim2.new(0, 40, 0, 40)
+	lockIcon.Position = UDim2.new(0.5, 0, 0.5, 0)
 	lockIcon.AnchorPoint = Vector2.new(0.5, 0.5)
 	lockIcon.BackgroundTransparency = 1
 	lockIcon.Text = "🔒"
-	lockIcon.TextSize = 48
+	lockIcon.TextSize = 32
 	lockIcon.Font = Enum.Font.SourceSans
 	lockIcon.ZIndex = 6
 	lockIcon.Parent = lockOverlay
 
-	addOutlinedText(lockOverlay, {
-		Name = "LockText",
-		Size = UDim2.new(1, -10, 0, 44),
-		Position = UDim2.new(0.5, 0, 0.6, 0),
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Text = "Rebirth " .. Economy.GetCrateRebirthRequirement(crate.id) .. "\nRequired",
-		Color = Color3.fromRGB(255, 180, 80),
-		Font = FONT,
-		TextSize = 16,
-		StrokeThickness = 2,
-	}).ZIndex = 6
+	local lockText = Instance.new("TextLabel")
+	lockText.Name = "LockText"
+	lockText.Size = UDim2.new(0, 200, 0, 24)
+	lockText.Position = UDim2.new(0.5, 28, 0.5, 0)
+	lockText.AnchorPoint = Vector2.new(0.5, 0.5)
+	lockText.BackgroundTransparency = 1
+	lockText.Text = "Rebirth " .. Economy.GetCrateRebirthRequirement(crateId) .. " Required"
+	lockText.TextColor3 = Color3.fromRGB(255, 180, 80)
+	lockText.Font = FONT
+	lockText.TextSize = 16
+	lockText.ZIndex = 6
+	lockText.Parent = lockOverlay
+	local ltStroke = Instance.new("UIStroke")
+	ltStroke.Color = Color3.fromRGB(0, 0, 0)
+	ltStroke.Thickness = 1.5
+	ltStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+	ltStroke.Parent = lockText
 
+	-- Buy click handler
 	buyBtn.MouseButton1Click:Connect(function()
-		local rebirthReq = Economy.GetCrateRebirthRequirement(crate.id)
+		local rebirthReq = Economy.GetCrateRebirthRequirement(crateId)
 		local currentRebirth = getRebirthCount()
 		if currentRebirth < rebirthReq then
-			buyBtn.Text = "Rebirth " .. rebirthReq .. " needed!"
-			task.delay(1.5, function()
-				buyBtn.Text = "🔒 LOCKED"
+			buyBtn.Text = "LOCKED"
+			task.delay(1.2, function()
+				buyBtn.Text = "🔒"
 			end)
 			return
 		end
 
 		SpinStandController.Close()
 		local SpinController = require(script.Parent.SpinController)
-		SpinController.SetCurrentCost(crate.cost)
-		SpinController.SetCurrentCrateId(crate.id)
+		SpinController.SetCurrentCost(cost)
+		SpinController.SetCurrentCrateId(crateId)
 		SpinController.Show()
 		SpinController.RequestSpin()
 	end)
 
-	cardRefs[crate.id] = {
-		card = card,
+	cardRefs[crateId] = {
+		card = row,
 		buyBtn = buyBtn,
 		lockOverlay = lockOverlay,
 	}
 
-	return card
+	return row
 end
 
 -------------------------------------------------
@@ -355,12 +299,14 @@ local function updateLockStatus()
 		local rebirthReq = Economy.GetCrateRebirthRequirement(crateId)
 		if currentRebirth >= rebirthReq then
 			refs.lockOverlay.Visible = false
-			refs.buyBtn.Text = "BUY"
-			refs.buyBtn.BackgroundColor3 = Color3.fromRGB(60, 220, 100)
+			refs.buyBtn.Text = "SPIN"
+			refs.buyBtn.BackgroundColor3 = Color3.fromRGB(60, 200, 90)
+			refs.card.BackgroundColor3 = CARD_BG
 		else
 			refs.lockOverlay.Visible = true
-			refs.buyBtn.Text = "🔒 LOCKED"
-			refs.buyBtn.BackgroundColor3 = Color3.fromRGB(80, 80, 100)
+			refs.buyBtn.Text = "🔒"
+			refs.buyBtn.BackgroundColor3 = Color3.fromRGB(70, 65, 85)
+			refs.card.BackgroundColor3 = CARD_LOCKED
 		end
 	end
 end
@@ -402,188 +348,158 @@ function SpinStandController.Init()
 	overlay.Name = "Overlay"
 	overlay.Size = UDim2.new(1, 0, 1, 0)
 	overlay.BackgroundColor3 = Color3.new(0, 0, 0)
-	overlay.BackgroundTransparency = 0.45
+	overlay.BackgroundTransparency = 0.4
 	overlay.BorderSizePixel = 0
 	overlay.Visible = false
 	overlay.ZIndex = 1
 	overlay.Parent = screenGui
 
-	-- Modal panel
+	-- Modal panel (dark themed like Spin the Baddies)
 	modalFrame = Instance.new("Frame")
-	modalFrame.Name = "CrateShopModal"
-	modalFrame.Size = UDim2.new(0, 560, 0, 420)
+	modalFrame.Name = "CaseShopModal"
+	modalFrame.Size = UDim2.new(0, MODAL_W, 0, MODAL_H)
 	modalFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
 	modalFrame.AnchorPoint = Vector2.new(0.5, 0.5)
-	modalFrame.BackgroundColor3 = BG_TOP
+	modalFrame.BackgroundColor3 = MODAL_BG
 	modalFrame.BorderSizePixel = 0
 	modalFrame.ZIndex = 2
 	modalFrame.Visible = false
 	modalFrame.Parent = screenGui
 
 	local modalCorner = Instance.new("UICorner")
-	modalCorner.CornerRadius = UDim.new(0, BUBBLE_CORNER)
+	modalCorner.CornerRadius = UDim.new(0, 20)
 	modalCorner.Parent = modalFrame
 
-	-- Background gradient
-	local bgGrad = Instance.new("UIGradient")
-	bgGrad.Color = ColorSequence.new({
-		ColorSequenceKeypoint.new(0, BG_TOP),
-		ColorSequenceKeypoint.new(1, BG_BOT),
-	})
-	bgGrad.Rotation = 90
-	bgGrad.Parent = modalFrame
-
-	-- Outer glow stroke
 	local modalStroke = Instance.new("UIStroke")
-	modalStroke.Color = STROKE_BG
-	modalStroke.Thickness = 3
-	modalStroke.Transparency = 0.15
+	modalStroke.Color = Color3.fromRGB(70, 60, 100)
+	modalStroke.Thickness = 2.5
+	modalStroke.Transparency = 0.2
 	modalStroke.Parent = modalFrame
 
 	UIHelper.CreateShadow(modalFrame)
 
-	-- Top rainbow accent line
-	local topAccent = Instance.new("Frame")
-	topAccent.Name = "TopAccent"
-	topAccent.Size = UDim2.new(1, -20, 0, 5)
-	topAccent.Position = UDim2.new(0.5, 0, 0, 10)
-	topAccent.AnchorPoint = Vector2.new(0.5, 0)
-	topAccent.BackgroundColor3 = Color3.new(1, 1, 1)
-	topAccent.BorderSizePixel = 0
-	topAccent.ZIndex = 3
-	topAccent.Parent = modalFrame
-	local topAccentCorner = Instance.new("UICorner")
-	topAccentCorner.CornerRadius = UDim.new(0, 3)
-	topAccentCorner.Parent = topAccent
-	local accentGrad = Instance.new("UIGradient")
-	accentGrad.Color = ColorSequence.new({
-		ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 80, 120)),
-		ColorSequenceKeypoint.new(0.2, Color3.fromRGB(255, 200, 50)),
-		ColorSequenceKeypoint.new(0.4, Color3.fromRGB(80, 255, 150)),
-		ColorSequenceKeypoint.new(0.6, Color3.fromRGB(80, 180, 255)),
-		ColorSequenceKeypoint.new(0.8, Color3.fromRGB(200, 80, 255)),
-		ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 80, 120)),
-	})
-	accentGrad.Parent = topAccent
+	-- Header area
+	local header = Instance.new("Frame")
+	header.Name = "Header"
+	header.Size = UDim2.new(1, 0, 0, 60)
+	header.BackgroundTransparency = 1
+	header.ZIndex = 3
+	header.Parent = modalFrame
 
-	-- Title
-	local title = addOutlinedText(modalFrame, {
-		Name = "Title",
-		Size = UDim2.new(1, -90, 0, 46),
-		Position = UDim2.new(0.5, 0, 0, 22),
-		AnchorPoint = Vector2.new(0.5, 0),
-		Text = "🎰  PICK A CRATE!  🎰",
-		Color = Color3.fromRGB(255, 240, 100),
-		Font = FONT,
-		TextSize = 32,
-		StrokeColor = Color3.fromRGB(180, 80, 0),
-		StrokeThickness = 3,
-	})
+	-- Title: "Case Shop"
+	local title = Instance.new("TextLabel")
+	title.Name = "Title"
+	title.Size = UDim2.new(0.6, 0, 0, 36)
+	title.Position = UDim2.new(0, 20, 0, 14)
+	title.BackgroundTransparency = 1
+	title.Text = "Case Shop"
+	title.TextColor3 = Color3.new(1, 1, 1)
+	title.Font = FONT
+	title.TextSize = 30
+	title.TextXAlignment = Enum.TextXAlignment.Left
 	title.ZIndex = 3
+	title.Parent = header
+	local titleStroke = Instance.new("UIStroke")
+	titleStroke.Color = Color3.fromRGB(0, 0, 0)
+	titleStroke.Thickness = 2.5
+	titleStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+	titleStroke.Parent = title
 
 	-- Subtitle
-	addOutlinedText(modalFrame, {
-		Name = "Subtitle",
-		Size = UDim2.new(1, -60, 0, 22),
-		Position = UDim2.new(0.5, 0, 0, 68),
-		AnchorPoint = Vector2.new(0.5, 0),
-		Text = "Higher luck = rarer drops!",
-		Color = Color3.fromRGB(200, 190, 255),
-		Font = FONT_SUB,
-		TextSize = 16,
-		StrokeColor = Color3.fromRGB(40, 20, 80),
-		StrokeThickness = 1.5,
-	})
+	local subtitle = Instance.new("TextLabel")
+	subtitle.Name = "Subtitle"
+	subtitle.Size = UDim2.new(0.6, 0, 0, 18)
+	subtitle.Position = UDim2.new(0, 22, 0, 46)
+	subtitle.BackgroundTransparency = 1
+	subtitle.Text = "Higher case = rarer drops!"
+	subtitle.TextColor3 = Color3.fromRGB(160, 155, 180)
+	subtitle.Font = FONT_SUB
+	subtitle.TextSize = 13
+	subtitle.TextXAlignment = Enum.TextXAlignment.Left
+	subtitle.ZIndex = 3
+	subtitle.Parent = header
 
-	-- Scrollable cards container
-	local scroll = Instance.new("ScrollingFrame")
-	scroll.Name = "CardsScroll"
-	scroll.Size = UDim2.new(1, -36, 0, 296)
-	scroll.Position = UDim2.new(0.5, 0, 0, 96)
-	scroll.AnchorPoint = Vector2.new(0.5, 0)
-	scroll.BackgroundTransparency = 1
-	scroll.BorderSizePixel = 0
-	scroll.ScrollBarThickness = 8
-	scroll.ScrollBarImageColor3 = Color3.fromRGB(140, 100, 220)
-	scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
-	scroll.AutomaticCanvasSize = Enum.AutomaticSize.X
-	scroll.ZIndex = 2
-	scroll.Parent = modalFrame
-
-	local cardsFrame = Instance.new("Frame")
-	cardsFrame.Name = "CardsFrame"
-	cardsFrame.Size = UDim2.new(0, 0, 1, 0)
-	cardsFrame.AutomaticSize = Enum.AutomaticSize.X
-	cardsFrame.BackgroundTransparency = 1
-	cardsFrame.Parent = scroll
-
-	local listLayout = Instance.new("UIListLayout")
-	listLayout.FillDirection = Enum.FillDirection.Horizontal
-	listLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
-	listLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-	listLayout.Padding = UDim.new(0, 16)
-	listLayout.Parent = cardsFrame
-
-	-- Left padding so first card isn't flush
-	local leftPad = Instance.new("UIPadding")
-	leftPad.PaddingLeft = UDim.new(0, 6)
-	leftPad.PaddingRight = UDim.new(0, 6)
-	leftPad.Parent = cardsFrame
-
-	for _, crate in ipairs(crates) do
-		buildCrateCard(crate, cardsFrame)
-	end
-
-	-- Close button (bubbly red circle)
+	-- Close button (red X, top right)
 	local closeBtn = Instance.new("TextButton")
 	closeBtn.Name = "CloseBtn"
 	closeBtn.Size = UDim2.new(0, 42, 0, 42)
-	closeBtn.Position = UDim2.new(1, -12, 0, 12)
+	closeBtn.Position = UDim2.new(1, -14, 0, 10)
 	closeBtn.AnchorPoint = Vector2.new(1, 0)
-	closeBtn.BackgroundColor3 = Color3.fromRGB(240, 60, 70)
-	closeBtn.Text = "✕"
+	closeBtn.BackgroundColor3 = Color3.fromRGB(220, 55, 55)
+	closeBtn.Text = "X"
 	closeBtn.TextColor3 = Color3.new(1, 1, 1)
 	closeBtn.Font = FONT
-	closeBtn.TextSize = 24
+	closeBtn.TextSize = 22
 	closeBtn.BorderSizePixel = 0
 	closeBtn.AutoButtonColor = false
 	closeBtn.ZIndex = 5
 	closeBtn.Parent = modalFrame
 
 	local closeCorner = Instance.new("UICorner")
-	closeCorner.CornerRadius = UDim.new(1, 0)
+	closeCorner.CornerRadius = UDim.new(0, 10)
 	closeCorner.Parent = closeBtn
-
 	local closeStroke = Instance.new("UIStroke")
-	closeStroke.Color = Color3.fromRGB(180, 30, 30)
-	closeStroke.Thickness = 2.5
+	closeStroke.Color = Color3.fromRGB(160, 30, 30)
+	closeStroke.Thickness = 2
 	closeStroke.Parent = closeBtn
-
-	local closeGrad = Instance.new("UIGradient")
-	closeGrad.Color = ColorSequence.new({
-		ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 100, 100)),
-		ColorSequenceKeypoint.new(1, Color3.fromRGB(200, 40, 50)),
-	})
-	closeGrad.Rotation = 90
-	closeGrad.Parent = closeBtn
-
 	local closeTextStroke = Instance.new("UIStroke")
 	closeTextStroke.Color = Color3.fromRGB(80, 0, 0)
 	closeTextStroke.Thickness = 1.5
 	closeTextStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
 	closeTextStroke.Parent = closeBtn
 
-	-- Bounce on hover
-	local closeBounce = TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+	local closeBounce = TweenInfo.new(0.12, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 	closeBtn.MouseEnter:Connect(function()
-		TweenService:Create(closeBtn, closeBounce, { Size = UDim2.new(0, 48, 0, 48) }):Play()
+		TweenService:Create(closeBtn, closeBounce, { Size = UDim2.new(0, 48, 0, 48), BackgroundColor3 = Color3.fromRGB(255, 75, 75) }):Play()
 	end)
 	closeBtn.MouseLeave:Connect(function()
-		TweenService:Create(closeBtn, closeBounce, { Size = UDim2.new(0, 42, 0, 42) }):Play()
+		TweenService:Create(closeBtn, closeBounce, { Size = UDim2.new(0, 42, 0, 42), BackgroundColor3 = Color3.fromRGB(220, 55, 55) }):Play()
 	end)
 	closeBtn.MouseButton1Click:Connect(function()
 		SpinStandController.Close()
 	end)
+
+	-- Divider line under header
+	local divider = Instance.new("Frame")
+	divider.Name = "Divider"
+	divider.Size = UDim2.new(1, -30, 0, 1)
+	divider.Position = UDim2.new(0.5, 0, 0, 64)
+	divider.AnchorPoint = Vector2.new(0.5, 0)
+	divider.BackgroundColor3 = Color3.fromRGB(65, 60, 80)
+	divider.BorderSizePixel = 0
+	divider.ZIndex = 3
+	divider.Parent = modalFrame
+
+	-- Scrollable case list
+	local scroll = Instance.new("ScrollingFrame")
+	scroll.Name = "CaseScroll"
+	scroll.Size = UDim2.new(1, -24, 1, -80)
+	scroll.Position = UDim2.new(0.5, 0, 0, 72)
+	scroll.AnchorPoint = Vector2.new(0.5, 0)
+	scroll.BackgroundTransparency = 1
+	scroll.BorderSizePixel = 0
+	scroll.ScrollBarThickness = 6
+	scroll.ScrollBarImageColor3 = Color3.fromRGB(100, 90, 140)
+	scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+	scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+	scroll.ZIndex = 2
+	scroll.Parent = modalFrame
+
+	local listLayout = Instance.new("UIListLayout")
+	listLayout.FillDirection = Enum.FillDirection.Vertical
+	listLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	listLayout.Padding = UDim.new(0, 8)
+	listLayout.Parent = scroll
+
+	local topPad = Instance.new("UIPadding")
+	topPad.PaddingTop = UDim.new(0, 4)
+	topPad.PaddingBottom = UDim.new(0, 10)
+	topPad.Parent = scroll
+
+	-- Build all 18 case rows
+	for i = 1, Economy.TotalCases do
+		buildCaseRow(i, scroll)
+	end
 
 	-- Server event
 	OpenSpinStandGui.OnClientEvent:Connect(function()

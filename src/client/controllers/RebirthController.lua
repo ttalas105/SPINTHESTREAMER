@@ -38,17 +38,7 @@ local confirmBtnRef
 local warningLabelRef
 local maxedLabelRef
 
--- Crate emojis/colors for displaying case unlocks
-local CRATE_EMOJIS = { "📦", "🎁", "📫", "🎀", "✨", "🌟", "💎" }
-local CRATE_COLORS = {
-	Color3.fromRGB(100, 200, 255),
-	Color3.fromRGB(255, 140, 180),
-	Color3.fromRGB(160, 255, 160),
-	Color3.fromRGB(255, 200, 100),
-	Color3.fromRGB(200, 150, 255),
-	Color3.fromRGB(255, 220, 140),
-	Color3.fromRGB(180, 220, 255),
-}
+local Economy2 = require(ReplicatedStorage.Shared.Config.Economy)
 
 -------------------------------------------------
 -- GET CURRENT REBIRTH DATA
@@ -102,8 +92,8 @@ local function updateDisplay()
 
 	if caseUnlockLabelRef then
 		if info.unlocksCase then
-			local emoji = CRATE_EMOJIS[info.unlocksCase] or "📦"
-			caseUnlockLabelRef.Text = emoji .. "  Unlock Case " .. info.unlocksCase .. "  ➕"
+			local caseName = Economy2.CrateNames[info.unlocksCase] or ("Case " .. info.unlocksCase)
+			caseUnlockLabelRef.Text = "📦  Unlock: " .. caseName .. "  ➕"
 			caseUnlockLabelRef.Visible = true
 		else
 			caseUnlockLabelRef.Text = "🏆  Final Rebirth Bonus!"

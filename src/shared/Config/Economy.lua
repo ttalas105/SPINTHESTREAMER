@@ -14,37 +14,146 @@ Economy.SpinCost5 = 450       -- discounted 5-pack
 Economy.SpinCost10 = 800      -- discounted 10-pack
 
 -------------------------------------------------
--- SPIN STAND CRATES (buy at stall for luck bonus)
--- Cases 1–3: unlocked before Rebirth 1. Cases 4–7: require Rebirth 1+.
+-- SPIN STAND CASES (18 total, buy at stall for luck bonus)
+-- Case 1 is free (no rebirth). Case N (2-18) requires Rebirth N-1.
 -------------------------------------------------
-Economy.Crate1Cost = 200   -- Case 1: +0% luck
-Economy.Crate2Cost = 1000  -- Case 2: +5% luck
-Economy.Crate3Cost = 4000  -- Case 3: +15% luck
-Economy.Crate4Cost = 800
-Economy.Crate5Cost = 1500
-Economy.Crate6Cost = 3000
-Economy.Crate7Cost = 6000
+Economy.TotalCases = 18
 
-Economy.Crate1LuckBonus = 0     -- +0% luck (Case 1)
-Economy.Crate2LuckBonus = 0.05  -- +5% luck (Case 2)
-Economy.Crate3LuckBonus = 0.15  -- +15% luck (Case 3)
-Economy.Crate4LuckBonus = 1.00  -- +100% luck (case 4)
-Economy.Crate5LuckBonus = 2.00  -- +200% luck (case 5)
-Economy.Crate6LuckBonus = 1.50  -- +150% luck
-Economy.Crate7LuckBonus = 2.50  -- +250% luck
+Economy.CrateCosts = {
+	100,       -- Case 1
+	300,       -- Case 2
+	600,       -- Case 3
+	1000,      -- Case 4
+	2000,      -- Case 5
+	3500,      -- Case 6
+	5500,      -- Case 7
+	8000,      -- Case 8
+	12000,     -- Case 9
+	18000,     -- Case 10
+	28000,     -- Case 11
+	42000,     -- Case 12
+	65000,     -- Case 13
+	100000,    -- Case 14
+	150000,    -- Case 15
+	225000,    -- Case 16
+	350000,    -- Case 17
+	500000,    -- Case 18
+}
+
+Economy.CrateLuckBonuses = {
+	0,       -- Case 1:  +0%
+	0.05,    -- Case 2:  +5%
+	0.15,    -- Case 3:  +15%
+	0.30,    -- Case 4:  +30%
+	0.50,    -- Case 5:  +50%
+	0.75,    -- Case 6:  +75%
+	1.00,    -- Case 7:  +100%
+	1.50,    -- Case 8:  +150%
+	2.00,    -- Case 9:  +200%
+	3.00,    -- Case 10: +300%
+	4.00,    -- Case 11: +400%
+	5.00,    -- Case 12: +500%
+	6.50,    -- Case 13: +650%
+	8.00,    -- Case 14: +800%
+	10.00,   -- Case 15: +1000%
+	12.50,   -- Case 16: +1250%
+	15.00,   -- Case 17: +1500%
+	20.00,   -- Case 18: +2000%
+}
+
+Economy.CrateImageIds = {
+	"rbxassetid://77068968088917",  -- Case 1
+	"rbxassetid://103035672107983", -- Case 2
+	"rbxassetid://126662755699680", -- Case 3
+	"rbxassetid://96984490714060",  -- Case 4
+	"rbxassetid://133028981319076", -- Case 5
+	"rbxassetid://117927435828773", -- Case 6
+	"rbxassetid://99511304131085",  -- Case 7
+	"rbxassetid://91698336063054",  -- Case 8
+	"rbxassetid://135861190644609", -- Case 9
+	"rbxassetid://82689313831165",  -- Case 10
+	"rbxassetid://77071400509917",  -- Case 11
+	"rbxassetid://130216295179680", -- Case 12
+	"rbxassetid://84935046324931",  -- Case 13
+	"rbxassetid://106996470609349", -- Case 14
+	"rbxassetid://115504007548064", -- Case 15
+	"rbxassetid://102873440096716", -- Case 16
+	"rbxassetid://126496434664236", -- Case 17
+	"rbxassetid://94765664565476",  -- Case 18
+}
+
+Economy.CrateNames = {
+	"Starter Case",     -- 1
+	"Bronze Case",      -- 2
+	"Silver Case",      -- 3
+	"Gold Case",        -- 4
+	"Platinum Case",    -- 5
+	"Emerald Case",     -- 6
+	"Diamond Case",     -- 7
+	"Ruby Case",        -- 8
+	"Sapphire Case",    -- 9
+	"Crystal Case",     -- 10
+	"Amethyst Case",    -- 11
+	"Obsidian Case",    -- 12
+	"Phoenix Case",     -- 13
+	"Celestial Case",   -- 14
+	"Cosmic Case",      -- 15
+	"Inferno Case",     -- 16
+	"Astral Case",      -- 17
+	"Ultimate Case",    -- 18
+}
+
+Economy.CrateRarities = {
+	"Common",     -- 1
+	"Common",     -- 2
+	"Uncommon",   -- 3
+	"Uncommon",   -- 4
+	"Rare",       -- 5
+	"Rare",       -- 6
+	"Epic",       -- 7
+	"Epic",       -- 8
+	"Epic",       -- 9
+	"Legendary",  -- 10
+	"Legendary",  -- 11
+	"Legendary",  -- 12
+	"Mythic",     -- 13
+	"Mythic",     -- 14
+	"Mythic",     -- 15
+	"Godly",      -- 16
+	"Godly",      -- 17
+	"Godly",      -- 18
+}
 
 -------------------------------------------------
--- REBIRTH (7 levels)
--- First rebirth costs 1M; each gives +5% coin bonus and unlocks the next case.
+-- REBIRTH (19 levels)
+-- Each gives +5% coin bonus. Rebirths 1-17 unlock cases 2-18.
 -- Rebirth resets: cash + active potions.
 -------------------------------------------------
-Economy.MaxRebirths = 7
+Economy.MaxRebirths = 19
 
--- Cost for each rebirth level (1-indexed): Rebirth 1 = 1,000,000
-Economy.RebirthCosts = { 1000000, 2, 3, 4, 5, 6, 7 }
+Economy.RebirthCosts = {
+	1000000,       -- Rebirth 1:  $1M
+	3000000,       -- Rebirth 2:  $3M
+	7500000,       -- Rebirth 3:  $7.5M
+	15000000,      -- Rebirth 4:  $15M
+	30000000,      -- Rebirth 5:  $30M
+	50000000,      -- Rebirth 6:  $50M
+	85000000,      -- Rebirth 7:  $85M
+	140000000,     -- Rebirth 8:  $140M
+	225000000,     -- Rebirth 9:  $225M
+	350000000,     -- Rebirth 10: $350M
+	550000000,     -- Rebirth 11: $550M
+	850000000,     -- Rebirth 12: $850M
+	1300000000,    -- Rebirth 13: $1.3B
+	2000000000,    -- Rebirth 14: $2B
+	3000000000,    -- Rebirth 15: $3B
+	4500000000,    -- Rebirth 16: $4.5B
+	7000000000,    -- Rebirth 17: $7B
+	10000000000,   -- Rebirth 18: $10B
+	15000000000,   -- Rebirth 19: $15B
+}
 
--- Coin bonus per rebirth: cumulative +5% each
-Economy.RebirthCoinBonusPercent = 5 -- per rebirth
+Economy.RebirthCoinBonusPercent = 5
 
 --- Get the cost of the next rebirth (0-indexed rebirthCount)
 function Economy.GetRebirthCost(currentRebirths: number): number
@@ -58,11 +167,10 @@ function Economy.GetRebirthCoinMultiplier(rebirthCount: number): number
 	return 1 + (rebirthCount * Economy.RebirthCoinBonusPercent / 100)
 end
 
---- Get the minimum rebirth level required to use a crate (1-indexed crate id)
---- Cases 1–3 = available before Rebirth 1 (rebirth 0). Case 4 = Rebirth 1, Case 5 = Rebirth 2, etc.
+--- Case 1 is free. Case N (2-18) requires Rebirth (N-1).
 function Economy.GetCrateRebirthRequirement(crateId: number): number
-	if crateId <= 3 then return 0 end
-	return crateId - 3
+	if crateId <= 1 then return 0 end
+	return crateId - 1
 end
 
 --- Info for a specific rebirth level (1-indexed)
@@ -70,8 +178,8 @@ function Economy.GetRebirthInfo(rebirthLevel: number)
 	if rebirthLevel < 1 or rebirthLevel > Economy.MaxRebirths then return nil end
 	local cost = Economy.RebirthCosts[rebirthLevel]
 	local coinBonus = rebirthLevel * Economy.RebirthCoinBonusPercent
-	local unlocksCase = rebirthLevel + 3 -- rebirth 1 unlocks case 4, rebirth 2 unlocks case 5, etc.
-	if unlocksCase > 7 then unlocksCase = nil end
+	local unlocksCase = rebirthLevel + 1
+	if unlocksCase > Economy.TotalCases then unlocksCase = nil end
 	return {
 		level = rebirthLevel,
 		cost = cost,

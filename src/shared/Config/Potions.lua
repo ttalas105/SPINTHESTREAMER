@@ -12,30 +12,32 @@ local Potions = {}
 Potions.DURATION_PER_USE = 5 * 60  -- 5 minutes
 Potions.MAX_DURATION = 3 * 60 * 60 -- 3 hours
 
+-- Luck3 and Prismatic imageIds = pending (no decal yet).
 Potions.Types = {
 	Luck = {
-		{ tier = 1, name = "Luck Potion I",   multiplier = 1.5, cost = 1, color = Color3.fromRGB(80, 255, 100) },
-		{ tier = 2, name = "Luck Potion II",  multiplier = 3,   cost = 1, color = Color3.fromRGB(50, 220, 80)  },
-		{ tier = 3, name = "Luck Potion III", multiplier = 4,   cost = 1, color = Color3.fromRGB(30, 180, 60)  },
+		{ tier = 1, name = "Luck Potion 1",  multiplier = 2,   cost = 1, rarity = "Common",   color = Color3.fromRGB(80, 255, 100),  imageId = "rbxassetid://117397968445761", desc = "+2x luck multiplier for 5m" },
+		{ tier = 2, name = "Luck Potion 2",  multiplier = 3,   cost = 1, rarity = "Rare",     color = Color3.fromRGB(50, 220, 80),   imageId = "rbxassetid://79599948950862",  desc = "+3x luck multiplier for 5m" },
+		{ tier = 3, name = "Luck Potion 3",  multiplier = 5,   cost = 1, rarity = "Epic",     color = Color3.fromRGB(30, 180, 60),   imageId = "", desc = "+5x luck multiplier for 5m" },
 	},
 	Cash = {
-		{ tier = 1, name = "Cash Potion I",   multiplier = 1.5, cost = 1, color = Color3.fromRGB(255, 220, 60)  },
-		{ tier = 2, name = "Cash Potion II",  multiplier = 3,   cost = 1, color = Color3.fromRGB(255, 190, 40)  },
-		{ tier = 3, name = "Cash Potion III", multiplier = 4,   cost = 1, color = Color3.fromRGB(255, 160, 20)  },
+		{ tier = 1, name = "Money Potion 1", multiplier = 2,   cost = 1, rarity = "Common",   color = Color3.fromRGB(255, 220, 60),  imageId = "rbxassetid://77682596035149",  desc = "+2x money multiplier for 5m" },
+		{ tier = 2, name = "Money Potion 2", multiplier = 3,   cost = 1, rarity = "Rare",     color = Color3.fromRGB(255, 190, 40),  imageId = "rbxassetid://130221704783075", desc = "+3x money multiplier for 5m" },
+		{ tier = 3, name = "Money Potion 3", multiplier = 5,   cost = 1, rarity = "Epic",     color = Color3.fromRGB(255, 160, 20),  imageId = "rbxassetid://132127116771235", desc = "+5x money multiplier for 5m" },
 	},
 }
 
--- Prismatic potion: premium (Robux). Boosts BOTH luck and cash x7.
+-- Prismatic potion: premium (Robux). Boosts BOTH luck and cash x5.
 -- Single tier only. Stacks time, not buffs. Same stacking rules apply.
 Potions.Prismatic = {
 	name = "Prismatic Potion",
-	multiplier = 7,        -- x7 luck AND x7 cash
-	color = Color3.fromRGB(255, 120, 255), -- rainbow-ish pink/purple base
-	-- Robux prices for packs
+	multiplier = 5,
+	color = Color3.fromRGB(255, 120, 255),
+	imageId = "",
+	desc = "5x luck and money multiplier for 15 minutes",
 	packs = {
-		{ amount = 1,  robux = 60,  label = "1 Potion",   tag = nil },
-		{ amount = 5,  robux = 240, label = "5 Potions",  tag = "Get 1 FREE!" },
-		{ amount = 10, robux = 480, label = "10 Potions", tag = "Get 2 FREE!" },
+		{ amount = 1,  robux = 99,  label = "x1",  tag = nil },
+		{ amount = 3,  robux = 199, label = "x3",  tag = nil },
+		{ amount = 10, robux = 599, label = "x10", tag = nil },
 	},
 }
 

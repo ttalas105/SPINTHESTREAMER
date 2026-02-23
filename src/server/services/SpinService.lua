@@ -274,26 +274,8 @@ local function handleCrateSpin(player, crateId: number)
 		return
 	end
 
-	local crateCosts = {
-		[1] = Economy.Crate1Cost,
-		[2] = Economy.Crate2Cost,
-		[3] = Economy.Crate3Cost,
-		[4] = Economy.Crate4Cost,
-		[5] = Economy.Crate5Cost,
-		[6] = Economy.Crate6Cost,
-		[7] = Economy.Crate7Cost,
-	}
-	local crateLuck = {
-		[1] = Economy.Crate1LuckBonus,
-		[2] = Economy.Crate2LuckBonus,
-		[3] = Economy.Crate3LuckBonus,
-		[4] = Economy.Crate4LuckBonus,
-		[5] = Economy.Crate5LuckBonus,
-		[6] = Economy.Crate6LuckBonus,
-		[7] = Economy.Crate7LuckBonus,
-	}
-	local cost = crateCosts[crateId]
-	local luckBonus = crateLuck[crateId]
+	local cost = Economy.CrateCosts[crateId]
+	local luckBonus = Economy.CrateLuckBonuses[crateId]
 	if not cost or not luckBonus then
 		SpinResult:FireClient(player, { success = false, reason = "Invalid crate!" })
 		return

@@ -6,6 +6,7 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
 
 local DesignConfig = require(ReplicatedStorage.Shared.Config.DesignConfig)
 local UIHelper = require(script.Parent.UIHelper)
@@ -21,9 +22,9 @@ local onButtonClicked = {}
 -------------------------------------------------
 -- Nav button style (match left nav)
 -------------------------------------------------
-local BUTTON_W = 155
-local BUTTON_H = 180
-local BUTTON_PADDING = 14
+local BUTTON_W = 120
+local BUTTON_H = 140
+local BUTTON_PADDING = 10
 local BUBBLE_CORNER = 22
 local STROKE_THICKNESS = 3
 local STROKE_COLOR = Color3.fromRGB(30, 25, 50)
@@ -36,6 +37,42 @@ local menuItems = {
 -------------------------------------------------
 -- BUILD UI
 -------------------------------------------------
+
+local HUD_BOTTOM_RESERVE = 110
+local TOP_BAR_RESERVE = 60
+
+local function layoutNav(container, btnFrames, viewportHeight)
+	local availableH = viewportHeight - TOP_BAR_RESERVE - HUD_BOTTOM_RESERVE
+	local count = #btnFrames
+	local padding = BUTTON_PADDING
+
+	local scale = 1
+	local totalNatural = (count * BUTTON_H) + ((count - 1) * padding)
+	if totalNatural > availableH and availableH > 0 then
+		scale = availableH / totalNatural
+	end
+
+	local btnW = math.floor(BUTTON_W * scale)
+	local btnH = math.floor(BUTTON_H * scale)
+	local scaledPadding = math.floor(padding * scale)
+	local totalH = (count * btnH) + ((count - 1) * scaledPadding)
+
+	container.Size = UDim2.new(0, btnW + 12, 0, totalH)
+
+	local centerY = TOP_BAR_RESERVE + availableH / 2
+	container.Position = UDim2.new(1, -12, 0, math.floor(centerY))
+	container.AnchorPoint = Vector2.new(1, 0.5)
+
+	for _, child in ipairs(container:GetChildren()) do
+		if child:IsA("UIListLayout") then
+			child.Padding = UDim.new(0, scaledPadding)
+		end
+	end
+
+	for _, frame in ipairs(btnFrames) do
+		frame.Size = UDim2.new(0, btnW, 0, btnH)
+	end
+end
 
 function RightSideNavController.Init()
 	local screenGui = UIHelper.CreateScreenGui("RightSideNavGui", 4)
@@ -56,6 +93,8 @@ function RightSideNavController.Init()
 	listLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 	listLayout.Padding = UDim.new(0, BUTTON_PADDING)
 	listLayout.Parent = container
+
+	local btnFrames = {}
 
 	for _, item in ipairs(menuItems) do
 		local hasImage = item.imageId ~= ""
@@ -87,6 +126,7 @@ function RightSideNavController.Init()
 		end
 
 		buttons[item.name] = iconBtn
+		table.insert(btnFrames, iconBtn)
 
 		clickZone.MouseButton1Click:Connect(function()
 			if onButtonClicked[item.name] then
@@ -94,6 +134,13 @@ function RightSideNavController.Init()
 			end
 		end)
 	end
+
+	local camera = workspace.CurrentCamera
+	local function onViewportChanged()
+		layoutNav(container, btnFrames, camera.ViewportSize.Y)
+	end
+	camera:GetPropertyChangedSignal("ViewportSize"):Connect(onViewportChanged)
+	onViewportChanged()
 end
 
 -------------------------------------------------

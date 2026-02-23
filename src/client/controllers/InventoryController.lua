@@ -56,59 +56,72 @@ local VISIBLE_SLOTS = 9
 -- BUILD SLOT
 -------------------------------------------------
 
+local EMPTY_SLOT_COLOR = Color3.fromRGB(40, 35, 60)
+
 local function createSlot(parent, slotNumber)
 	local slotSize = DesignConfig.Sizes.InventorySlotSize
 
 	local frame = UIHelper.CreateRoundedFrame({
 		Name = "Slot_" .. slotNumber,
 		Size = slotSize,
-		Color = DesignConfig.Colors.InventorySlot,
-		CornerRadius = UDim.new(0, 8),
-		StrokeColor = Color3.fromRGB(70, 70, 100),
+		Color = EMPTY_SLOT_COLOR,
+		CornerRadius = UDim.new(0, 10),
+		StrokeColor = Color3.fromRGB(80, 75, 110),
 		Parent = parent,
 	})
 
-	-- Slot number (top-left corner)
 	local numberLabel = Instance.new("TextLabel")
 	numberLabel.Name = "Number"
-	numberLabel.Size = UDim2.new(0, 16, 0, 16)
-	numberLabel.Position = UDim2.new(0, 2, 0, 2)
+	numberLabel.Size = UDim2.new(0, 16, 0, 14)
+	numberLabel.Position = UDim2.new(0, 3, 0, 2)
 	numberLabel.BackgroundTransparency = 1
-	numberLabel.TextColor3 = DesignConfig.Colors.TextMuted
-	numberLabel.Font = DesignConfig.Fonts.Secondary
-	numberLabel.TextSize = 12
+	numberLabel.TextColor3 = Color3.fromRGB(200, 200, 220)
+	numberLabel.Font = Enum.Font.FredokaOne
+	numberLabel.TextSize = 11
 	numberLabel.Text = tostring(slotNumber)
 	numberLabel.TextXAlignment = Enum.TextXAlignment.Left
 	numberLabel.TextYAlignment = Enum.TextYAlignment.Top
+	numberLabel.ZIndex = 3
 	numberLabel.Parent = frame
 
-	-- Streamer initial (center)
 	local iconLabel = Instance.new("TextLabel")
 	iconLabel.Name = "Icon"
-	iconLabel.Size = UDim2.new(1, -4, 0.55, 0)
-	iconLabel.Position = UDim2.new(0.5, 0, 0.2, 0)
+	iconLabel.Size = UDim2.new(1, -4, 0.5, 0)
+	iconLabel.Position = UDim2.new(0.5, 0, 0.25, 0)
 	iconLabel.AnchorPoint = Vector2.new(0.5, 0)
 	iconLabel.BackgroundTransparency = 1
-	iconLabel.TextColor3 = DesignConfig.Colors.White
-	iconLabel.Font = DesignConfig.Fonts.Primary
+	iconLabel.TextColor3 = Color3.new(1, 1, 1)
+	iconLabel.Font = Enum.Font.FredokaOne
 	iconLabel.TextScaled = true
 	iconLabel.Text = ""
+	iconLabel.ZIndex = 3
 	iconLabel.Parent = frame
 
-	-- Rarity text (bottom)
+	local iconStroke = Instance.new("UIStroke")
+	iconStroke.Color = Color3.fromRGB(0, 0, 0)
+	iconStroke.Thickness = 1.5
+	iconStroke.Transparency = 0.2
+	iconStroke.Parent = iconLabel
+
 	local rarityLabel = Instance.new("TextLabel")
 	rarityLabel.Name = "Rarity"
-	rarityLabel.Size = UDim2.new(1, -4, 0.25, 0)
-	rarityLabel.Position = UDim2.new(0.5, 0, 0.75, 0)
-	rarityLabel.AnchorPoint = Vector2.new(0.5, 0)
+	rarityLabel.Size = UDim2.new(1, -4, 0, 14)
+	rarityLabel.Position = UDim2.new(0.5, 0, 1, -2)
+	rarityLabel.AnchorPoint = Vector2.new(0.5, 1)
 	rarityLabel.BackgroundTransparency = 1
-	rarityLabel.TextColor3 = DesignConfig.Colors.TextSecondary
-	rarityLabel.Font = DesignConfig.Fonts.Secondary
-	rarityLabel.TextScaled = true
+	rarityLabel.TextColor3 = Color3.new(1, 1, 1)
+	rarityLabel.Font = Enum.Font.FredokaOne
+	rarityLabel.TextSize = 10
 	rarityLabel.Text = ""
+	rarityLabel.ZIndex = 3
 	rarityLabel.Parent = frame
 
-	-- Click detection
+	local rarStroke = Instance.new("UIStroke")
+	rarStroke.Color = Color3.fromRGB(0, 0, 0)
+	rarStroke.Thickness = 1.2
+	rarStroke.Transparency = 0.3
+	rarStroke.Parent = rarityLabel
+
 	local clickBtn = Instance.new("TextButton")
 	clickBtn.Name = "ClickZone"
 	clickBtn.Size = UDim2.new(1, 0, 1, 0)
@@ -121,21 +134,15 @@ local function createSlot(parent, slotNumber)
 		InventoryController.SelectSlot(slotNumber)
 	end)
 
-	-- Hover effect
-	local tweenInfo = TweenInfo.new(0.12, Enum.EasingStyle.Quad)
+	local bounceTween = TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+	local idleSize = slotSize
+	local hoverSize = UDim2.new(idleSize.X.Scale * 1.08, idleSize.X.Offset * 1.08, idleSize.Y.Scale * 1.08, idleSize.Y.Offset * 1.08)
+
 	clickBtn.MouseEnter:Connect(function()
-		if slotNumber ~= selectedIndex then
-			TweenService:Create(frame, tweenInfo, {
-				BackgroundColor3 = DesignConfig.Colors.ButtonHover,
-			}):Play()
-		end
+		TweenService:Create(frame, bounceTween, { Size = hoverSize }):Play()
 	end)
 	clickBtn.MouseLeave:Connect(function()
-		if slotNumber ~= selectedIndex then
-			TweenService:Create(frame, tweenInfo, {
-				BackgroundColor3 = DesignConfig.Colors.InventorySlot,
-			}):Play()
-		end
+		TweenService:Create(frame, bounceTween, { Size = idleSize }):Play()
 	end)
 
 	return {
@@ -168,77 +175,75 @@ local function updateSlotVisuals()
 		local stroke = slotData.frame:FindFirstChildOfClass("UIStroke")
 		local isQueued = streamerId and queuedSet[i]
 
-		-- Remove old effect tag if present
 		local oldEffectTag = slotData.frame:FindFirstChild("EffectTag")
 		if oldEffectTag then oldEffectTag:Destroy() end
 
 		if isQueued then
-			-- Queued for sacrifice — show as completely empty slot
 			slotData.iconLabel.Text = ""
 			slotData.rarityLabel.Text = ""
-			slotData.frame.BackgroundColor3 = DesignConfig.Colors.InventorySlot
+			slotData.frame.BackgroundColor3 = EMPTY_SLOT_COLOR
 			if stroke then
-				stroke.Color = Color3.fromRGB(70, 70, 100); stroke.Thickness = 1
+				stroke.Color = Color3.fromRGB(80, 75, 110); stroke.Thickness = 1.5
 			end
 		elseif streamerId then
 			local info = Streamers.ById[streamerId]
 			local rarityColor = DesignConfig.RarityColors[info and info.rarity or "Common"]
 				or Color3.fromRGB(170, 170, 170)
 
-			-- Effect: override display color with effect color
 			local effectInfo = effect and Effects.ByName[effect] or nil
 			local displayColor = effectInfo and effectInfo.color or rarityColor
 
 			local displayName = info and info.displayName or "?"
-			if effectInfo then
-				displayName = effectInfo.prefix .. " " .. displayName
-			end
 
-			slotData.iconLabel.Text = string.sub(displayName, 1, 5)
-			slotData.iconLabel.TextColor3 = displayColor
-			slotData.rarityLabel.Text = info and info.rarity or ""
-			slotData.rarityLabel.TextColor3 = displayColor
+			slotData.iconLabel.Text = string.sub(displayName, 1, 6)
+			slotData.iconLabel.TextColor3 = Color3.new(1, 1, 1)
 
-			-- Show small effect tag at top of slot
+			slotData.rarityLabel.Text = info and info.rarity:upper() or ""
+			slotData.rarityLabel.TextColor3 = Color3.new(1, 1, 1)
+
 			if effectInfo then
 				local effectTag = Instance.new("TextLabel")
 				effectTag.Name = "EffectTag"
-				effectTag.Size = UDim2.new(1, 0, 0, 12)
-				effectTag.Position = UDim2.new(0, 0, 0, 1)
+				effectTag.Size = UDim2.new(1, -4, 0, 14)
+				effectTag.Position = UDim2.new(0.5, 0, 0, 14)
+				effectTag.AnchorPoint = Vector2.new(0.5, 0)
 				effectTag.BackgroundTransparency = 1
 				effectTag.Text = effectInfo.prefix:upper()
 				effectTag.TextColor3 = effectInfo.color
-				effectTag.Font = Enum.Font.GothamBold
-				effectTag.TextSize = 10
+				effectTag.Font = Enum.Font.FredokaOne
+				effectTag.TextSize = 11
 				effectTag.TextScaled = false
+				effectTag.ZIndex = 4
 				effectTag.Parent = slotData.frame
+
+				local etStroke = Instance.new("UIStroke")
+				etStroke.Color = Color3.fromRGB(0, 0, 0)
+				etStroke.Thickness = 1.5
+				etStroke.Parent = effectTag
 			end
 
-			-- Tint the slot background slightly with display color
-			if i == selectedIndex then
-				slotData.frame.BackgroundColor3 = Color3.fromRGB(
-					math.floor(displayColor.R * 255 * 0.3 + 50 * 0.7),
-					math.floor(displayColor.G * 255 * 0.3 + 50 * 0.7),
-					math.floor(displayColor.B * 255 * 0.3 + 70 * 0.7)
-				)
-			else
-				slotData.frame.BackgroundColor3 = DesignConfig.Colors.InventorySlot
+			local bgR = math.clamp(math.floor(rarityColor.R * 255 * 0.55 + 25), 0, 255)
+			local bgG = math.clamp(math.floor(rarityColor.G * 255 * 0.55 + 20), 0, 255)
+			local bgB = math.clamp(math.floor(rarityColor.B * 255 * 0.55 + 30), 0, 255)
+			slotData.frame.BackgroundColor3 = Color3.fromRGB(bgR, bgG, bgB)
+
+			if stroke then
+				stroke.Color = rarityColor
+				stroke.Thickness = i == selectedIndex and 3.5 or 2
 			end
 		else
 			slotData.iconLabel.Text = ""
 			slotData.rarityLabel.Text = ""
-			slotData.frame.BackgroundColor3 = DesignConfig.Colors.InventorySlot
+			slotData.frame.BackgroundColor3 = EMPTY_SLOT_COLOR
+			if stroke then
+				stroke.Color = Color3.fromRGB(80, 75, 110)
+				stroke.Thickness = 1.5
+			end
 		end
 
-		-- Selection highlight
-		if stroke then
-			if i == selectedIndex then
-				stroke.Color = DesignConfig.Colors.InventorySelected
-				stroke.Thickness = 3
-			else
-				stroke.Color = Color3.fromRGB(70, 70, 100)
-				stroke.Thickness = 1
-			end
+		if stroke and i == selectedIndex then
+			stroke.Color = Color3.fromRGB(255, 255, 100)
+			stroke.Thickness = 3.5
 		end
 	end
 
