@@ -154,7 +154,7 @@ local function showConfirmation(message, onYes)
 	box.AnchorPoint = Vector2.new(0.5, 0.5); box.BackgroundColor3 = Color3.fromRGB(28, 26, 50)
 	box.BorderSizePixel = 0; box.ZIndex = 51; box.Parent = dim
 	Instance.new("UICorner", box).CornerRadius = UDim.new(0, 20)
-	local bs = Instance.new("UIStroke", box); bs.Color = ACCENT; bs.Thickness = 3
+	local bs = Instance.new("UIStroke", box); bs.Color = ACCENT; bs.Thickness = 1.5
 
 	local t = Instance.new("TextLabel")
 	t.Size = UDim2.new(1, -sx(30), 0, sx(38)); t.Position = UDim2.new(0.5, 0, 0, sx(18))
@@ -268,7 +268,7 @@ local function showPicker(title, filterFn, excludeSet, onSelect)
 	popup.BackgroundColor3 = Color3.fromRGB(20, 18, 38); popup.BorderSizePixel = 0; popup.ZIndex = 41
 	popup.ClipsDescendants = true; popup.Parent = dim
 	Instance.new("UICorner", popup).CornerRadius = UDim.new(0, sx(20))
-	local ps = Instance.new("UIStroke", popup); ps.Color = Color3.fromRGB(255, 200, 60); ps.Thickness = 2.5
+	local ps = Instance.new("UIStroke", popup); ps.Color = Color3.fromRGB(255, 200, 60); ps.Thickness = 1.5
 
 	local tl = Instance.new("TextLabel")
 	tl.Size = UDim2.new(1, -sx(70), 0, sx(42)); tl.Position = UDim2.new(0.5, 0, 0, sx(12))
@@ -1175,7 +1175,7 @@ local function buildLuckContent(luckType)
 	elseif luckType == "DontDoIt" then
 		local cfg = Sacrifice.DontDoIt
 		local header = Instance.new("Frame")
-		header.Size = UDim2.new(1, -10, 0, 170)
+		header.Size = UDim2.new(1, -10, 0, 140)
 		header.BackgroundColor3 = Color3.fromRGB(22, 22, 40); header.BorderSizePixel = 0; header.Parent = contentFrame
 		Instance.new("UICorner", header).CornerRadius = UDim.new(0, 18)
 		Instance.new("UIStroke", header).Color = Color3.fromRGB(220, 60, 60)
@@ -1185,44 +1185,104 @@ local function buildLuckContent(luckType)
 		t.Text = cfg.name; t.TextColor3 = Color3.fromRGB(255, 100, 100)
 		t.Font = FONT; t.TextSize = 28; t.Parent = header
 		local d = Instance.new("TextLabel")
-		d.Size = UDim2.new(1, -24, 0, 100); d.Position = UDim2.new(0.5, 0, 0, 52)
+		d.Size = UDim2.new(1, -24, 0, 80); d.Position = UDim2.new(0.5, 0, 0, 46)
 		d.AnchorPoint = Vector2.new(0.5, 0); d.BackgroundTransparency = 1
-		d.Text = cfg.desc .. "\n\nUpgrade Chances:\nCommon->Rare: 50%  |  Rare->Epic: 30%\nEpic->Legendary: 10%  |  Legendary->Mythic: 4%\n\nInfinite charges — no cooldown!"
+		d.Text = cfg.desc .. "\n\nUpgrade Chances:\nCommon->Rare: 50%  |  Rare->Epic: 30%\nEpic->Legendary: 10%  |  Legendary->Mythic: 4%"
 		d.TextColor3 = Color3.fromRGB(160, 170, 200); d.Font = FONT; d.TextSize = 14; d.TextWrapped = true; d.Parent = header
 
-		local sb = Instance.new("TextButton")
-		sb.Size = UDim2.new(0, 220, 0, 48); sb.BackgroundColor3 = Color3.fromRGB(200, 60, 60)
-		sb.Text = "SACRIFICE"; sb.TextColor3 = Color3.new(1, 1, 1)
-		sb.Font = FONT; sb.TextSize = 18; sb.BorderSizePixel = 0; sb.Parent = contentFrame
-		Instance.new("UICorner", sb).CornerRadius = UDim.new(0, 12)
-		UIHelper.AddPuffyGradient(sb)
-		sb.MouseButton1Click:Connect(function()
-			-- Find the highest earner across hotbar + storage
-			local allItems = getCombinedItems()
-			local bestName, bestEffect = "???", nil
-			local bestPrice = -1
-			for _, entry in ipairs(allItems) do
-				local id = type(entry.item) == "table" and entry.item.id or entry.item
-				local eff = type(entry.item) == "table" and entry.item.effect or nil
-				local info = Streamers.ById[id]
+		-- Streamer picker: show all streamers so player can choose
+		local pickLabel = Instance.new("TextLabel")
+		pickLabel.Size = UDim2.new(1, -10, 0, sx(26))
+		pickLabel.BackgroundTransparency = 1
+		pickLabel.Text = "Tap a streamer to sacrifice it:"
+		pickLabel.TextColor3 = Color3.fromRGB(180, 180, 200)
+		pickLabel.Font = FONT; pickLabel.TextSize = sx(15)
+		pickLabel.Parent = contentFrame
+
+		local allItems = getCombinedItems()
+
+		if #allItems == 0 then
+			local noItems = Instance.new("TextLabel")
+			noItems.Size = UDim2.new(1, 0, 0, sx(60))
+			noItems.BackgroundTransparency = 1
+			noItems.Text = "No eligible streamers in your inventory or storage"
+			noItems.TextColor3 = Color3.fromRGB(120, 120, 140)
+			noItems.Font = FONT; noItems.TextSize = sx(16)
+			noItems.Parent = contentFrame
+		else
+			local pickScroll = Instance.new("ScrollingFrame")
+			pickScroll.Size = UDim2.new(1, -10, 0, sx(280))
+			pickScroll.BackgroundTransparency = 1; pickScroll.BorderSizePixel = 0
+			pickScroll.ScrollBarThickness = sx(5); pickScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+			pickScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y; pickScroll.Parent = contentFrame
+
+			local grid = Instance.new("UIGridLayout", pickScroll)
+			grid.CellSize = UDim2.new(0, sx(108), 0, sx(80))
+			grid.CellPadding = UDim2.new(0, sx(8), 0, sx(8))
+			grid.SortOrder = Enum.SortOrder.LayoutOrder
+
+			Instance.new("UIPadding", pickScroll).PaddingLeft = UDim.new(0, 4)
+
+			for order, entry in ipairs(allItems) do
+				local item = entry.item
+				local vi = entry.vi
+				local id, eff, info = getItemInfo(item)
 				if info then
-					local p = info.cashPerSecond or 0
-					if eff then
-						local ei = Effects.ByName[eff]
-						if ei and ei.cashMultiplier then p = p * ei.cashMultiplier end
+					local rColor = DesignConfig.RarityColors[info.rarity] or Color3.new(1, 1, 1)
+					local effInfo = eff and Effects.ByName[eff] or nil
+					local displayColor = effInfo and effInfo.color or rColor
+					local displayName = info.displayName or id
+					if effInfo then displayName = effInfo.prefix .. " " .. displayName end
+					local isStorage = vi > STORAGE_OFFSET
+
+					local cell = Instance.new("TextButton")
+					cell.Size = UDim2.new(0, sx(108), 0, sx(80))
+					cell.BackgroundColor3 = Color3.fromRGB(30, 28, 50); cell.BorderSizePixel = 0
+					cell.Text = ""; cell.LayoutOrder = order; cell.Parent = pickScroll
+					Instance.new("UICorner", cell).CornerRadius = UDim.new(0, sx(12))
+					local cs = Instance.new("UIStroke", cell)
+					cs.Color = displayColor; cs.Thickness = 1.5; cs.Transparency = 0.3; cs.Parent = cell
+
+					local nl = Instance.new("TextLabel")
+					nl.Size = UDim2.new(1, -8, 0, sx(18)); nl.Position = UDim2.new(0.5, 0, 0, sx(6))
+					nl.AnchorPoint = Vector2.new(0.5, 0); nl.BackgroundTransparency = 1
+					nl.Text = displayName; nl.TextColor3 = displayColor
+					nl.Font = FONT; nl.TextSize = sx(11); nl.TextTruncate = Enum.TextTruncate.AtEnd
+					nl.Parent = cell
+
+					local rl = Instance.new("TextLabel")
+					rl.Size = UDim2.new(1, -8, 0, sx(14)); rl.Position = UDim2.new(0.5, 0, 0, sx(26))
+					rl.AnchorPoint = Vector2.new(0.5, 0); rl.BackgroundTransparency = 1
+					rl.Text = info.rarity; rl.TextColor3 = rColor
+					rl.Font = FONT2; rl.TextSize = sx(10); rl.Parent = cell
+
+					if isStorage then
+						local sl = Instance.new("TextLabel")
+						sl.Size = UDim2.new(0, sx(14), 0, sx(14)); sl.Position = UDim2.new(1, -sx(4), 1, -sx(4))
+						sl.AnchorPoint = Vector2.new(1, 1); sl.BackgroundColor3 = Color3.fromRGB(60, 130, 200)
+						sl.Text = "S"; sl.TextColor3 = Color3.new(1, 1, 1)
+						sl.Font = FONT; sl.TextSize = sx(9); sl.Parent = cell
+						Instance.new("UICorner", sl).CornerRadius = UDim.new(0, 3)
 					end
-					if p > bestPrice then
-						bestPrice = p
-						bestName = info.displayName or id
-						bestEffect = eff
-					end
+
+					local sacIcon = Instance.new("TextLabel")
+					sacIcon.Size = UDim2.new(1, 0, 0, sx(22))
+					sacIcon.Position = UDim2.new(0.5, 0, 1, -sx(6))
+					sacIcon.AnchorPoint = Vector2.new(0.5, 1)
+					sacIcon.BackgroundTransparency = 1
+					sacIcon.Text = "SACRIFICE"
+					sacIcon.TextColor3 = Color3.fromRGB(255, 100, 100)
+					sacIcon.Font = FONT; sacIcon.TextSize = sx(10)
+					sacIcon.Parent = cell
+
+					cell.MouseButton1Click:Connect(function()
+						showConfirmation("Sacrifice " .. displayName .. " (" .. info.rarity .. ")?\nChance to upgrade to next rarity!", function()
+							SacrificeRequest:FireServer("DontDoIt", vi)
+						end)
+					end)
 				end
 			end
-			local streamerLabel = bestEffect and (bestEffect .. " " .. bestName) or bestName
-			showConfirmation("This will PERMANENTLY sacrifice your " .. streamerLabel .. " (highest earner)!", function()
-				SacrificeRequest:FireServer("DontDoIt")
-			end)
-		end)
+		end
 	end
 end
 
@@ -1772,6 +1832,7 @@ function SacrificeController.Init()
 	Instance.new("UICorner", modalFrame).CornerRadius = UDim.new(0, sx(24))
 	Instance.new("UIStroke", modalFrame).Color = ACCENT
 	UIHelper.CreateShadow(modalFrame)
+	UIHelper.MakeResponsiveModal(modalFrame, 880, 640)
 
 	local topBar = Instance.new("Frame")
 	topBar.Size = UDim2.new(1, 0, 0, sx(10)); topBar.BackgroundColor3 = Color3.new(1, 1, 1)
@@ -1786,7 +1847,7 @@ function SacrificeController.Init()
 	local titleLbl = Instance.new("TextLabel")
 	titleLbl.Size = UDim2.new(1, -sx(100), 0, sx(48)); titleLbl.Position = UDim2.new(0.5, 0, 0, sx(10))
 	titleLbl.AnchorPoint = Vector2.new(0.5, 0); titleLbl.BackgroundTransparency = 1
-	titleLbl.Text = "SACRIFICE"; titleLbl.TextColor3 = Color3.fromRGB(255, 160, 160)
+	titleLbl.Text = "STREAMER SACRIFICE"; titleLbl.TextColor3 = Color3.fromRGB(255, 160, 160)
 	titleLbl.Font = FONT; titleLbl.TextSize = sx(32); titleLbl.Parent = modalFrame
 	local tts = Instance.new("UIStroke", titleLbl)
 	tts.Color = Color3.fromRGB(60, 0, 20); tts.Thickness = 2.5; tts.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
@@ -1882,7 +1943,7 @@ function SacrificeController.Init()
 	addSection("— TEST YOUR LUCK —")
 	addTab("FiftyFifty", "50 / 50", Color3.fromRGB(255, 220, 60))
 	addTab("FeelingLucky", "Feeling Lucky?", Color3.fromRGB(100, 200, 255))
-	addTab("DontDoIt", "Don't do it", Color3.fromRGB(255, 80, 80))
+	addTab("DontDoIt", "Streamer Sacrifice", Color3.fromRGB(255, 80, 80))
 	addTab("GemRoulette", "Gem Roulette", Color3.fromRGB(255, 180, 50))
 	addSection("— ELEMENTAL —")
 	addTab("Elem_", "Default", Color3.fromRGB(170, 170, 170))

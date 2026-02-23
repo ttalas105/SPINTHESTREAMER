@@ -37,10 +37,10 @@ local CARD_LOCKED = Color3.fromRGB(30, 28, 36)
 local ACCENT      = Color3.fromRGB(100, 220, 120)
 local LOCKED_TEXT = Color3.fromRGB(180, 160, 200)
 
-local ROW_H       = 100
-local IMAGE_SIZE  = 80
-local MODAL_W     = 480
-local MODAL_H     = 520
+local ROW_H       = 130
+local IMAGE_SIZE  = 105
+local MODAL_W     = 580
+local MODAL_H     = 620
 
 local RARITY_COLORS = {
 	Common    = Color3.fromRGB(180, 180, 190),
@@ -97,6 +97,7 @@ local function buildCaseRow(crateId, parent)
 	row.Size = UDim2.new(1, 0, 0, ROW_H)
 	row.BackgroundColor3 = CARD_BG
 	row.BorderSizePixel = 0
+	row.LayoutOrder = crateId
 	row.Parent = parent
 
 	local rowCorner = Instance.new("UICorner")
@@ -110,83 +111,89 @@ local function buildCaseRow(crateId, parent)
 	rowStroke.Transparency = 0.3
 	rowStroke.Parent = row
 
-	-- Case image (left)
+	-- Case image (left) — cases 13-18 use larger display to compensate for smaller source images
+	local imgScale = crateId >= 13 and 1.3 or 1.0
+	local displaySize = math.floor(IMAGE_SIZE * imgScale)
+
 	local caseImage = Instance.new("ImageLabel")
 	caseImage.Name = "CaseImage"
-	caseImage.Size = UDim2.new(0, IMAGE_SIZE, 0, IMAGE_SIZE)
-	caseImage.Position = UDim2.new(0, 10, 0.5, 0)
+	caseImage.Size = UDim2.new(0, displaySize, 0, displaySize)
+	caseImage.Position = UDim2.new(0, 10 - math.floor((displaySize - IMAGE_SIZE) / 2), 0.5, 0)
 	caseImage.AnchorPoint = Vector2.new(0, 0.5)
 	caseImage.BackgroundTransparency = 1
 	caseImage.Image = imageId or ""
 	caseImage.ScaleType = Enum.ScaleType.Fit
+	caseImage.ClipsDescendants = false
 	caseImage.Parent = row
+
+	local textX = IMAGE_SIZE + 24
 
 	-- Name (right of image)
 	local nameLabel = Instance.new("TextLabel")
 	nameLabel.Name = "NameLabel"
-	nameLabel.Size = UDim2.new(1, -(IMAGE_SIZE + 140), 0, 30)
-	nameLabel.Position = UDim2.new(0, IMAGE_SIZE + 20, 0, 12)
+	nameLabel.Size = UDim2.new(1, -(textX + 130), 0, 34)
+	nameLabel.Position = UDim2.new(0, textX, 0, 12)
 	nameLabel.BackgroundTransparency = 1
 	nameLabel.Text = name
 	nameLabel.TextColor3 = Color3.new(1, 1, 1)
 	nameLabel.Font = FONT
-	nameLabel.TextSize = 22
+	nameLabel.TextSize = 26
 	nameLabel.TextXAlignment = Enum.TextXAlignment.Left
 	nameLabel.TextTruncate = Enum.TextTruncate.AtEnd
 	nameLabel.Parent = row
 	local nameStroke = Instance.new("UIStroke")
 	nameStroke.Color = Color3.fromRGB(0, 0, 0)
-	nameStroke.Thickness = 2
+	nameStroke.Thickness = 1.5
 	nameStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
 	nameStroke.Parent = nameLabel
 
 	-- Rarity + Luck line
 	local infoLabel = Instance.new("TextLabel")
 	infoLabel.Name = "InfoLabel"
-	infoLabel.Size = UDim2.new(1, -(IMAGE_SIZE + 140), 0, 22)
-	infoLabel.Position = UDim2.new(0, IMAGE_SIZE + 20, 0, 42)
+	infoLabel.Size = UDim2.new(1, -(textX + 130), 0, 24)
+	infoLabel.Position = UDim2.new(0, textX, 0, 48)
 	infoLabel.BackgroundTransparency = 1
 	infoLabel.Text = rarity .. " - " .. luckString(luck)
 	infoLabel.TextColor3 = rarityColor
 	infoLabel.Font = FONT_SUB
-	infoLabel.TextSize = 15
+	infoLabel.TextSize = 17
 	infoLabel.TextXAlignment = Enum.TextXAlignment.Left
 	infoLabel.Parent = row
 	local infoStroke = Instance.new("UIStroke")
 	infoStroke.Color = Color3.fromRGB(0, 0, 0)
-	infoStroke.Thickness = 1
+	infoStroke.Thickness = 1.2
 	infoStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
 	infoStroke.Parent = infoLabel
 
 	-- Cost label
 	local costLabel = Instance.new("TextLabel")
 	costLabel.Name = "CostLabel"
-	costLabel.Size = UDim2.new(1, -(IMAGE_SIZE + 140), 0, 20)
-	costLabel.Position = UDim2.new(0, IMAGE_SIZE + 20, 0, 64)
+	costLabel.Size = UDim2.new(1, -(textX + 130), 0, 24)
+	costLabel.Position = UDim2.new(0, textX, 0, 76)
 	costLabel.BackgroundTransparency = 1
 	costLabel.Text = formatCash(cost)
 	costLabel.TextColor3 = Color3.fromRGB(100, 255, 130)
 	costLabel.Font = FONT
-	costLabel.TextSize = 16
+	costLabel.TextSize = 20
 	costLabel.TextXAlignment = Enum.TextXAlignment.Left
 	costLabel.Parent = row
 	local costStroke = Instance.new("UIStroke")
 	costStroke.Color = Color3.fromRGB(0, 0, 0)
-	costStroke.Thickness = 1
+	costStroke.Thickness = 1.5
 	costStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
 	costStroke.Parent = costLabel
 
 	-- BUY button (right side)
 	local buyBtn = Instance.new("TextButton")
 	buyBtn.Name = "BuyBtn"
-	buyBtn.Size = UDim2.new(0, 90, 0, 40)
+	buyBtn.Size = UDim2.new(0, 105, 0, 48)
 	buyBtn.Position = UDim2.new(1, -14, 0.5, 0)
 	buyBtn.AnchorPoint = Vector2.new(1, 0.5)
 	buyBtn.BackgroundColor3 = Color3.fromRGB(60, 200, 90)
 	buyBtn.Text = "SPIN"
 	buyBtn.TextColor3 = Color3.new(1, 1, 1)
 	buyBtn.Font = FONT
-	buyBtn.TextSize = 18
+	buyBtn.TextSize = 22
 	buyBtn.BorderSizePixel = 0
 	buyBtn.AutoButtonColor = false
 	buyBtn.Parent = row
@@ -207,7 +214,7 @@ local function buildCaseRow(crateId, parent)
 	-- Hover effects (row + button)
 	local bounceTI = TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 	local idleSize = buyBtn.Size
-	local hoverSize = UDim2.new(0, 98, 0, 44)
+	local hoverSize = UDim2.new(0, 115, 0, 52)
 
 	buyBtn.MouseEnter:Connect(function()
 		TweenService:Create(row, bounceTI, { BackgroundColor3 = CARD_HOVER }):Play()
@@ -233,26 +240,26 @@ local function buildCaseRow(crateId, parent)
 	lockCorner.Parent = lockOverlay
 
 	local lockIcon = Instance.new("TextLabel")
-	lockIcon.Size = UDim2.new(0, 40, 0, 40)
-	lockIcon.Position = UDim2.new(0.5, 0, 0.5, 0)
+	lockIcon.Size = UDim2.new(0, 50, 0, 50)
+	lockIcon.Position = UDim2.new(0.5, -30, 0.5, 0)
 	lockIcon.AnchorPoint = Vector2.new(0.5, 0.5)
 	lockIcon.BackgroundTransparency = 1
 	lockIcon.Text = "🔒"
-	lockIcon.TextSize = 32
+	lockIcon.TextSize = 40
 	lockIcon.Font = Enum.Font.SourceSans
 	lockIcon.ZIndex = 6
 	lockIcon.Parent = lockOverlay
 
 	local lockText = Instance.new("TextLabel")
 	lockText.Name = "LockText"
-	lockText.Size = UDim2.new(0, 200, 0, 24)
-	lockText.Position = UDim2.new(0.5, 28, 0.5, 0)
+	lockText.Size = UDim2.new(0, 220, 0, 30)
+	lockText.Position = UDim2.new(0.5, 30, 0.5, 0)
 	lockText.AnchorPoint = Vector2.new(0.5, 0.5)
 	lockText.BackgroundTransparency = 1
 	lockText.Text = "Rebirth " .. Economy.GetCrateRebirthRequirement(crateId) .. " Required"
 	lockText.TextColor3 = Color3.fromRGB(255, 180, 80)
 	lockText.Font = FONT
-	lockText.TextSize = 16
+	lockText.TextSize = 20
 	lockText.ZIndex = 6
 	lockText.Parent = lockOverlay
 	local ltStroke = Instance.new("UIStroke")
@@ -372,11 +379,12 @@ function SpinStandController.Init()
 
 	local modalStroke = Instance.new("UIStroke")
 	modalStroke.Color = Color3.fromRGB(70, 60, 100)
-	modalStroke.Thickness = 2.5
-	modalStroke.Transparency = 0.2
+	modalStroke.Thickness = 1.5
+	modalStroke.Transparency = 0.3
 	modalStroke.Parent = modalFrame
 
 	UIHelper.CreateShadow(modalFrame)
+	UIHelper.MakeResponsiveModal(modalFrame, MODAL_W, MODAL_H)
 
 	-- Header area
 	local header = Instance.new("Frame")
@@ -395,13 +403,13 @@ function SpinStandController.Init()
 	title.Text = "Case Shop"
 	title.TextColor3 = Color3.new(1, 1, 1)
 	title.Font = FONT
-	title.TextSize = 30
+	title.TextSize = 36
 	title.TextXAlignment = Enum.TextXAlignment.Left
 	title.ZIndex = 3
 	title.Parent = header
 	local titleStroke = Instance.new("UIStroke")
 	titleStroke.Color = Color3.fromRGB(0, 0, 0)
-	titleStroke.Thickness = 2.5
+	titleStroke.Thickness = 1.5
 	titleStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
 	titleStroke.Parent = title
 
@@ -488,7 +496,8 @@ function SpinStandController.Init()
 	local listLayout = Instance.new("UIListLayout")
 	listLayout.FillDirection = Enum.FillDirection.Vertical
 	listLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-	listLayout.Padding = UDim.new(0, 8)
+	listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	listLayout.Padding = UDim.new(0, 10)
 	listLayout.Parent = scroll
 
 	local topPad = Instance.new("UIPadding")

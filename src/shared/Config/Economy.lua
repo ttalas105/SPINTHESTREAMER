@@ -83,24 +83,24 @@ Economy.CrateImageIds = {
 }
 
 Economy.CrateNames = {
-	"Starter Case",     -- 1
-	"Bronze Case",      -- 2
-	"Silver Case",      -- 3
-	"Gold Case",        -- 4
-	"Platinum Case",    -- 5
-	"Emerald Case",     -- 6
-	"Diamond Case",     -- 7
-	"Ruby Case",        -- 8
-	"Sapphire Case",    -- 9
-	"Crystal Case",     -- 10
-	"Amethyst Case",    -- 11
-	"Obsidian Case",    -- 12
-	"Phoenix Case",     -- 13
-	"Celestial Case",   -- 14
-	"Cosmic Case",      -- 15
-	"Inferno Case",     -- 16
-	"Astral Case",      -- 17
-	"Ultimate Case",    -- 18
+	"Scrap Case",        -- 1
+	"Basic Case",        -- 2
+	"Lucky Case",        -- 3
+	"Polished Case",     -- 4
+	"Shiny Case",        -- 5
+	"Mystic Case",       -- 6
+	"Inferno Case",      -- 7
+	"Neon Case",         -- 8
+	"Cosmic Case",       -- 9
+	"Radiant Case",      -- 10
+	"Celestial Case",    -- 11
+	"Abyss Case",        -- 12
+	"Iridescent Case",   -- 13
+	"Angelic Case",      -- 14
+	"Time Case",         -- 15
+	"Tidal Case",        -- 16
+	"Infinity Case",     -- 17
+	"Prismatic Case",    -- 18
 }
 
 Economy.CrateRarities = {

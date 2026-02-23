@@ -32,7 +32,7 @@ Potions.Prismatic = {
 	name = "Prismatic Potion",
 	multiplier = 5,
 	color = Color3.fromRGB(255, 120, 255),
-	imageId = "",
+	imageId = "rbxassetid://126494728573780",
 	desc = "5x luck and money multiplier for 15 minutes",
 	packs = {
 		{ amount = 1,  robux = 99,  label = "x1",  tag = nil },

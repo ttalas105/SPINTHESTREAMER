@@ -142,8 +142,8 @@ local function buildCarousel(parent)
 	local frameStroke = Instance.new("UIStroke")
 	frameStroke.Name = "BorderStroke"
 	frameStroke.Color = CAROUSEL_STROKE
-	frameStroke.Thickness = 3
-	frameStroke.Transparency = 0.1
+	frameStroke.Thickness = 1.5
+	frameStroke.Transparency = 0.25
 	frameStroke.Parent = carouselFrame
 
 	-- Rainbow accent line across the top
@@ -773,8 +773,8 @@ local function showResult(data)
 
 	local rmStroke = Instance.new("UIStroke")
 	rmStroke.Color = displayColor
-	rmStroke.Thickness = 3
-	rmStroke.Transparency = 0.1
+	rmStroke.Thickness = 1.5
+	rmStroke.Transparency = 0.25
 	rmStroke.Parent = receivedMessage
 
 	-- Background gradient
@@ -858,7 +858,7 @@ local function showResult(data)
 		Color = displayColor,
 		Font = FONT,
 		TextSize = 26,
-		StrokeThickness = 3,
+		StrokeThickness = 1.5,
 		ZIndex = 21,
 	})
 
@@ -1139,8 +1139,8 @@ function SpinController.Init()
 
 	local containerStroke = Instance.new("UIStroke")
 	containerStroke.Color = CONTAINER_STROKE
-	containerStroke.Thickness = 3
-	containerStroke.Transparency = 0.1
+	containerStroke.Thickness = 1.5
+	containerStroke.Transparency = 0.25
 	containerStroke.Parent = spinContainer
 
 	UIHelper.CreateShadow(spinContainer)
@@ -1179,7 +1179,7 @@ function SpinController.Init()
 		Font = FONT,
 		TextSize = 32,
 		StrokeColor = Color3.fromRGB(180, 80, 0),
-		StrokeThickness = 3,
+		StrokeThickness = 1.5,
 	})
 	spinTitle.ZIndex = 2
 
@@ -1277,7 +1277,7 @@ function SpinController.Init()
 	closeBtn.Position = UDim2.new(1, -12, 0, 12)
 	closeBtn.AnchorPoint = Vector2.new(1, 0)
 	closeBtn.BackgroundColor3 = Color3.fromRGB(240, 60, 70)
-	closeBtn.Text = "✕"
+	closeBtn.Text = "X"
 	closeBtn.TextColor3 = Color3.new(1, 1, 1)
 	closeBtn.Font = FONT
 	closeBtn.TextSize = 22

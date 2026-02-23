@@ -350,23 +350,26 @@ local function handleFeelingLucky(player)
 end
 
 -------------------------------------------------
--- DON'T DO IT
+-- STREAMER SACRIFICE (formerly "Don't Do It")
+-- Player picks which streamer to sacrifice.
 -------------------------------------------------
-local function handleDontDoIt(player)
+local function handleDontDoIt(player, chosenVI)
 	local cfg = Sacrifice.DontDoIt
-	local bestVI = getHighestEarningIndex(player)
-	if not bestVI then
-		SacrificeResult:FireClient(player, { success = false, reason = "You need at least 1 streamer!" })
+	if not chosenVI or type(chosenVI) ~= "number" then
+		SacrificeResult:FireClient(player, { success = false, reason = "Pick a streamer to sacrifice!" })
 		return
 	end
-	-- Resolve the item from the virtual index
 	local item1
-	if bestVI > STORAGE_OFFSET then
+	if chosenVI > STORAGE_OFFSET then
 		local sto = PlayerData.GetStorage(player)
-		item1 = sto[bestVI - STORAGE_OFFSET]
+		item1 = sto[chosenVI - STORAGE_OFFSET]
 	else
 		local inv = PlayerData.GetInventory(player)
-		item1 = inv[bestVI]
+		item1 = inv[chosenVI]
+	end
+	if not item1 then
+		SacrificeResult:FireClient(player, { success = false, reason = "Invalid streamer!" })
+		return
 	end
 	local id1 = type(item1) == "table" and item1.id or item1
 	local info1 = Streamers.ById[id1]
@@ -374,8 +377,8 @@ local function handleDontDoIt(player)
 		SacrificeResult:FireClient(player, { success = false, reason = "Invalid streamer." })
 		return
 	end
-	-- Remove the single highest-earning streamer
-	removeByVirtualIndices(player, { bestVI })
+	-- Remove the player's chosen streamer
+	removeByVirtualIndices(player, { chosenVI })
 	local baseRarity = info1.rarity
 	local chance = cfg.upgradeChances[baseRarity]
 	if not chance then
@@ -491,7 +494,7 @@ local function onSacrificeRequest(player, sacrificeType, ...)
 	elseif sacrificeType == "FeelingLucky" then
 		handleFeelingLucky(player)
 	elseif sacrificeType == "DontDoIt" then
-		handleDontDoIt(player)
+		handleDontDoIt(player, ...)
 	elseif sacrificeType == "GemRoulette" then
 		handleGemRoulette(player, ...)
 	elseif sacrificeType == "Elemental" then

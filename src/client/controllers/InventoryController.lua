@@ -334,7 +334,7 @@ function InventoryController.Init()
 
 	local bpStroke = Instance.new("UIStroke")
 	bpStroke.Color = Color3.fromRGB(120, 100, 200)
-	bpStroke.Thickness = 2
+	bpStroke.Thickness = 1
 	bpStroke.Parent = backpackButton
 
 	-- Item count badge on backpack

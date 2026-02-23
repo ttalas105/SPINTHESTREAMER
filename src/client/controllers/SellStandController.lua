@@ -1,8 +1,7 @@
 --[[
 	SellStandController.lua
-	Kid-friendly sell UI with 3D streamer model previews, vibrant cards,
-	effect badges, and bubbly design. Walk up to the Sell stall and press E.
-	Items sorted by sell price (highest first).
+	Sell UI — dark-themed panel matching the Case Shop / Potion Shop style.
+	3D streamer model previews with rotating viewports, sorted by sell price.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -28,21 +27,21 @@ local SellByIndexRequest = RemoteEvents:WaitForChild("SellByIndexRequest")
 local SellAllRequest = RemoteEvents:WaitForChild("SellAllRequest")
 local SellResult = RemoteEvents:WaitForChild("SellResult")
 
-local screenGui
-local modalFrame
+local screenGui, overlay, modalFrame
 local isOpen = false
-local scrollFrame
-local sellAllBtn
-local totalLabel
-local emptyLabel
-local countLabel
+local scrollFrame, sellAllBtn, totalLabel, countLabel, emptyLabel
 
 local FONT = Enum.Font.FredokaOne
+local FONT_SUB = Enum.Font.GothamBold
+local MODAL_BG = Color3.fromRGB(30, 25, 45)
+local RED = Color3.fromRGB(220, 55, 55)
+local RED_DARK = Color3.fromRGB(160, 30, 30)
+local GREEN = Color3.fromRGB(80, 220, 100)
+local MODAL_W, MODAL_H = 480, 540
 
--- Active viewport rotation connections (cleaned up on rebuild)
+local bounceTween = TweenInfo.new(0.12, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+
 local viewportConns = {}
-
--- Track inventory snapshot to avoid unnecessary rebuilds that reset viewports
 local lastInventorySnapshot = ""
 
 -------------------------------------------------
@@ -54,6 +53,7 @@ local function getItemId(item)
 	if type(item) == "string" then return item end
 	return nil
 end
+
 local function getItemEffect(item)
 	if type(item) == "table" then return item.effect end
 	return nil
@@ -74,7 +74,7 @@ local function calcSellPrice(item)
 	return math.floor(price)
 end
 
-local function formatNumber(n)
+local function fmtNum(n)
 	local s = tostring(math.floor(n))
 	local formatted = ""
 	local len = #s
@@ -89,10 +89,9 @@ end
 
 local function formatOdds(odds)
 	if not odds or odds < 1 then return "" end
-	return "1/" .. formatNumber(odds)
+	return "1/" .. fmtNum(odds)
 end
 
--- Build a fingerprint string of the inventory for change detection
 local function buildInventorySnapshot(inventory)
 	if not inventory or #inventory == 0 then return "" end
 	local parts = {}
@@ -104,9 +103,19 @@ local function buildInventorySnapshot(inventory)
 	return table.concat(parts, "|")
 end
 
+local function addStroke(parent, color, thickness)
+	local s = Instance.new("UIStroke")
+	s.Color = color or Color3.new(0, 0, 0)
+	s.Thickness = thickness or 1
+	s.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+	s.Parent = parent
+	return s
+end
+
 -------------------------------------------------
--- CLEANUP VIEWPORT CONNECTIONS
+-- VIEWPORT CLEANUP
 -------------------------------------------------
+
 local function cleanViewportConns()
 	for _, conn in ipairs(viewportConns) do
 		pcall(function() conn:Disconnect() end)
@@ -115,9 +124,9 @@ local function cleanViewportConns()
 end
 
 -------------------------------------------------
--- BUILD CARD FOR ONE ITEM
--- originalIndex = the real index in the server inventory (for sell requests)
+-- BUILD ITEM CARD
 -------------------------------------------------
+
 local function buildItemCard(item, originalIndex, parent)
 	local streamerId = getItemId(item)
 	local effect = getItemEffect(item)
@@ -130,58 +139,44 @@ local function buildItemCard(item, originalIndex, parent)
 	local rarityColor = rarityInfo and rarityInfo.color or Color3.fromRGB(170, 170, 170)
 	local displayColor = effectInfo and effectInfo.color or rarityColor
 
-	-- Card
 	local card = Instance.new("Frame")
 	card.Name = "Card_" .. originalIndex
-	card.Size = UDim2.new(1, -12, 0, 100)
-	card.BackgroundColor3 = Color3.fromRGB(22, 22, 38)
+	card.Size = UDim2.new(1, -12, 0, 90)
+	card.BackgroundColor3 = Color3.fromRGB(40, 35, 60)
 	card.BorderSizePixel = 0
 	card.Parent = parent
-
-	local cardCorner = Instance.new("UICorner")
-	cardCorner.CornerRadius = UDim.new(0, 14)
-	cardCorner.Parent = card
+	Instance.new("UICorner", card).CornerRadius = UDim.new(0, 12)
 
 	local cardStroke = Instance.new("UIStroke")
 	cardStroke.Color = displayColor
-	cardStroke.Thickness = 2
-	cardStroke.Transparency = 0.4
+	cardStroke.Thickness = 1.5
+	cardStroke.Transparency = 0.5
 	cardStroke.Parent = card
 
-	-- Left: 3D model viewport
+	-- 3D model viewport (left)
+	local vpSize = 70
 	local modelsFolder = ReplicatedStorage:FindFirstChild("StreamerModels")
 	local modelTemplate = modelsFolder and modelsFolder:FindFirstChild(streamerId)
 
-	local vpSize = 80
 	local viewport = Instance.new("ViewportFrame")
 	viewport.Name = "ModelVP"
 	viewport.Size = UDim2.new(0, vpSize, 0, vpSize)
 	viewport.Position = UDim2.new(0, 10, 0.5, 0)
 	viewport.AnchorPoint = Vector2.new(0, 0.5)
-	viewport.BackgroundColor3 = Color3.fromRGB(15, 15, 28)
-	viewport.BackgroundTransparency = 0.3
+	viewport.BackgroundColor3 = Color3.fromRGB(25, 22, 42)
+	viewport.BackgroundTransparency = 0.2
 	viewport.BorderSizePixel = 0
 	viewport.Parent = card
-	local vpCorner = Instance.new("UICorner")
-	vpCorner.CornerRadius = UDim.new(0, 10)
-	vpCorner.Parent = viewport
-	local vpStroke = Instance.new("UIStroke")
-	vpStroke.Color = displayColor
-	vpStroke.Thickness = 1.5
-	vpStroke.Transparency = 0.5
-	vpStroke.Parent = viewport
+	Instance.new("UICorner", viewport).CornerRadius = UDim.new(0, 10)
 
 	if modelTemplate then
 		local vpModel = modelTemplate:Clone()
 		vpModel.Parent = viewport
-
 		local vpCamera = Instance.new("Camera")
 		vpCamera.Parent = viewport
 		viewport.CurrentCamera = vpCamera
 
-		local ok, cf, size = pcall(function()
-			return vpModel:GetBoundingBox()
-		end)
+		local ok, cf, size = pcall(function() return vpModel:GetBoundingBox() end)
 		if ok and cf and size then
 			local maxDim = math.max(size.X, size.Y, size.Z)
 			local dist = maxDim * 1.8
@@ -189,24 +184,14 @@ local function buildItemCard(item, originalIndex, parent)
 			local camYOffset = size.Y * 0.15
 			local angle = { value = 0 }
 
-			vpCamera.CFrame = CFrame.new(
-				target + Vector3.new(0, camYOffset, dist),
-				target
-			)
+			vpCamera.CFrame = CFrame.new(target + Vector3.new(0, camYOffset, dist), target)
 
-			-- Continuous rotation using accumulated angle
 			local alive = true
 			local conn
 			conn = RunService.Heartbeat:Connect(function(dt)
-				if not alive then
-					conn:Disconnect()
-					return
-				end
-				-- Check if viewport still exists in the hierarchy
+				if not alive then conn:Disconnect(); return end
 				if not viewport.Parent or not vpCamera.Parent then
-					alive = false
-					conn:Disconnect()
-					return
+					alive = false; conn:Disconnect(); return
 				end
 				angle.value = angle.value + dt * 0.8
 				local a = angle.value
@@ -223,150 +208,122 @@ local function buildItemCard(item, originalIndex, parent)
 		local placeholder = Instance.new("TextLabel")
 		placeholder.Size = UDim2.new(1, 0, 1, 0)
 		placeholder.BackgroundTransparency = 1
-		placeholder.Text = "\u{1F3AD}"
-		placeholder.TextSize = 36
-		placeholder.Font = Enum.Font.SourceSans
+		placeholder.Text = "?"
+		placeholder.TextSize = 28
+		placeholder.TextColor3 = Color3.fromRGB(100, 100, 120)
+		placeholder.Font = FONT
 		placeholder.Parent = viewport
 	end
 
-	-- Right side content
-	local textX = vpSize + 20
+	-- Info area (middle)
+	local textX = vpSize + 18
 
 	-- Effect badge
 	if effectInfo then
 		local badge = Instance.new("Frame")
-		badge.Name = "EffectBadge"
-		badge.Size = UDim2.new(0, 60, 0, 18)
-		badge.Position = UDim2.new(0, textX, 0, 6)
+		badge.Size = UDim2.new(0, 56, 0, 16)
+		badge.Position = UDim2.new(0, textX, 0, 8)
 		badge.BackgroundColor3 = effectInfo.color
 		badge.BackgroundTransparency = 0.6
 		badge.BorderSizePixel = 0
 		badge.Parent = card
-		local bCorner = Instance.new("UICorner")
-		bCorner.CornerRadius = UDim.new(0, 6)
-		bCorner.Parent = badge
+		Instance.new("UICorner", badge).CornerRadius = UDim.new(0, 5)
 		local bLabel = Instance.new("TextLabel")
 		bLabel.Size = UDim2.new(1, 0, 1, 0)
 		bLabel.BackgroundTransparency = 1
 		bLabel.Text = effectInfo.prefix:upper()
 		bLabel.TextColor3 = effectInfo.color
-		bLabel.Font = FONT
-		bLabel.TextSize = 11
+		bLabel.Font = FONT_SUB
+		bLabel.TextSize = 10
 		bLabel.Parent = badge
-		local bStroke = Instance.new("UIStroke")
-		bStroke.Color = Color3.fromRGB(0, 0, 0)
-		bStroke.Thickness = 1
-		bStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
-		bStroke.Parent = bLabel
+		addStroke(bLabel, Color3.new(0, 0, 0), 0.8)
 	end
 
-	-- Streamer name
+	-- Name
 	local displayName = info.displayName
-	if effectInfo then
-		displayName = effectInfo.prefix .. " " .. displayName
-	end
-	local nameY = effectInfo and 24 or 8
+	if effectInfo then displayName = effectInfo.prefix .. " " .. displayName end
+	local nameY = effectInfo and 26 or 12
 	local nameLabel = Instance.new("TextLabel")
-	nameLabel.Name = "Name"
-	nameLabel.Size = UDim2.new(0, 200, 0, 24)
+	nameLabel.Size = UDim2.new(0, 180, 0, 22)
 	nameLabel.Position = UDim2.new(0, textX, 0, nameY)
 	nameLabel.BackgroundTransparency = 1
 	nameLabel.Text = displayName
 	nameLabel.TextColor3 = displayColor
 	nameLabel.Font = FONT
-	nameLabel.TextSize = 16
+	nameLabel.TextSize = 15
 	nameLabel.TextXAlignment = Enum.TextXAlignment.Left
 	nameLabel.TextTruncate = Enum.TextTruncate.AtEnd
 	nameLabel.Parent = card
-	local nStroke = Instance.new("UIStroke")
-	nStroke.Color = Color3.fromRGB(0, 0, 0)
-	nStroke.Thickness = 1.5
-	nStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
-	nStroke.Parent = nameLabel
+	addStroke(nameLabel, Color3.new(0, 0, 0), 1)
 
 	-- Rarity + odds
 	local baseOdds = info.odds or 0
 	local effectOdds = baseOdds
-	if effectInfo then
-		effectOdds = math.floor(baseOdds * effectInfo.rarityMult)
-	end
+	if effectInfo then effectOdds = math.floor(baseOdds * effectInfo.rarityMult) end
 	local oddsStr = formatOdds(effectOdds)
 
 	local rarLine = Instance.new("TextLabel")
-	rarLine.Name = "RarityLine"
-	rarLine.Size = UDim2.new(0, 200, 0, 16)
-	rarLine.Position = UDim2.new(0, textX, 0, nameY + 24)
+	rarLine.Size = UDim2.new(0, 180, 0, 14)
+	rarLine.Position = UDim2.new(0, textX, 0, nameY + 22)
 	rarLine.BackgroundTransparency = 1
-	rarLine.Text = info.rarity:upper() .. "  \u{2022}  " .. oddsStr
-	rarLine.TextColor3 = rarityColor
-	rarLine.Font = FONT
-	rarLine.TextSize = 12
+	rarLine.Text = info.rarity .. (oddsStr ~= "" and ("  •  " .. oddsStr) or "")
+	rarLine.TextColor3 = Color3.fromRGB(140, 135, 160)
+	rarLine.Font = FONT_SUB
+	rarLine.TextSize = 11
 	rarLine.TextXAlignment = Enum.TextXAlignment.Left
 	rarLine.Parent = card
 
-	-- Cash per second
+	-- $/sec
 	local cashLine = Instance.new("TextLabel")
-	cashLine.Name = "CashLine"
-	cashLine.Size = UDim2.new(0, 200, 0, 16)
-	cashLine.Position = UDim2.new(0, textX, 0, nameY + 40)
+	cashLine.Size = UDim2.new(0, 180, 0, 14)
+	cashLine.Position = UDim2.new(0, textX, 0, nameY + 36)
 	cashLine.BackgroundTransparency = 1
-	cashLine.Text = "\u{1F4B0} $" .. formatNumber(sellPrice) .. "/sec"
+	cashLine.Text = "$" .. fmtNum(sellPrice) .. "/sec"
 	cashLine.TextColor3 = Color3.fromRGB(100, 255, 120)
-	cashLine.Font = FONT
-	cashLine.TextSize = 12
+	cashLine.Font = FONT_SUB
+	cashLine.TextSize = 11
 	cashLine.TextXAlignment = Enum.TextXAlignment.Left
 	cashLine.Parent = card
 
-	-- Sell price (big green)
-	local priceLabel = Instance.new("TextLabel")
-	priceLabel.Name = "Price"
-	priceLabel.Size = UDim2.new(0, 90, 0, 22)
-	priceLabel.Position = UDim2.new(1, -110, 0, 16)
-	priceLabel.BackgroundTransparency = 1
-	priceLabel.Text = "$" .. formatNumber(sellPrice)
-	priceLabel.TextColor3 = Color3.fromRGB(80, 255, 100)
-	priceLabel.Font = FONT
-	priceLabel.TextSize = 18
-	priceLabel.TextXAlignment = Enum.TextXAlignment.Right
-	priceLabel.Parent = card
-	local pStroke = Instance.new("UIStroke")
-	pStroke.Color = Color3.fromRGB(0, 0, 0)
-	pStroke.Thickness = 1.5
-	pStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
-	pStroke.Parent = priceLabel
-
-	-- Sell button
+	-- Sell button (right side)
 	local sellBtn = Instance.new("TextButton")
 	sellBtn.Name = "SellBtn"
-	sellBtn.Size = UDim2.new(0, 70, 0, 34)
-	sellBtn.Position = UDim2.new(1, -80, 1, -14)
-	sellBtn.AnchorPoint = Vector2.new(0.5, 1)
-	sellBtn.BackgroundColor3 = Color3.fromRGB(230, 55, 55)
-	sellBtn.Text = "SELL"
-	sellBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-	sellBtn.Font = FONT
-	sellBtn.TextSize = 16
+	sellBtn.Size = UDim2.new(0, 62, 0, 36)
+	sellBtn.Position = UDim2.new(1, -14, 0.5, 0)
+	sellBtn.AnchorPoint = Vector2.new(1, 0.5)
+	sellBtn.BackgroundColor3 = RED
+	sellBtn.Text = ""
 	sellBtn.BorderSizePixel = 0
+	sellBtn.AutoButtonColor = false
 	sellBtn.Parent = card
-	local sbCorner = Instance.new("UICorner")
-	sbCorner.CornerRadius = UDim.new(0, 10)
-	sbCorner.Parent = sellBtn
+	Instance.new("UICorner", sellBtn).CornerRadius = UDim.new(0, 10)
 	local sbStroke = Instance.new("UIStroke")
-	sbStroke.Color = Color3.fromRGB(160, 30, 30)
-	sbStroke.Thickness = 2
+	sbStroke.Color = RED_DARK
+	sbStroke.Thickness = 1.5
 	sbStroke.Parent = sellBtn
 
+	local sellText = Instance.new("TextLabel")
+	sellText.Size = UDim2.new(1, 0, 1, 0)
+	sellText.BackgroundTransparency = 1
+	sellText.Text = "SELL"
+	sellText.TextColor3 = Color3.new(1, 1, 1)
+	sellText.Font = FONT
+	sellText.TextSize = 14
+	sellText.Parent = sellBtn
+	addStroke(sellText, Color3.new(0, 0, 0), 1)
+
 	sellBtn.MouseEnter:Connect(function()
-		TweenService:Create(sellBtn, TweenInfo.new(0.12), {
-			BackgroundColor3 = Color3.fromRGB(255, 80, 80),
+		TweenService:Create(sellBtn, bounceTween, {
+			Size = UDim2.new(0, 68, 0, 40),
+			BackgroundColor3 = Color3.fromRGB(255, 75, 75),
 		}):Play()
 	end)
 	sellBtn.MouseLeave:Connect(function()
-		TweenService:Create(sellBtn, TweenInfo.new(0.12), {
-			BackgroundColor3 = Color3.fromRGB(230, 55, 55),
+		TweenService:Create(sellBtn, bounceTween, {
+			Size = UDim2.new(0, 62, 0, 36),
+			BackgroundColor3 = RED,
 		}):Play()
 	end)
-
 	sellBtn.MouseButton1Click:Connect(function()
 		SellByIndexRequest:FireServer(originalIndex)
 	end)
@@ -382,61 +339,45 @@ local function clearScrollFrame()
 	if not scrollFrame then return end
 	cleanViewportConns()
 	for _, child in ipairs(scrollFrame:GetChildren()) do
-		if child:IsA("Frame") then
-			child:Destroy()
-		end
+		if child:IsA("Frame") then child:Destroy() end
 	end
 end
 
--- Force a full rebuild (clears viewport connections and recreates everything)
 local function buildInventoryList(force)
 	if not scrollFrame then return end
-
 	local inventory = HUDController.Data.inventory or {}
 	local snapshot = buildInventorySnapshot(inventory)
-
-	-- Skip rebuild if nothing changed (keeps viewports spinning)
 	if not force and snapshot == lastInventorySnapshot then return end
 	lastInventorySnapshot = snapshot
 
 	clearScrollFrame()
-
 	local totalValue = 0
 
 	if #inventory == 0 then
 		if emptyLabel then emptyLabel.Visible = true end
 		if sellAllBtn then sellAllBtn.Visible = false end
-		if totalLabel then totalLabel.Text = "\u{1F4B0} Total: $0" end
+		if totalLabel then totalLabel.Text = "Total: $0" end
 		if countLabel then countLabel.Text = "0 streamers" end
 		return
 	end
 
 	if emptyLabel then emptyLabel.Visible = false end
 
-	-- Build sorted index list (by sell price, highest first)
 	local sortedIndices = {}
-	for i = 1, #inventory do
-		sortedIndices[i] = i
-	end
+	for i = 1, #inventory do sortedIndices[i] = i end
 	table.sort(sortedIndices, function(a, b)
 		return calcSellPrice(inventory[a]) > calcSellPrice(inventory[b])
 	end)
 
 	for _, origIdx in ipairs(sortedIndices) do
-		local item = inventory[origIdx]
-		local _, price = buildItemCard(item, origIdx, scrollFrame)
+		local _, price = buildItemCard(inventory[origIdx], origIdx, scrollFrame)
 		totalValue = totalValue + (price or 0)
 	end
 
-	if totalLabel then
-		totalLabel.Text = "\u{1F4B0} Total: $" .. formatNumber(totalValue)
-	end
-	if countLabel then
-		countLabel.Text = #inventory .. " streamer" .. (#inventory ~= 1 and "s" or "")
-	end
+	if totalLabel then totalLabel.Text = "Total: $" .. fmtNum(totalValue) end
+	if countLabel then countLabel.Text = #inventory .. " streamer" .. (#inventory ~= 1 and "s" or "") end
 	if sellAllBtn then
 		sellAllBtn.Visible = #inventory > 0
-		sellAllBtn.Text = "\u{1F4A5} SELL ALL \u{2014} $" .. formatNumber(totalValue)
 	end
 
 	local listLayout = scrollFrame:FindFirstChildOfClass("UIListLayout")
@@ -452,8 +393,9 @@ end
 function SellStandController.Open()
 	if isOpen then return end
 	isOpen = true
-	lastInventorySnapshot = "" -- force rebuild on open (resets viewports)
+	lastInventorySnapshot = ""
 	if modalFrame then
+		overlay.Visible = true
 		modalFrame.Visible = true
 		buildInventoryList(true)
 		UIHelper.ScaleIn(modalFrame, 0.25)
@@ -465,6 +407,7 @@ function SellStandController.Close()
 	isOpen = false
 	lastInventorySnapshot = ""
 	cleanViewportConns()
+	if overlay then overlay.Visible = false end
 	if modalFrame then UIHelper.ScaleOut(modalFrame, 0.2) end
 end
 
@@ -476,180 +419,198 @@ function SellStandController.Init()
 	screenGui = UIHelper.CreateScreenGui("SellStandGui", 8)
 	screenGui.Parent = playerGui
 
+	-- Dim overlay
+	overlay = Instance.new("Frame")
+	overlay.Name = "Overlay"
+	overlay.Size = UDim2.new(1, 0, 1, 0)
+	overlay.BackgroundColor3 = Color3.new(0, 0, 0)
+	overlay.BackgroundTransparency = 0.45
+	overlay.BorderSizePixel = 0
+	overlay.Visible = false
+	overlay.ZIndex = 1
+	overlay.Parent = screenGui
+
+	-- Modal
 	modalFrame = Instance.new("Frame")
 	modalFrame.Name = "SellModal"
-	modalFrame.Size = UDim2.new(0, 480, 0, 520)
+	modalFrame.Size = UDim2.new(0, MODAL_W, 0, MODAL_H)
 	modalFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
 	modalFrame.AnchorPoint = Vector2.new(0.5, 0.5)
-	modalFrame.BackgroundColor3 = Color3.fromRGB(16, 14, 30)
+	modalFrame.BackgroundColor3 = MODAL_BG
 	modalFrame.BorderSizePixel = 0
 	modalFrame.Visible = false
+	modalFrame.ZIndex = 2
+	modalFrame.ClipsDescendants = true
 	modalFrame.Parent = screenGui
-	local mCorner = Instance.new("UICorner")
-	mCorner.CornerRadius = UDim.new(0, 22)
-	mCorner.Parent = modalFrame
+
+	Instance.new("UICorner", modalFrame).CornerRadius = UDim.new(0, 20)
 	local mStroke = Instance.new("UIStroke")
-	mStroke.Color = Color3.fromRGB(230, 60, 60)
-	mStroke.Thickness = 3
-	mStroke.Transparency = 0.15
+	mStroke.Color = Color3.fromRGB(70, 60, 100)
+	mStroke.Thickness = 1.5
+	mStroke.Transparency = 0.3
 	mStroke.Parent = modalFrame
 	UIHelper.CreateShadow(modalFrame)
+	UIHelper.MakeResponsiveModal(modalFrame, MODAL_W, MODAL_H)
 
-	-- Red gradient top bar
-	local topBar = Instance.new("Frame")
-	topBar.Name = "TopBar"
-	topBar.Size = UDim2.new(1, 0, 0, 5)
-	topBar.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-	topBar.BorderSizePixel = 0
-	topBar.ZIndex = 5
-	topBar.Parent = modalFrame
-	local tbGrad = Instance.new("UIGradient")
-	tbGrad.Color = ColorSequence.new({
-		ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 80, 80)),
-		ColorSequenceKeypoint.new(0.5, Color3.fromRGB(255, 200, 60)),
-		ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 80, 80)),
-	})
-	tbGrad.Parent = topBar
+	-- ===== HEADER =====
+	local header = Instance.new("Frame")
+	header.Name = "Header"
+	header.Size = UDim2.new(1, 0, 0, 60)
+	header.BackgroundTransparency = 1
+	header.ZIndex = 3
+	header.Parent = modalFrame
 
-	-- Title
 	local title = Instance.new("TextLabel")
-	title.Name = "Title"
-	title.Size = UDim2.new(1, -80, 0, 44)
-	title.Position = UDim2.new(0.5, 0, 0, 10)
-	title.AnchorPoint = Vector2.new(0.5, 0)
+	title.Size = UDim2.new(0.6, 0, 0, 32)
+	title.Position = UDim2.new(0, 20, 0, 12)
 	title.BackgroundTransparency = 1
-	title.Text = "\u{1F3EA} SELL STAND \u{1F3EA}"
-	title.TextColor3 = Color3.fromRGB(255, 220, 80)
+	title.Text = "Sell Stand"
+	title.TextColor3 = Color3.new(1, 1, 1)
 	title.Font = FONT
 	title.TextSize = 28
-	title.Parent = modalFrame
-	local titleStroke = Instance.new("UIStroke")
-	titleStroke.Color = Color3.fromRGB(200, 50, 50)
-	titleStroke.Thickness = 3
-	titleStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
-	titleStroke.Parent = title
+	title.TextXAlignment = Enum.TextXAlignment.Left
+	title.ZIndex = 3
+	title.Parent = header
+	addStroke(title, Color3.new(0, 0, 0), 1.5)
+
+	local subtitle = Instance.new("TextLabel")
+	subtitle.Size = UDim2.new(0.5, 0, 0, 16)
+	subtitle.Position = UDim2.new(0, 22, 0, 42)
+	subtitle.BackgroundTransparency = 1
+	subtitle.Text = "Sell streamers from your inventory"
+	subtitle.TextColor3 = Color3.fromRGB(150, 145, 170)
+	subtitle.Font = FONT_SUB
+	subtitle.TextSize = 11
+	subtitle.TextXAlignment = Enum.TextXAlignment.Left
+	subtitle.ZIndex = 3
+	subtitle.Parent = header
 
 	-- Close button
 	local closeBtn = Instance.new("TextButton")
 	closeBtn.Name = "CloseBtn"
-	closeBtn.Size = UDim2.new(0, 42, 0, 42)
-	closeBtn.Position = UDim2.new(1, -12, 0, 10)
+	closeBtn.Size = UDim2.new(0, 40, 0, 40)
+	closeBtn.Position = UDim2.new(1, -14, 0, 10)
 	closeBtn.AnchorPoint = Vector2.new(1, 0)
-	closeBtn.BackgroundColor3 = Color3.fromRGB(220, 60, 60)
-	closeBtn.Text = "\u{2715}"
-	closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	closeBtn.BackgroundColor3 = RED
+	closeBtn.Text = "X"
+	closeBtn.TextColor3 = Color3.new(1, 1, 1)
 	closeBtn.Font = FONT
-	closeBtn.TextSize = 22
+	closeBtn.TextSize = 20
 	closeBtn.BorderSizePixel = 0
-	closeBtn.ZIndex = 10
+	closeBtn.AutoButtonColor = false
+	closeBtn.ZIndex = 5
 	closeBtn.Parent = modalFrame
-	local ccCorner = Instance.new("UICorner")
-	ccCorner.CornerRadius = UDim.new(1, 0)
-	ccCorner.Parent = closeBtn
-	local ccStroke = Instance.new("UIStroke")
-	ccStroke.Color = Color3.fromRGB(120, 30, 30)
-	ccStroke.Thickness = 2
-	ccStroke.Parent = closeBtn
-	closeBtn.MouseButton1Click:Connect(function()
-		SellStandController.Close()
-	end)
+	Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(0, 10)
+	local cStroke = Instance.new("UIStroke")
+	cStroke.Color = RED_DARK
+	cStroke.Thickness = 1.5
+	cStroke.Parent = closeBtn
+	addStroke(closeBtn, Color3.fromRGB(80, 0, 0), 1)
 
-	-- Total value + count row
+	closeBtn.MouseEnter:Connect(function()
+		TweenService:Create(closeBtn, bounceTween, { Size = UDim2.new(0, 46, 0, 46), BackgroundColor3 = Color3.fromRGB(255, 75, 75) }):Play()
+	end)
+	closeBtn.MouseLeave:Connect(function()
+		TweenService:Create(closeBtn, bounceTween, { Size = UDim2.new(0, 40, 0, 40), BackgroundColor3 = RED }):Play()
+	end)
+	closeBtn.MouseButton1Click:Connect(function() SellStandController.Close() end)
+
+	-- Divider
+	local divider = Instance.new("Frame")
+	divider.Size = UDim2.new(1, -30, 0, 1)
+	divider.Position = UDim2.new(0.5, 0, 0, 62)
+	divider.AnchorPoint = Vector2.new(0.5, 0)
+	divider.BackgroundColor3 = Color3.fromRGB(60, 55, 80)
+	divider.BorderSizePixel = 0
+	divider.ZIndex = 3
+	divider.Parent = modalFrame
+
+	-- ===== INFO ROW =====
 	local infoRow = Instance.new("Frame")
-	infoRow.Name = "InfoRow"
-	infoRow.Size = UDim2.new(1, -30, 0, 26)
-	infoRow.Position = UDim2.new(0.5, 0, 0, 56)
+	infoRow.Size = UDim2.new(1, -30, 0, 24)
+	infoRow.Position = UDim2.new(0.5, 0, 0, 68)
 	infoRow.AnchorPoint = Vector2.new(0.5, 0)
 	infoRow.BackgroundTransparency = 1
+	infoRow.ZIndex = 3
 	infoRow.Parent = modalFrame
 
 	totalLabel = Instance.new("TextLabel")
-	totalLabel.Name = "TotalLabel"
 	totalLabel.Size = UDim2.new(0.6, 0, 1, 0)
-	totalLabel.Position = UDim2.new(0, 0, 0, 0)
 	totalLabel.BackgroundTransparency = 1
-	totalLabel.Text = "\u{1F4B0} Total: $0"
-	totalLabel.TextColor3 = Color3.fromRGB(100, 255, 120)
+	totalLabel.Text = "Total: $0"
+	totalLabel.TextColor3 = GREEN
 	totalLabel.Font = FONT
-	totalLabel.TextSize = 17
+	totalLabel.TextSize = 16
 	totalLabel.TextXAlignment = Enum.TextXAlignment.Left
+	totalLabel.ZIndex = 3
 	totalLabel.Parent = infoRow
-	local tlStroke = Instance.new("UIStroke")
-	tlStroke.Color = Color3.fromRGB(0, 0, 0)
-	tlStroke.Thickness = 1.5
-	tlStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
-	tlStroke.Parent = totalLabel
+	addStroke(totalLabel, Color3.new(0, 0, 0), 1)
 
 	countLabel = Instance.new("TextLabel")
-	countLabel.Name = "CountLabel"
 	countLabel.Size = UDim2.new(0.4, 0, 1, 0)
 	countLabel.Position = UDim2.new(0.6, 0, 0, 0)
 	countLabel.BackgroundTransparency = 1
 	countLabel.Text = "0 streamers"
-	countLabel.TextColor3 = Color3.fromRGB(180, 180, 200)
-	countLabel.Font = FONT
-	countLabel.TextSize = 14
+	countLabel.TextColor3 = Color3.fromRGB(150, 145, 170)
+	countLabel.Font = FONT_SUB
+	countLabel.TextSize = 12
 	countLabel.TextXAlignment = Enum.TextXAlignment.Right
+	countLabel.ZIndex = 3
 	countLabel.Parent = infoRow
 
-	-- Scrolling frame
+	-- ===== SCROLL LIST =====
 	scrollFrame = Instance.new("ScrollingFrame")
 	scrollFrame.Name = "ItemList"
-	scrollFrame.Size = UDim2.new(1, -20, 1, -156)
-	scrollFrame.Position = UDim2.new(0.5, 0, 0, 86)
+	scrollFrame.Size = UDim2.new(1, -20, 1, -160)
+	scrollFrame.Position = UDim2.new(0.5, 0, 0, 96)
 	scrollFrame.AnchorPoint = Vector2.new(0.5, 0)
 	scrollFrame.BackgroundTransparency = 1
 	scrollFrame.BorderSizePixel = 0
-	scrollFrame.ScrollBarThickness = 6
-	scrollFrame.ScrollBarImageColor3 = Color3.fromRGB(200, 100, 100)
+	scrollFrame.ScrollBarThickness = 5
+	scrollFrame.ScrollBarImageColor3 = Color3.fromRGB(100, 80, 150)
 	scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
 	scrollFrame.AutomaticCanvasSize = Enum.AutomaticSize.None
-	scrollFrame.ZIndex = 9
+	scrollFrame.ZIndex = 3
 	scrollFrame.Parent = modalFrame
 
 	local layout = Instance.new("UIListLayout")
 	layout.SortOrder = Enum.SortOrder.LayoutOrder
-	layout.Padding = UDim.new(0, 8)
+	layout.Padding = UDim.new(0, 6)
 	layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 	layout.Parent = scrollFrame
 
 	-- Empty state
 	emptyLabel = Instance.new("TextLabel")
-	emptyLabel.Name = "EmptyLabel"
 	emptyLabel.Size = UDim2.new(1, -20, 0, 80)
 	emptyLabel.Position = UDim2.new(0.5, 0, 0.3, 0)
 	emptyLabel.AnchorPoint = Vector2.new(0.5, 0.5)
 	emptyLabel.BackgroundTransparency = 1
-	emptyLabel.Text = "\u{1F3B0} Your inventory is empty!\nSpin some cases first!"
-	emptyLabel.TextColor3 = Color3.fromRGB(140, 140, 160)
+	emptyLabel.Text = "Your inventory is empty!\nSpin some cases first."
+	emptyLabel.TextColor3 = Color3.fromRGB(120, 115, 140)
 	emptyLabel.Font = FONT
-	emptyLabel.TextSize = 18
+	emptyLabel.TextSize = 16
 	emptyLabel.TextWrapped = true
 	emptyLabel.Visible = false
-	emptyLabel.ZIndex = 9
+	emptyLabel.ZIndex = 3
 	emptyLabel.Parent = modalFrame
 
-	-- Sell All button
+	-- ===== SELL ALL BUTTON =====
 	sellAllBtn = Instance.new("TextButton")
 	sellAllBtn.Name = "SellAllBtn"
-	sellAllBtn.Size = UDim2.new(1, -30, 0, 50)
-	sellAllBtn.Position = UDim2.new(0.5, 0, 1, -14)
+	sellAllBtn.Size = UDim2.new(1, -30, 0, 46)
+	sellAllBtn.Position = UDim2.new(0.5, 0, 1, -12)
 	sellAllBtn.AnchorPoint = Vector2.new(0.5, 1)
-	sellAllBtn.BackgroundColor3 = Color3.fromRGB(210, 45, 45)
-	sellAllBtn.Text = "\u{1F4A5} SELL ALL \u{2014} $0"
-	sellAllBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-	sellAllBtn.Font = FONT
-	sellAllBtn.TextSize = 20
+	sellAllBtn.BackgroundColor3 = RED
+	sellAllBtn.Text = ""
 	sellAllBtn.BorderSizePixel = 0
+	sellAllBtn.AutoButtonColor = false
 	sellAllBtn.Visible = false
-	sellAllBtn.ZIndex = 10
+	sellAllBtn.ZIndex = 5
 	sellAllBtn.Parent = modalFrame
-	local saCorner = Instance.new("UICorner")
-	saCorner.CornerRadius = UDim.new(0, 14)
-	saCorner.Parent = sellAllBtn
+	Instance.new("UICorner", sellAllBtn).CornerRadius = UDim.new(0, 12)
 	local saStroke = Instance.new("UIStroke")
-	saStroke.Color = Color3.fromRGB(140, 20, 20)
-	saStroke.Thickness = 2.5
+	saStroke.Color = RED_DARK
+	saStroke.Thickness = 1.5
 	saStroke.Parent = sellAllBtn
 	local saGrad = Instance.new("UIGradient")
 	saGrad.Color = ColorSequence.new({
@@ -659,25 +620,33 @@ function SellStandController.Init()
 	saGrad.Rotation = 90
 	saGrad.Parent = sellAllBtn
 
-	sellAllBtn.MouseButton1Click:Connect(function()
-		SellAllRequest:FireServer()
-	end)
+	local sellAllText = Instance.new("TextLabel")
+	sellAllText.Size = UDim2.new(1, 0, 1, 0)
+	sellAllText.BackgroundTransparency = 1
+	sellAllText.Text = "SELL ALL"
+	sellAllText.TextColor3 = Color3.new(1, 1, 1)
+	sellAllText.Font = FONT
+	sellAllText.TextSize = 20
+	sellAllText.ZIndex = 6
+	sellAllText.Parent = sellAllBtn
+	addStroke(sellAllText, Color3.new(0, 0, 0), 1.5)
+
+	local saIdle = UDim2.new(1, -30, 0, 46)
+	local saHover = UDim2.new(1, -24, 0, 50)
 	sellAllBtn.MouseEnter:Connect(function()
-		TweenService:Create(sellAllBtn, TweenInfo.new(0.12), {
-			Size = UDim2.new(1, -24, 0, 52),
-		}):Play()
+		TweenService:Create(sellAllBtn, bounceTween, { Size = saHover, BackgroundColor3 = Color3.fromRGB(255, 75, 75) }):Play()
 	end)
 	sellAllBtn.MouseLeave:Connect(function()
-		TweenService:Create(sellAllBtn, TweenInfo.new(0.12), {
-			Size = UDim2.new(1, -30, 0, 50),
-		}):Play()
+		TweenService:Create(sellAllBtn, bounceTween, { Size = saIdle, BackgroundColor3 = RED }):Play()
+	end)
+	sellAllBtn.MouseButton1Click:Connect(function()
+		SellAllRequest:FireServer()
 	end)
 
 	-------------------------------------------------
 	-- EVENTS
 	-------------------------------------------------
 
-	-- Only rebuild if inventory actually changed (avoids destroying viewports on cash ticks)
 	HUDController.OnDataUpdated(function()
 		if isOpen then buildInventoryList(false) end
 	end)
@@ -685,7 +654,7 @@ function SellStandController.Init()
 	SellResult.OnClientEvent:Connect(function(data)
 		if data.success and isOpen then
 			task.wait(0.1)
-			lastInventorySnapshot = "" -- force rebuild after selling
+			lastInventorySnapshot = ""
 			buildInventoryList(true)
 		end
 	end)

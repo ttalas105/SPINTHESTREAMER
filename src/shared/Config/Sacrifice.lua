@@ -245,10 +245,10 @@ Sacrifice.GemRoulette = {
 	rechargeMinutes = 60,
 }
 
--- Don't do it: sacrifice your highest-earning streamer, chance to upgrade to next rarity.
+-- Streamer Sacrifice: pick any streamer, chance to upgrade to next rarity.
 Sacrifice.DontDoIt = {
-	name    = "Don't do it (please)",
-	desc    = "Sacrifice your highest-earning streamer for a chance to upgrade it to the next rarity!",
+	name    = "Streamer Sacrifice",
+	desc    = "Pick any streamer to sacrifice for a chance to upgrade it to the next rarity!",
 	upgradeChances = {
 		Common    = 50,   -- common → rare
 		Rare      = 30,   -- rare → epic

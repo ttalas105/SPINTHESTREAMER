@@ -62,7 +62,7 @@ function HUDController.Init()
 	local hudContainer = Instance.new("Frame")
 	hudContainer.Name = "HUDContainer"
 	hudContainer.Size = UDim2.new(0, 240, 0, 100)
-	hudContainer.Position = UDim2.new(0, 14, 1, -14)
+	hudContainer.Position = UDim2.new(0, 150, 1, -16)
 	hudContainer.AnchorPoint = Vector2.new(0, 1)
 	hudContainer.BackgroundTransparency = 1
 	hudContainer.BorderSizePixel = 0
@@ -82,7 +82,7 @@ function HUDController.Init()
 
 	local cashStroke = Instance.new("UIStroke")
 	cashStroke.Color = Color3.fromRGB(0, 0, 0)
-	cashStroke.Thickness = 3
+	cashStroke.Thickness = 1.5
 	cashStroke.Parent = cashLabel
 
 	gemsLabel = Instance.new("TextLabel")
@@ -99,7 +99,7 @@ function HUDController.Init()
 
 	local gemsStroke = Instance.new("UIStroke")
 	gemsStroke.Color = Color3.fromRGB(0, 0, 0)
-	gemsStroke.Thickness = 2.5
+	gemsStroke.Thickness = 1.5
 	gemsStroke.Parent = gemsLabel
 
 	luckLabel = Instance.new("TextLabel")

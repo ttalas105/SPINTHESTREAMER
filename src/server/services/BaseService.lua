@@ -736,6 +736,114 @@ local function bindPrompt(displayInfo, player: Player)
 	bindCollectTouch(displayInfo, player)
 end
 
+local function addBaseOwnerSign(baseModel: Model, player: Player)
+	if not baseModel then return end
+
+	-- Find the highest point in the base to place the sign above
+	local topY = -math.huge
+	local centerX, centerZ = 0, 0
+	local partCount = 0
+	for _, d in ipairs(baseModel:GetDescendants()) do
+		if d:IsA("BasePart") then
+			local pos = d.Position
+			local halfY = d.Size.Y / 2
+			if pos.Y + halfY > topY then
+				topY = pos.Y + halfY
+			end
+			centerX = centerX + pos.X
+			centerZ = centerZ + pos.Z
+			partCount = partCount + 1
+		end
+	end
+	if partCount == 0 then return end
+	centerX = centerX / partCount
+	centerZ = centerZ / partCount
+
+	local anchor = Instance.new("Part")
+	anchor.Name = "OwnerSignAnchor"
+	anchor.Size = Vector3.new(1, 1, 1)
+	anchor.Transparency = 1
+	anchor.Anchored = true
+	anchor.CanCollide = false
+	anchor.CanTouch = false
+	anchor.CanQuery = false
+	anchor.Position = Vector3.new(centerX, topY + 14, centerZ)
+	anchor.Parent = baseModel
+
+	local bb = Instance.new("BillboardGui")
+	bb.Name = "OwnerSign"
+	bb.Adornee = anchor
+	bb.Size = UDim2.new(0, 220, 0, 70)
+	bb.StudsOffset = Vector3.new(0, 0, 0)
+	bb.AlwaysOnTop = true
+	bb.MaxDistance = 120
+	bb.Parent = anchor
+
+	-- Avatar headshot
+	local avatarImage = Instance.new("ImageLabel")
+	avatarImage.Name = "Avatar"
+	avatarImage.Size = UDim2.new(0, 54, 0, 54)
+	avatarImage.Position = UDim2.new(0, 4, 0.5, 0)
+	avatarImage.AnchorPoint = Vector2.new(0, 0.5)
+	avatarImage.BackgroundColor3 = Color3.fromRGB(40, 35, 60)
+	avatarImage.BorderSizePixel = 0
+	avatarImage.Parent = bb
+	Instance.new("UICorner", avatarImage).CornerRadius = UDim.new(1, 0)
+	local avatarStroke = Instance.new("UIStroke")
+	avatarStroke.Color = Color3.fromRGB(255, 255, 255)
+	avatarStroke.Thickness = 2
+	avatarStroke.Parent = avatarImage
+
+	local ok, thumbUrl = pcall(function()
+		return Players:GetUserThumbnailAsync(
+			player.UserId,
+			Enum.ThumbnailType.HeadShot,
+			Enum.ThumbnailSize.Size100x100
+		)
+	end)
+	if ok and thumbUrl then
+		avatarImage.Image = thumbUrl
+	end
+
+	-- Player name
+	local nameLabel = Instance.new("TextLabel")
+	nameLabel.Name = "OwnerName"
+	nameLabel.Size = UDim2.new(1, -66, 0, 34)
+	nameLabel.Position = UDim2.new(0, 64, 0, 4)
+	nameLabel.BackgroundTransparency = 1
+	nameLabel.Text = player.DisplayName
+	nameLabel.TextColor3 = Color3.new(1, 1, 1)
+	nameLabel.Font = Enum.Font.FredokaOne
+	nameLabel.TextScaled = true
+	nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+	nameLabel.Parent = bb
+
+	local nameStroke = Instance.new("UIStroke")
+	nameStroke.Color = Color3.fromRGB(0, 0, 0)
+	nameStroke.Thickness = 2
+	nameStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+	nameStroke.Parent = nameLabel
+
+	-- Username (smaller, below display name)
+	local userLabel = Instance.new("TextLabel")
+	userLabel.Name = "OwnerUser"
+	userLabel.Size = UDim2.new(1, -66, 0, 20)
+	userLabel.Position = UDim2.new(0, 64, 0, 38)
+	userLabel.BackgroundTransparency = 1
+	userLabel.Text = "@" .. player.Name
+	userLabel.TextColor3 = Color3.fromRGB(180, 180, 200)
+	userLabel.Font = Enum.Font.GothamBold
+	userLabel.TextScaled = true
+	userLabel.TextXAlignment = Enum.TextXAlignment.Left
+	userLabel.Parent = bb
+
+	local userStroke = Instance.new("UIStroke")
+	userStroke.Color = Color3.fromRGB(0, 0, 0)
+	userStroke.Thickness = 1.5
+	userStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+	userStroke.Parent = userLabel
+end
+
 local function assignBase(player)
 	local slot = findAvailableSlot()
 	if not slot then
@@ -773,6 +881,8 @@ local function assignBase(player)
 		warn("[BaseService] Could not find green/grey display pairs in BaseSlot_" .. tostring(slot))
 	end
 
+	addBaseOwnerSign(baseModel, player)
+
 	BaseReady:FireClient(player, {
 		position = slotInfo.position,
 		floorSize = DesignConfig.Base.FloorSize,
@@ -793,6 +903,13 @@ function BaseService.Init(playerDataModule, potionServiceModule)
 		local baseInfo = BaseService._bases[userId]
 		if baseInfo then
 			clearPlacedModel(player)
+			-- Remove owner sign
+			if baseInfo.baseModel then
+				local signAnchor = baseInfo.baseModel:FindFirstChild("OwnerSignAnchor")
+				if signAnchor then
+					pcall(function() signAnchor:Destroy() end)
+				end
+			end
 			for _, displayInfo in pairs(baseInfo.displays or {}) do
 				if displayInfo.prompt then
 					pcall(function() displayInfo.prompt:Destroy() end)

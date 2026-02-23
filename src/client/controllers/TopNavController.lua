@@ -72,13 +72,13 @@ function TopNavController.Init()
 
 		local btnStroke = Instance.new("UIStroke")
 		btnStroke.Color = Color3.fromRGB(255, 255, 255)
-		btnStroke.Thickness = isActive and 3.5 or 2
+		btnStroke.Thickness = isActive and 2 or 1
 		btnStroke.Transparency = 0.3
 		btnStroke.Parent = btn
 
 		local textStroke = Instance.new("UIStroke")
 		textStroke.Color = Color3.fromRGB(30, 30, 30)
-		textStroke.Thickness = 3
+		textStroke.Thickness = 1.5
 		textStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
 		textStroke.Parent = btn
 

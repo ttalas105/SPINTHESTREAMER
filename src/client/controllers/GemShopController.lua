@@ -210,6 +210,7 @@ local function openDropRatePopup(caseData)
 	pStroke.Color = caseData.color
 	pStroke.Thickness = 3
 	pStroke.Parent = popup
+	UIHelper.MakeResponsiveModal(popup, 700, 560)
 
 	-- Title
 	local title = Instance.new("TextLabel")
@@ -232,7 +233,7 @@ local function openDropRatePopup(caseData)
 	closeBtn.Position = UDim2.new(1, -12, 0, 8)
 	closeBtn.AnchorPoint = Vector2.new(1, 0)
 	closeBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-	closeBtn.Text = "\u{2715}"; closeBtn.TextColor3 = Color3.new(1,1,1)
+	closeBtn.Text = "X"; closeBtn.TextColor3 = Color3.new(1,1,1)
 	closeBtn.Font = FONT; closeBtn.TextSize = 22
 	closeBtn.BorderSizePixel = 0; closeBtn.ZIndex = 32
 	closeBtn.Parent = popup
@@ -1079,6 +1080,7 @@ function GemShopController.Init()
 	local mCorner = Instance.new("UICorner"); mCorner.CornerRadius = UDim.new(0, 24); mCorner.Parent = modalFrame
 	local mStroke = Instance.new("UIStroke"); mStroke.Color = Color3.fromRGB(100, 200, 255); mStroke.Thickness = 3; mStroke.Transparency = 0.15; mStroke.Parent = modalFrame
 	UIHelper.CreateShadow(modalFrame)
+	UIHelper.MakeResponsiveModal(modalFrame, 880, 640)
 
 	-- Top bar gradient
 	local topBar = Instance.new("Frame")
@@ -1126,7 +1128,7 @@ function GemShopController.Init()
 	closeBtn.Position = UDim2.new(1, -14, 0, 10)
 	closeBtn.AnchorPoint = Vector2.new(1, 0)
 	closeBtn.BackgroundColor3 = Color3.fromRGB(220, 60, 60)
-	closeBtn.Text = "\u{2715}"; closeBtn.TextColor3 = Color3.new(1,1,1)
+	closeBtn.Text = "X"; closeBtn.TextColor3 = Color3.new(1,1,1)
 	closeBtn.Font = FONT; closeBtn.TextSize = 24
 	closeBtn.BorderSizePixel = 0; closeBtn.ZIndex = 10
 	closeBtn.Parent = modalFrame

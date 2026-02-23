@@ -498,6 +498,7 @@ local function buildShopModal()
 	mStroke.Transparency = 0.2
 	mStroke.Parent = modal
 	UIHelper.CreateShadow(modal)
+	UIHelper.MakeResponsiveModal(modal, MODAL_W, MODAL_H)
 
 	-- Header area
 	local header = Instance.new("Frame")

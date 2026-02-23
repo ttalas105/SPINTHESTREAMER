@@ -24,10 +24,10 @@ local onButtonClicked = {}
 -- Nav button style
 -------------------------------------------------
 local BUTTON_W = 120
-local BUTTON_H = 140
-local BUTTON_PADDING = 10
+local BUTTON_H = 130
+local BUTTON_PADDING = 30
 local BUBBLE_CORNER = 22
-local STROKE_THICKNESS = 3
+local STROKE_THICKNESS = 1.5
 local STROKE_COLOR = Color3.fromRGB(30, 25, 50)
 
 local menuItems = {
@@ -40,18 +40,17 @@ local menuItems = {
 -- BUILD UI
 -------------------------------------------------
 
-local HUD_BOTTOM_RESERVE = 110
-local TOP_BAR_RESERVE = 60
+local TOP_BAR_RESERVE = 70
 
 local function layoutNav(container, btnFrames, viewportHeight)
-	local availableH = viewportHeight - TOP_BAR_RESERVE - HUD_BOTTOM_RESERVE
 	local count = #btnFrames
 	local padding = BUTTON_PADDING
-
-	local scale = 1
 	local totalNatural = (count * BUTTON_H) + ((count - 1) * padding)
-	if totalNatural > availableH and availableH > 0 then
-		scale = availableH / totalNatural
+
+	local maxH = viewportHeight - TOP_BAR_RESERVE - 20
+	local scale = 1
+	if totalNatural > maxH and maxH > 0 then
+		scale = maxH / totalNatural
 	end
 
 	local btnW = math.floor(BUTTON_W * scale)
@@ -61,7 +60,7 @@ local function layoutNav(container, btnFrames, viewportHeight)
 
 	container.Size = UDim2.new(0, btnW + 12, 0, totalH)
 
-	local centerY = TOP_BAR_RESERVE + availableH / 2
+	local centerY = TOP_BAR_RESERVE + (viewportHeight - TOP_BAR_RESERVE) * 0.5
 	container.Position = UDim2.new(0, 12, 0, math.floor(centerY))
 	container.AnchorPoint = Vector2.new(0, 0.5)
 

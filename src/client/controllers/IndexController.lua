@@ -45,6 +45,8 @@ local FONT = Enum.Font.FredokaOne
 -- Book image for Index header. Upload your image in Roblox (Create > Decals & Images), then set to "rbxassetid://YOUR_ID"
 local INDEX_BOOK_ASSET_ID = "rbxassetid://0"
 
+local LeftSideNavController = require(script.Parent.LeftSideNavController)
+
 local TABS = { { name = "Default", effect = nil, color = Color3.fromRGB(200, 200, 220) } }
 for _, eff in ipairs(Effects.List) do
 	table.insert(TABS, { name = eff.name, effect = eff.name, color = eff.color })
@@ -57,6 +59,35 @@ end
 local function getIndexKey(streamerId, effect)
 	if effect then return effect .. ":" .. streamerId end
 	return streamerId
+end
+
+-- Count unclaimed streamers for a specific tab (nil = Default)
+local function countUnclaimedForTab(tabEffect)
+	local indexCol = HUDController.Data.indexCollection or {}
+	local count = 0
+	for _, info in ipairs(Streamers.List) do
+		local key = getIndexKey(info.id, tabEffect)
+		local val = indexCol[key]
+		if val ~= nil and val ~= "claimed" then
+			count = count + 1
+		end
+	end
+	return count
+end
+
+-- Count total unclaimed across ALL tabs
+local function countTotalUnclaimed()
+	local total = 0
+	for _, tab in ipairs(TABS) do
+		total = total + countUnclaimedForTab(tab.effect)
+	end
+	return total
+end
+
+-- Update the Index nav button badge
+local function updateNavBadge()
+	local count = countTotalUnclaimed()
+	LeftSideNavController.SetBadge("Index", count)
 end
 
 local function buildSnapshot()
@@ -257,6 +288,27 @@ local function buildStreamerCard(info, effect, parent, cardIndex)
 
 	-- Bottom: claim / claimed / locked
 	if isUnlocked and not isClaimed then
+		-- Exclamation badge (top-right of card)
+		local exclBadge = Instance.new("Frame")
+		exclBadge.Name = "ExclBadge"
+		exclBadge.Size = UDim2.new(0, 22, 0, 22)
+		exclBadge.Position = UDim2.new(1, -4, 0, -2)
+		exclBadge.AnchorPoint = Vector2.new(1, 0)
+		exclBadge.BackgroundColor3 = Color3.fromRGB(255, 60, 60)
+		exclBadge.BorderSizePixel = 0
+		exclBadge.ZIndex = 8
+		exclBadge.Parent = card
+		Instance.new("UICorner", exclBadge).CornerRadius = UDim.new(1, 0)
+		local exclText = Instance.new("TextLabel")
+		exclText.Size = UDim2.new(1, 0, 1, 0)
+		exclText.BackgroundTransparency = 1
+		exclText.Text = "!"
+		exclText.TextColor3 = Color3.new(1, 1, 1)
+		exclText.Font = FONT
+		exclText.TextSize = 14
+		exclText.ZIndex = 9
+		exclText.Parent = exclBadge
+
 		local claimBtn = Instance.new("TextButton")
 		claimBtn.Name = "ClaimBtn"
 		claimBtn.Size = UDim2.new(1, -16, 0, 24)
@@ -340,6 +392,9 @@ local function buildGrid(force)
 		local tabName = tabEffect or "Default"
 		counterLabel.Text = tabName .. ": " .. unlockedCount .. "/" .. totalCount .. " discovered"
 	end
+
+	updateSidebarBadges()
+	updateNavBadge()
 end
 
 -------------------------------------------------
@@ -352,6 +407,46 @@ local function highlightTab(tabName)
 		btn.BackgroundColor3 = isActive and Color3.fromRGB(60, 60, 90) or Color3.fromRGB(25, 25, 40)
 		local lbl = btn:FindFirstChild("TabLabel")
 		if lbl then lbl.TextSize = isActive and 13 or 11 end
+	end
+end
+
+-- Update sidebar tab exclamation badges
+local function updateSidebarBadges()
+	for _, btn in ipairs(sidebarBtns) do
+		local tabName = btn.Name:sub(5) -- strip "Tab_"
+		local tabEffect = nil
+		for _, tab in ipairs(TABS) do
+			if tab.name == tabName then tabEffect = tab.effect; break end
+		end
+		local unclaimed = countUnclaimedForTab(tabEffect)
+		local badge = btn:FindFirstChild("TabBadge")
+		if unclaimed > 0 then
+			if not badge then
+				badge = Instance.new("Frame")
+				badge.Name = "TabBadge"
+				badge.Size = UDim2.new(0, 18, 0, 18)
+				badge.Position = UDim2.new(1, -6, 0.5, 0)
+				badge.AnchorPoint = Vector2.new(1, 0.5)
+				badge.BackgroundColor3 = Color3.fromRGB(255, 60, 60)
+				badge.BorderSizePixel = 0
+				badge.ZIndex = 6
+				badge.Parent = btn
+				Instance.new("UICorner", badge).CornerRadius = UDim.new(1, 0)
+				local bl = Instance.new("TextLabel")
+				bl.Name = "BadgeText"
+				bl.Size = UDim2.new(1, 0, 1, 0)
+				bl.BackgroundTransparency = 1
+				bl.Text = "!"
+				bl.TextColor3 = Color3.new(1, 1, 1)
+				bl.Font = FONT
+				bl.TextSize = 12
+				bl.ZIndex = 7
+				bl.Parent = badge
+			end
+			badge.Visible = true
+		else
+			if badge then badge.Visible = false end
+		end
 	end
 end
 
@@ -403,8 +498,9 @@ function IndexController.Init()
 	mCorner.Parent = modalFrame
 	local mStroke = Instance.new("UIStroke")
 	mStroke.Color = Color3.fromRGB(100, 180, 255)
-	mStroke.Thickness = 3
-	mStroke.Transparency = 0.15
+	mStroke.Thickness = 1.5
+	mStroke.Transparency = 0.3
+	UIHelper.MakeResponsiveModal(modalFrame, 680, 500)
 	mStroke.Parent = modalFrame
 	UIHelper.CreateShadow(modalFrame)
 
@@ -466,7 +562,7 @@ function IndexController.Init()
 	title.Parent = headerFrame
 	local tStroke = Instance.new("UIStroke")
 	tStroke.Color = Color3.fromRGB(0, 0, 80)
-	tStroke.Thickness = 2.5
+	tStroke.Thickness = 1.5
 	tStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
 	tStroke.Parent = title
 
@@ -476,7 +572,7 @@ function IndexController.Init()
 	closeBtn.Position = UDim2.new(1, -12, 0, 10)
 	closeBtn.AnchorPoint = Vector2.new(1, 0)
 	closeBtn.BackgroundColor3 = Color3.fromRGB(220, 60, 60)
-	closeBtn.Text = "\u{2715}"
+	closeBtn.Text = "X"
 	closeBtn.TextColor3 = Color3.new(1, 1, 1)
 	closeBtn.Font = FONT
 	closeBtn.TextSize = 20
@@ -606,16 +702,26 @@ function IndexController.Init()
 	-------------------------------------------------
 
 	HUDController.OnDataUpdated(function()
-		if isOpen then buildGrid(false) end
+		updateNavBadge()
+		if isOpen then
+			buildGrid(false)
+			updateSidebarBadges()
+		end
 	end)
 
 	ClaimIndexResult.OnClientEvent:Connect(function(result)
-		if result.success and isOpen then
-			task.wait(0.1)
-			lastSnapshot = ""
-			buildGrid(true)
+		if result.success then
+			updateNavBadge()
+			if isOpen then
+				task.wait(0.1)
+				lastSnapshot = ""
+				buildGrid(true)
+			end
 		end
 	end)
+
+	-- Set initial badge count
+	updateNavBadge()
 
 	modalFrame.Visible = false
 end

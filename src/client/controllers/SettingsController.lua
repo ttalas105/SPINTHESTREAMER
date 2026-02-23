@@ -143,10 +143,11 @@ function SettingsController.Init()
 
 	local outerStroke = Instance.new("UIStroke")
 	outerStroke.Color = Color3.fromRGB(120, 80, 200)
-	outerStroke.Thickness = 2.5
-	outerStroke.Transparency = 0.2
+	outerStroke.Thickness = 1.5
+	outerStroke.Transparency = 0.3
 	outerStroke.Parent = modalFrame
 	UIHelper.CreateShadow(modalFrame)
+	UIHelper.MakeResponsiveModal(modalFrame, PANEL_W, PANEL_H)
 
 	-- Header bar
 	local header = Instance.new("Frame")

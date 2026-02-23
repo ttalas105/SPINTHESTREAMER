@@ -362,8 +362,9 @@ function StorageController.Init()
 	modalFrame.Parent = screenGui
 	Instance.new("UICorner", modalFrame).CornerRadius = UDim.new(0, 24)
 	local mStroke = Instance.new("UIStroke", modalFrame)
-	mStroke.Color = ACCENT; mStroke.Thickness = 2.5; mStroke.Transparency = 0.15
+	mStroke.Color = ACCENT; mStroke.Thickness = 1.5; mStroke.Transparency = 0.3
 	UIHelper.CreateShadow(modalFrame)
+	UIHelper.MakeResponsiveModal(modalFrame, 860, 620)
 
 	-- Title bar
 	local titleBar = Instance.new("Frame")

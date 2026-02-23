@@ -274,8 +274,8 @@ function UIHelper.CreateIconButton(props)
 
 		local bgStroke = Instance.new("UIStroke")
 		bgStroke.Color = btnStrokeColor
-		bgStroke.Thickness = 3
-		bgStroke.Transparency = 0.1
+		bgStroke.Thickness = 1.5
+		bgStroke.Transparency = 0.25
 		bgStroke.Parent = container
 	else
 		container.BackgroundColor3 = props.Color or DesignConfig.Colors.ButtonIdle
@@ -325,7 +325,7 @@ function UIHelper.CreateIconButton(props)
 
 		local labelStroke = Instance.new("UIStroke")
 		labelStroke.Color = Color3.fromRGB(30, 30, 30)
-		labelStroke.Thickness = 4
+		labelStroke.Thickness = 2.5
 		labelStroke.Transparency = 0
 		labelStroke.Parent = label
 	else
@@ -341,6 +341,33 @@ function UIHelper.CreateIconButton(props)
 		labelStroke.Transparency = 0.3
 		labelStroke.Parent = label
 	end
+
+	-- Notification badge (hidden by default, used by SetBadge)
+	local badge = Instance.new("Frame")
+	badge.Name = "Badge"
+	badge.Size = UDim2.new(0, 24, 0, 24)
+	badge.Position = UDim2.new(1, -4, 0, -4)
+	badge.AnchorPoint = Vector2.new(1, 0)
+	badge.BackgroundColor3 = Color3.fromRGB(255, 60, 60)
+	badge.BorderSizePixel = 0
+	badge.ZIndex = 10
+	badge.Visible = false
+	badge.Parent = container
+	Instance.new("UICorner", badge).CornerRadius = UDim.new(1, 0)
+	local badgeStroke = Instance.new("UIStroke")
+	badgeStroke.Color = Color3.fromRGB(180, 30, 30)
+	badgeStroke.Thickness = 1.5
+	badgeStroke.Parent = badge
+	local badgeCount = Instance.new("TextLabel")
+	badgeCount.Name = "Count"
+	badgeCount.Size = UDim2.new(1, 0, 1, 0)
+	badgeCount.BackgroundTransparency = 1
+	badgeCount.Text = "0"
+	badgeCount.TextColor3 = Color3.new(1, 1, 1)
+	badgeCount.Font = Enum.Font.FredokaOne
+	badgeCount.TextSize = 13
+	badgeCount.ZIndex = 11
+	badgeCount.Parent = badge
 
 	local clickButton = Instance.new("TextButton")
 	clickButton.Name = "ClickZone"
@@ -533,6 +560,39 @@ function UIHelper.CameraShake(intensity, duration)
 			camera.CFrame = camera.CFrame * CFrame.new(shakeX, shakeY, 0)
 		end
 	end)
+end
+
+--[[
+	Makes a modal frame responsive to viewport size.
+	designW/designH = the intended pixel size on a ~1080p screen.
+	The modal will scale down on smaller screens so it never overflows.
+	Returns a cleanup connection to disconnect when the UI is destroyed.
+]]
+function UIHelper.MakeResponsiveModal(modal, designW, designH)
+	local camera = workspace.CurrentCamera
+
+	local function fit()
+		local vw = camera.ViewportSize.X
+		local vh = camera.ViewportSize.Y
+		local screenScale = math.min(vw / REF_WIDTH, vh / REF_HEIGHT)
+
+		local renderedW = designW * screenScale
+		local renderedH = designH * screenScale
+
+		local fitScale = 1
+		if renderedW > vw * 0.94 then
+			fitScale = math.min(fitScale, (vw * 0.94) / renderedW)
+		end
+		if renderedH > vh * 0.92 then
+			fitScale = math.min(fitScale, (vh * 0.92) / renderedH)
+		end
+
+		modal.Size = UDim2.new(0, math.floor(designW * fitScale), 0, math.floor(designH * fitScale))
+	end
+
+	fit()
+	local conn = camera:GetPropertyChangedSignal("ViewportSize"):Connect(fit)
+	return conn
 end
 
 return UIHelper

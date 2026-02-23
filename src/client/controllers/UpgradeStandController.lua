@@ -1,8 +1,7 @@
 --[[
 	UpgradeStandController.lua
-	Kid-friendly upgrade UI at the Upgrade stand (beside Spin).
+	Upgrade UI — dark-themed panel matching Case Shop / Potion Shop style.
 	Two upgrades: Luck (+5 per purchase) and Coin Multiplier (+2% per purchase).
-	Vibrant, bubbly design with gradients, icons, and animations.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -25,48 +24,67 @@ local UpgradeLuckResult = RemoteEvents:WaitForChild("UpgradeLuckResult")
 local UpgradeCashRequest = RemoteEvents:WaitForChild("UpgradeCashRequest")
 local UpgradeCashResult = RemoteEvents:WaitForChild("UpgradeCashResult")
 
-local screenGui
-local modalFrame
+local screenGui, overlay, modalFrame
 local isOpen = false
 
--- Refs for dynamic update
-local luckStatRef
-local luckBtnRef
-local cashStatRef
-local cashBtnRef
+local luckValueRef, luckCostRef, luckBtnRef
+local cashValueRef, cashCostRef, cashBtnRef
 
 local FONT = Enum.Font.FredokaOne
+local FONT_SUB = Enum.Font.GothamBold
+local MODAL_BG = Color3.fromRGB(30, 25, 45)
+local RED = Color3.fromRGB(220, 55, 55)
+local RED_DARK = Color3.fromRGB(160, 30, 30)
+local CARD_BG = Color3.fromRGB(40, 35, 60)
+local MODAL_W, MODAL_H = 400, 420
+
+local bounceTween = TweenInfo.new(0.12, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+
+local function addStroke(parent, color, thickness)
+	local s = Instance.new("UIStroke")
+	s.Color = color or Color3.new(0, 0, 0)
+	s.Thickness = thickness or 1
+	s.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+	s.Parent = parent
+	return s
+end
+
+local function fmtNum(n)
+	local s = tostring(math.floor(n))
+	local formatted = ""
+	local len = #s
+	for i = 1, len do
+		formatted = formatted .. string.sub(s, i, i)
+		if (len - i) % 3 == 0 and i < len then formatted = formatted .. "," end
+	end
+	return formatted
+end
 
 -------------------------------------------------
 -- REFRESH
 -------------------------------------------------
+
 local function refreshModal()
-	-- Luck
-	if luckStatRef and luckBtnRef then
+	if luckValueRef and luckCostRef and luckBtnRef then
 		local luck = HUDController.Data.luck or 0
 		local cost = Economy.GetLuckUpgradeCost(luck)
-		luckStatRef.Text = ("🍀 Luck: %d  (+%d%% drop luck)"):format(luck, luck)
-		luckBtnRef.Text = ("BUY +5 LUCK  •  $%s"):format(tostring(cost))
+		luckValueRef.Text = "+" .. luck .. "% drop luck"
+		luckCostRef.Text = "$" .. fmtNum(cost)
 		local canAfford = (HUDController.Data.cash or 0) >= cost
-		luckBtnRef.BackgroundColor3 = canAfford and Color3.fromRGB(50, 210, 90) or Color3.fromRGB(80, 80, 90)
+		luckBtnRef.BackgroundColor3 = canAfford and Color3.fromRGB(50, 200, 90) or Color3.fromRGB(60, 55, 75)
 	end
-	-- Cash
-	if cashStatRef and cashBtnRef then
+	if cashValueRef and cashCostRef and cashBtnRef then
 		local cashUpgrade = HUDController.Data.cashUpgrade or 0
-		local percentBoost = cashUpgrade * 2
+		local pct = cashUpgrade * 2
 		local cost = Economy.GetCashUpgradeCost(cashUpgrade)
-		cashStatRef.Text = ("💰 Cash Boost: +%d%%"):format(percentBoost)
-		cashBtnRef.Text = ("BUY +2%% CASH  •  $%s"):format(tostring(cost))
+		cashValueRef.Text = "+" .. pct .. "% income"
+		cashCostRef.Text = "$" .. fmtNum(cost)
 		local canAfford = (HUDController.Data.cash or 0) >= cost
-		cashBtnRef.BackgroundColor3 = canAfford and Color3.fromRGB(255, 190, 40) or Color3.fromRGB(80, 80, 90)
+		cashBtnRef.BackgroundColor3 = canAfford and Color3.fromRGB(240, 180, 40) or Color3.fromRGB(60, 55, 75)
 	end
 end
 
--------------------------------------------------
--- FLASH ANIMATION on successful upgrade
--------------------------------------------------
 local function flashButton(btn, color)
-	local orig = btn.BackgroundColor3
 	btn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 	TweenService:Create(btn, TweenInfo.new(0.4, Enum.EasingStyle.Quad), {
 		BackgroundColor3 = color,
@@ -76,137 +94,114 @@ end
 -------------------------------------------------
 -- BUILD UPGRADE CARD
 -------------------------------------------------
-local function buildUpgradeCard(parent, config)
-	-- Card frame
+
+local function buildUpgradeCard(parent, cfg)
 	local card = Instance.new("Frame")
-	card.Name = config.name .. "Card"
-	card.Size = UDim2.new(1, -30, 0, 160)
-	card.BackgroundColor3 = config.bgColor
+	card.Name = cfg.name .. "Card"
+	card.Size = UDim2.new(1, 0, 0, 130)
+	card.BackgroundColor3 = CARD_BG
 	card.BorderSizePixel = 0
 	card.Parent = parent
-	local cardCorner = Instance.new("UICorner")
-	cardCorner.CornerRadius = UDim.new(0, 18)
-	cardCorner.Parent = card
-	local cardStroke = Instance.new("UIStroke")
-	cardStroke.Color = config.strokeColor
-	cardStroke.Thickness = 2.5
-	cardStroke.Parent = card
+	Instance.new("UICorner", card).CornerRadius = UDim.new(0, 14)
 
-	-- Top gradient accent
-	local accent = Instance.new("Frame")
-	accent.Name = "Accent"
-	accent.Size = UDim2.new(1, 0, 0, 4)
-	accent.Position = UDim2.new(0, 0, 0, 0)
-	accent.BackgroundColor3 = config.accentColor
-	accent.BorderSizePixel = 0
-	accent.ZIndex = 3
-	accent.Parent = card
-	local acCorner = Instance.new("UICorner")
-	acCorner.CornerRadius = UDim.new(0, 18)
-	acCorner.Parent = accent
-
-	-- Icon (big emoji)
-	local icon = Instance.new("TextLabel")
-	icon.Name = "Icon"
-	icon.Size = UDim2.new(0, 60, 0, 60)
-	icon.Position = UDim2.new(0, 16, 0, 16)
-	icon.BackgroundTransparency = 1
-	icon.Text = config.emoji
-	icon.TextSize = 44
-	icon.Font = Enum.Font.SourceSans
-	icon.Parent = card
+	-- Color indicator strip (left edge)
+	local strip = Instance.new("Frame")
+	strip.Size = UDim2.new(0, 5, 0.7, 0)
+	strip.Position = UDim2.new(0, 8, 0.15, 0)
+	strip.BackgroundColor3 = cfg.accent
+	strip.BorderSizePixel = 0
+	strip.Parent = card
+	Instance.new("UICorner", strip).CornerRadius = UDim.new(0, 3)
 
 	-- Title
 	local title = Instance.new("TextLabel")
-	title.Name = "Title"
-	title.Size = UDim2.new(1, -90, 0, 30)
-	title.Position = UDim2.new(0, 80, 0, 16)
+	title.Size = UDim2.new(0.6, 0, 0, 24)
+	title.Position = UDim2.new(0, 22, 0, 14)
 	title.BackgroundTransparency = 1
-	title.Text = config.title
-	title.TextColor3 = config.titleColor
+	title.Text = cfg.title
+	title.TextColor3 = cfg.accent
 	title.Font = FONT
-	title.TextSize = 22
+	title.TextSize = 18
 	title.TextXAlignment = Enum.TextXAlignment.Left
 	title.Parent = card
-	local tStroke = Instance.new("UIStroke")
-	tStroke.Color = Color3.fromRGB(0, 0, 0)
-	tStroke.Thickness = 2
-	tStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
-	tStroke.Parent = title
+	addStroke(title, Color3.new(0, 0, 0), 1)
 
-	-- Subtitle description
+	-- Description
 	local desc = Instance.new("TextLabel")
-	desc.Name = "Desc"
-	desc.Size = UDim2.new(1, -90, 0, 20)
-	desc.Position = UDim2.new(0, 80, 0, 46)
+	desc.Size = UDim2.new(0.65, 0, 0, 16)
+	desc.Position = UDim2.new(0, 22, 0, 38)
 	desc.BackgroundTransparency = 1
-	desc.Text = config.desc
-	desc.TextColor3 = Color3.fromRGB(200, 200, 220)
-	desc.Font = FONT
-	desc.TextSize = 13
+	desc.Text = cfg.desc
+	desc.TextColor3 = Color3.fromRGB(140, 135, 160)
+	desc.Font = FONT_SUB
+	desc.TextSize = 11
 	desc.TextXAlignment = Enum.TextXAlignment.Left
 	desc.Parent = card
 
-	-- Stat label (dynamic — shows current level)
-	local statLabel = Instance.new("TextLabel")
-	statLabel.Name = "StatLabel"
-	statLabel.Size = UDim2.new(1, -30, 0, 28)
-	statLabel.Position = UDim2.new(0.5, 0, 0, 78)
-	statLabel.AnchorPoint = Vector2.new(0.5, 0)
-	statLabel.BackgroundTransparency = 1
-	statLabel.Text = ""
-	statLabel.TextColor3 = config.statColor
-	statLabel.Font = FONT
-	statLabel.TextSize = 18
-	statLabel.Parent = card
-	local sStroke = Instance.new("UIStroke")
-	sStroke.Color = Color3.fromRGB(0, 0, 0)
-	sStroke.Thickness = 1.5
-	sStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
-	sStroke.Parent = statLabel
+	-- Current value (right side, top)
+	local valueLabel = Instance.new("TextLabel")
+	valueLabel.Size = UDim2.new(0, 120, 0, 22)
+	valueLabel.Position = UDim2.new(1, -14, 0, 16)
+	valueLabel.AnchorPoint = Vector2.new(1, 0)
+	valueLabel.BackgroundTransparency = 1
+	valueLabel.Text = "+0%"
+	valueLabel.TextColor3 = cfg.valueColor
+	valueLabel.Font = FONT
+	valueLabel.TextSize = 16
+	valueLabel.TextXAlignment = Enum.TextXAlignment.Right
+	valueLabel.Parent = card
+	addStroke(valueLabel, Color3.new(0, 0, 0), 1)
 
-	-- Buy button (big, bold, gradient)
+	-- Cost label
+	local costLabel = Instance.new("TextLabel")
+	costLabel.Size = UDim2.new(0, 120, 0, 18)
+	costLabel.Position = UDim2.new(1, -14, 0, 38)
+	costLabel.AnchorPoint = Vector2.new(1, 0)
+	costLabel.BackgroundTransparency = 1
+	costLabel.Text = "$0"
+	costLabel.TextColor3 = Color3.fromRGB(255, 220, 100)
+	costLabel.Font = FONT_SUB
+	costLabel.TextSize = 12
+	costLabel.TextXAlignment = Enum.TextXAlignment.Right
+	costLabel.Parent = card
+
+	-- Buy button (bottom of card, full width)
 	local btn = Instance.new("TextButton")
 	btn.Name = "BuyBtn"
-	btn.Size = UDim2.new(0.85, 0, 0, 42)
-	btn.Position = UDim2.new(0.5, 0, 1, -14)
+	btn.Size = UDim2.new(1, -24, 0, 40)
+	btn.Position = UDim2.new(0.5, 0, 1, -12)
 	btn.AnchorPoint = Vector2.new(0.5, 1)
-	btn.BackgroundColor3 = config.btnColor
-	btn.Text = "BUY"
-	btn.TextColor3 = config.btnTextColor
-	btn.Font = FONT
-	btn.TextSize = 18
+	btn.BackgroundColor3 = cfg.btnColor
+	btn.Text = ""
 	btn.BorderSizePixel = 0
+	btn.AutoButtonColor = false
 	btn.Parent = card
-	local btnCorner = Instance.new("UICorner")
-	btnCorner.CornerRadius = UDim.new(0, 14)
-	btnCorner.Parent = btn
+	Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 10)
 	local btnStroke = Instance.new("UIStroke")
-	btnStroke.Color = config.btnStrokeColor
-	btnStroke.Thickness = 2.5
+	btnStroke.Color = cfg.btnStroke
+	btnStroke.Thickness = 1.5
 	btnStroke.Parent = btn
-	-- Subtle gradient on button (no transparency — prevents blurred look)
-	local btnGrad = Instance.new("UIGradient")
-	btnGrad.Color = ColorSequence.new({
-		ColorSequenceKeypoint.new(0, Color3.new(1, 1, 1)),
-		ColorSequenceKeypoint.new(1, Color3.fromRGB(210, 210, 210)),
-	})
-	btnGrad.Rotation = 90
-	btnGrad.Parent = btn
 
-	-- Hover effect
+	local btnText = Instance.new("TextLabel")
+	btnText.Size = UDim2.new(1, 0, 1, 0)
+	btnText.BackgroundTransparency = 1
+	btnText.Text = cfg.btnLabel
+	btnText.TextColor3 = Color3.new(1, 1, 1)
+	btnText.Font = FONT
+	btnText.TextSize = 16
+	btnText.Parent = btn
+	addStroke(btnText, Color3.new(0, 0, 0), 1)
+
+	local idleSize = UDim2.new(1, -24, 0, 40)
+	local hoverSize = UDim2.new(1, -18, 0, 44)
 	btn.MouseEnter:Connect(function()
-		TweenService:Create(btn, TweenInfo.new(0.15), {
-			Size = UDim2.new(0.88, 0, 0, 44),
-		}):Play()
+		TweenService:Create(btn, bounceTween, { Size = hoverSize }):Play()
 	end)
 	btn.MouseLeave:Connect(function()
-		TweenService:Create(btn, TweenInfo.new(0.15), {
-			Size = UDim2.new(0.85, 0, 0, 42),
-		}):Play()
+		TweenService:Create(btn, bounceTween, { Size = idleSize }):Play()
 	end)
 
-	return card, statLabel, btn
+	return card, valueLabel, costLabel, btn
 end
 
 -------------------------------------------------
@@ -217,6 +212,7 @@ function UpgradeStandController.Open()
 	if isOpen then return end
 	isOpen = true
 	if modalFrame then
+		overlay.Visible = true
 		modalFrame.Visible = true
 		refreshModal()
 		UIHelper.ScaleIn(modalFrame, 0.25)
@@ -226,7 +222,8 @@ end
 function UpgradeStandController.Close()
 	if not isOpen then return end
 	isOpen = false
-	if modalFrame then modalFrame.Visible = false end
+	if overlay then overlay.Visible = false end
+	if modalFrame then UIHelper.ScaleOut(modalFrame, 0.2) end
 end
 
 -------------------------------------------------
@@ -237,152 +234,175 @@ function UpgradeStandController.Init()
 	screenGui = UIHelper.CreateScreenGui("UpgradeStandGui", 5)
 	screenGui.Parent = playerGui
 
-	-- No overlay — clean, no dark background shade
+	-- Overlay
+	overlay = Instance.new("Frame")
+	overlay.Name = "Overlay"
+	overlay.Size = UDim2.new(1, 0, 1, 0)
+	overlay.BackgroundColor3 = Color3.new(0, 0, 0)
+	overlay.BackgroundTransparency = 0.45
+	overlay.BorderSizePixel = 0
+	overlay.Visible = false
+	overlay.ZIndex = 1
+	overlay.Parent = screenGui
 
-	-- Modal frame
+	-- Modal
 	modalFrame = Instance.new("Frame")
 	modalFrame.Name = "UpgradeModal"
-	modalFrame.Size = UDim2.new(0, 380, 0, 460)
+	modalFrame.Size = UDim2.new(0, MODAL_W, 0, MODAL_H)
 	modalFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
 	modalFrame.AnchorPoint = Vector2.new(0.5, 0.5)
-	modalFrame.BackgroundColor3 = Color3.fromRGB(18, 16, 32)
+	modalFrame.BackgroundColor3 = MODAL_BG
 	modalFrame.BorderSizePixel = 0
 	modalFrame.Visible = false
+	modalFrame.ZIndex = 2
+	modalFrame.ClipsDescendants = true
 	modalFrame.Parent = screenGui
-	local mCorner = Instance.new("UICorner")
-	mCorner.CornerRadius = UDim.new(0, 22)
-	mCorner.Parent = modalFrame
+
+	Instance.new("UICorner", modalFrame).CornerRadius = UDim.new(0, 20)
 	local mStroke = Instance.new("UIStroke")
-	mStroke.Color = Color3.fromRGB(100, 80, 200)
-	mStroke.Thickness = 3
+	mStroke.Color = Color3.fromRGB(70, 60, 100)
+	mStroke.Thickness = 1.5
+	mStroke.Transparency = 0.3
 	mStroke.Parent = modalFrame
+	UIHelper.CreateShadow(modalFrame)
+	UIHelper.MakeResponsiveModal(modalFrame, MODAL_W, MODAL_H)
 
-	-- Rainbow top bar
-	local topBar = Instance.new("Frame")
-	topBar.Name = "TopBar"
-	topBar.Size = UDim2.new(1, 0, 0, 5)
-	topBar.Position = UDim2.new(0, 0, 0, 0)
-	topBar.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-	topBar.BorderSizePixel = 0
-	topBar.ZIndex = 5
-	topBar.Parent = modalFrame
-	local tbGrad = Instance.new("UIGradient")
-	tbGrad.Color = ColorSequence.new({
-		ColorSequenceKeypoint.new(0, Color3.fromRGB(80, 255, 120)),
-		ColorSequenceKeypoint.new(0.5, Color3.fromRGB(255, 200, 50)),
-		ColorSequenceKeypoint.new(1, Color3.fromRGB(100, 150, 255)),
-	})
-	tbGrad.Parent = topBar
+	-- ===== HEADER =====
+	local header = Instance.new("Frame")
+	header.Name = "Header"
+	header.Size = UDim2.new(1, 0, 0, 60)
+	header.BackgroundTransparency = 1
+	header.ZIndex = 3
+	header.Parent = modalFrame
 
-	-- Title
 	local title = Instance.new("TextLabel")
-	title.Name = "Title"
-	title.Size = UDim2.new(1, -60, 0, 44)
-	title.Position = UDim2.new(0.5, 0, 0, 12)
-	title.AnchorPoint = Vector2.new(0.5, 0)
+	title.Size = UDim2.new(0.6, 0, 0, 32)
+	title.Position = UDim2.new(0, 20, 0, 12)
 	title.BackgroundTransparency = 1
-	title.Text = "⚡ UPGRADES ⚡"
-	title.TextColor3 = Color3.fromRGB(255, 220, 80)
+	title.Text = "Upgrades"
+	title.TextColor3 = Color3.new(1, 1, 1)
 	title.Font = FONT
-	title.TextSize = 30
-	title.Parent = modalFrame
-	local titleStroke = Instance.new("UIStroke")
-	titleStroke.Color = Color3.fromRGB(120, 60, 200)
-	titleStroke.Thickness = 3
-	titleStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
-	titleStroke.Parent = title
+	title.TextSize = 28
+	title.TextXAlignment = Enum.TextXAlignment.Left
+	title.ZIndex = 3
+	title.Parent = header
+	addStroke(title, Color3.new(0, 0, 0), 1.5)
+
+	local subtitle = Instance.new("TextLabel")
+	subtitle.Size = UDim2.new(0.6, 0, 0, 16)
+	subtitle.Position = UDim2.new(0, 22, 0, 42)
+	subtitle.BackgroundTransparency = 1
+	subtitle.Text = "Boost your luck and income"
+	subtitle.TextColor3 = Color3.fromRGB(150, 145, 170)
+	subtitle.Font = FONT_SUB
+	subtitle.TextSize = 11
+	subtitle.TextXAlignment = Enum.TextXAlignment.Left
+	subtitle.ZIndex = 3
+	subtitle.Parent = header
 
 	-- Close button
 	local closeBtn = Instance.new("TextButton")
-	closeBtn.Name = "CloseBtn"
 	closeBtn.Size = UDim2.new(0, 40, 0, 40)
-	closeBtn.Position = UDim2.new(1, -12, 0, 10)
+	closeBtn.Position = UDim2.new(1, -14, 0, 10)
 	closeBtn.AnchorPoint = Vector2.new(1, 0)
-	closeBtn.BackgroundColor3 = Color3.fromRGB(220, 60, 60)
-	closeBtn.Text = "✕"
-	closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	closeBtn.BackgroundColor3 = RED
+	closeBtn.Text = "X"
+	closeBtn.TextColor3 = Color3.new(1, 1, 1)
 	closeBtn.Font = FONT
-	closeBtn.TextSize = 22
+	closeBtn.TextSize = 20
 	closeBtn.BorderSizePixel = 0
-	closeBtn.ZIndex = 8
+	closeBtn.AutoButtonColor = false
+	closeBtn.ZIndex = 5
 	closeBtn.Parent = modalFrame
-	local ccCorner = Instance.new("UICorner")
-	ccCorner.CornerRadius = UDim.new(1, 0)
-	ccCorner.Parent = closeBtn
-	local ccStroke = Instance.new("UIStroke")
-	ccStroke.Color = Color3.fromRGB(120, 30, 30)
-	ccStroke.Thickness = 2
-	ccStroke.Parent = closeBtn
-	closeBtn.MouseButton1Click:Connect(function()
-		UpgradeStandController.Close()
-	end)
+	Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(0, 10)
+	local cStroke = Instance.new("UIStroke")
+	cStroke.Color = RED_DARK
+	cStroke.Thickness = 1.5
+	cStroke.Parent = closeBtn
+	addStroke(closeBtn, Color3.fromRGB(80, 0, 0), 1)
 
-	-- Cards container
+	closeBtn.MouseEnter:Connect(function()
+		TweenService:Create(closeBtn, bounceTween, { Size = UDim2.new(0, 46, 0, 46), BackgroundColor3 = Color3.fromRGB(255, 75, 75) }):Play()
+	end)
+	closeBtn.MouseLeave:Connect(function()
+		TweenService:Create(closeBtn, bounceTween, { Size = UDim2.new(0, 40, 0, 40), BackgroundColor3 = RED }):Play()
+	end)
+	closeBtn.MouseButton1Click:Connect(function() UpgradeStandController.Close() end)
+
+	-- Divider
+	local divider = Instance.new("Frame")
+	divider.Size = UDim2.new(1, -30, 0, 1)
+	divider.Position = UDim2.new(0.5, 0, 0, 62)
+	divider.AnchorPoint = Vector2.new(0.5, 0)
+	divider.BackgroundColor3 = Color3.fromRGB(60, 55, 80)
+	divider.BorderSizePixel = 0
+	divider.ZIndex = 3
+	divider.Parent = modalFrame
+
+	-- ===== CARDS AREA =====
 	local cardsContainer = Instance.new("Frame")
-	cardsContainer.Name = "CardsContainer"
-	cardsContainer.Size = UDim2.new(1, 0, 1, -70)
-	cardsContainer.Position = UDim2.new(0, 0, 0, 62)
+	cardsContainer.Name = "Cards"
+	cardsContainer.Size = UDim2.new(1, -30, 1, -90)
+	cardsContainer.Position = UDim2.new(0.5, 0, 0, 72)
+	cardsContainer.AnchorPoint = Vector2.new(0.5, 0)
 	cardsContainer.BackgroundTransparency = 1
+	cardsContainer.ZIndex = 3
 	cardsContainer.Parent = modalFrame
+
 	local layout = Instance.new("UIListLayout")
 	layout.SortOrder = Enum.SortOrder.LayoutOrder
-	layout.Padding = UDim.new(0, 14)
+	layout.Padding = UDim.new(0, 12)
 	layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 	layout.Parent = cardsContainer
 
 	-- LUCK CARD
-	local _, luckStat, luckBtn = buildUpgradeCard(cardsContainer, {
+	local _, luckVal, luckCost, luckBtn = buildUpgradeCard(cardsContainer, {
 		name = "Luck",
-		emoji = "🍀",
-		title = "LUCK UPGRADE",
-		desc = "Each +5 luck = +5% better drops!",
-		titleColor = Color3.fromRGB(80, 255, 120),
-		statColor = Color3.fromRGB(150, 255, 180),
-		bgColor = Color3.fromRGB(20, 40, 28),
-		strokeColor = Color3.fromRGB(60, 200, 100),
-		accentColor = Color3.fromRGB(80, 255, 120),
-		btnColor = Color3.fromRGB(50, 210, 90),
-		btnTextColor = Color3.fromRGB(255, 255, 255),
-		btnStrokeColor = Color3.fromRGB(30, 140, 50),
+		title = "Luck Upgrade",
+		desc = "Each +5 luck = +5% better drops",
+		accent = Color3.fromRGB(80, 220, 120),
+		valueColor = Color3.fromRGB(120, 255, 160),
+		btnColor = Color3.fromRGB(50, 200, 90),
+		btnStroke = Color3.fromRGB(30, 140, 50),
+		btnLabel = "BUY +5 LUCK",
 	})
-	luckStatRef = luckStat
+	luckValueRef = luckVal
+	luckCostRef = luckCost
 	luckBtnRef = luckBtn
 	luckBtn.MouseButton1Click:Connect(function()
 		UpgradeLuckRequest:FireServer()
 	end)
 
 	-- CASH CARD
-	local _, cashStat, cashBtn = buildUpgradeCard(cardsContainer, {
+	local _, cashVal, cashCost, cashBtn = buildUpgradeCard(cardsContainer, {
 		name = "Cash",
-		emoji = "💰",
-		title = "COIN MULTIPLIER",
-		desc = "Each upgrade = +2% streamer income!",
-		titleColor = Color3.fromRGB(255, 220, 60),
-		statColor = Color3.fromRGB(255, 240, 150),
-		bgColor = Color3.fromRGB(40, 35, 18),
-		strokeColor = Color3.fromRGB(220, 180, 40),
-		accentColor = Color3.fromRGB(255, 200, 50),
-		btnColor = Color3.fromRGB(255, 190, 40),
-		btnTextColor = Color3.fromRGB(30, 20, 0),
-		btnStrokeColor = Color3.fromRGB(180, 120, 20),
+		title = "Coin Multiplier",
+		desc = "Each upgrade = +2% streamer income",
+		accent = Color3.fromRGB(240, 200, 50),
+		valueColor = Color3.fromRGB(255, 230, 120),
+		btnColor = Color3.fromRGB(240, 180, 40),
+		btnStroke = Color3.fromRGB(180, 120, 20),
+		btnLabel = "BUY +2% COINS",
 	})
-	cashStatRef = cashStat
+	cashValueRef = cashVal
+	cashCostRef = cashCost
 	cashBtnRef = cashBtn
 	cashBtn.MouseButton1Click:Connect(function()
 		UpgradeCashRequest:FireServer()
 	end)
 
-	-- Bottom helper text
-	local helpLabel = Instance.new("TextLabel")
-	helpLabel.Size = UDim2.new(1, -20, 0, 22)
-	helpLabel.Position = UDim2.new(0.5, 0, 1, -10)
-	helpLabel.AnchorPoint = Vector2.new(0.5, 1)
-	helpLabel.BackgroundTransparency = 1
-	helpLabel.Text = "Luck = better drops  •  Cash = more income"
-	helpLabel.TextColor3 = Color3.fromRGB(120, 120, 150)
-	helpLabel.Font = FONT
-	helpLabel.TextSize = 12
-	helpLabel.Parent = modalFrame
+	-- Bottom hint
+	local hint = Instance.new("TextLabel")
+	hint.Size = UDim2.new(1, -20, 0, 18)
+	hint.Position = UDim2.new(0.5, 0, 1, -8)
+	hint.AnchorPoint = Vector2.new(0.5, 1)
+	hint.BackgroundTransparency = 1
+	hint.Text = "Luck = better drops  •  Coins = more income"
+	hint.TextColor3 = Color3.fromRGB(100, 95, 120)
+	hint.Font = FONT_SUB
+	hint.TextSize = 10
+	hint.ZIndex = 3
+	hint.Parent = modalFrame
 
 	-------------------------------------------------
 	-- EVENTS
@@ -394,14 +414,14 @@ function UpgradeStandController.Init()
 
 	UpgradeLuckResult.OnClientEvent:Connect(function(result)
 		if result.success then
-			flashButton(luckBtnRef, Color3.fromRGB(50, 210, 90))
+			flashButton(luckBtnRef, Color3.fromRGB(50, 200, 90))
 			if isOpen then refreshModal() end
 		end
 	end)
 
 	UpgradeCashResult.OnClientEvent:Connect(function(result)
 		if result.success then
-			flashButton(cashBtnRef, Color3.fromRGB(255, 190, 40))
+			flashButton(cashBtnRef, Color3.fromRGB(240, 180, 40))
 			if isOpen then refreshModal() end
 		end
 	end)
