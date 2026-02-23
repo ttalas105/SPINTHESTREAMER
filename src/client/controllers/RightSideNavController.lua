@@ -31,6 +31,7 @@ local STROKE_COLOR = Color3.fromRGB(30, 25, 50)
 
 local menuItems = {
 	{ name = "Rebirth",  icon = "\u{2728}", imageId = "rbxassetid://83431543153884", color = Color3.fromRGB(255, 100, 140),  label = "Rebirth"  },
+	{ name = "Quests",   icon = "\u{1F4CB}", imageId = "", color = Color3.fromRGB(80, 200, 120),   label = "Quests"   },
 	{ name = "Settings", icon = "\u{2699}\u{FE0F}", imageId = "rbxassetid://136970465147454", color = Color3.fromRGB(100, 160, 220),  label = "Settings" },
 }
 

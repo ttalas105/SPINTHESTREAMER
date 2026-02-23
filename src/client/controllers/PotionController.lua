@@ -13,6 +13,7 @@ local MarketplaceService = game:GetService("MarketplaceService")
 local Potions = require(ReplicatedStorage.Shared.Config.Potions)
 local DesignConfig = require(ReplicatedStorage.Shared.Config.DesignConfig)
 local UIHelper = require(script.Parent.UIHelper)
+local HUDController = require(script.Parent.HUDController)
 
 local PotionController = {}
 
@@ -431,15 +432,35 @@ local function buildPotionRow(potionType, potion, parent)
 	rarityLabel.ZIndex = 53
 	rarityLabel.Parent = row
 
+	-- Rebirth requirement (if any)
+	local rebirthRequired = potion.rebirthRequired or 0
+	local currentRebirth = HUDController.Data.rebirthCount or 0
+	local isLocked = rebirthRequired > 0 and currentRebirth < rebirthRequired
+
+	if rebirthRequired > 0 then
+		local reqLabel = Instance.new("TextLabel")
+		reqLabel.Name = "RebirthReq"
+		reqLabel.Size = UDim2.new(1, -(textX + 14), 0, 18)
+		reqLabel.Position = UDim2.new(0, textX, 0, 82)
+		reqLabel.BackgroundTransparency = 1
+		reqLabel.Text = "Requires Rebirth " .. rebirthRequired
+		reqLabel.TextColor3 = isLocked and Color3.fromRGB(255, 120, 80) or Color3.fromRGB(100, 200, 120)
+		reqLabel.Font = FONT_SUB
+		reqLabel.TextSize = 12
+		reqLabel.TextXAlignment = Enum.TextXAlignment.Left
+		reqLabel.ZIndex = 53
+		reqLabel.Parent = row
+	end
+
 	-- Buy button (bottom right of row)
 	local buyBtn = Instance.new("TextButton")
 	buyBtn.Name = "BuyBtn"
 	buyBtn.Size = UDim2.new(0, 80, 0, 34)
 	buyBtn.Position = UDim2.new(1, -14, 1, -14)
 	buyBtn.AnchorPoint = Vector2.new(1, 1)
-	buyBtn.BackgroundColor3 = Color3.fromRGB(60, 200, 90)
-	buyBtn.Text = "BUY"
-	buyBtn.TextColor3 = Color3.new(1, 1, 1)
+	buyBtn.BackgroundColor3 = isLocked and Color3.fromRGB(70, 65, 80) or Color3.fromRGB(60, 200, 90)
+	buyBtn.Text = isLocked and "LOCKED" or "BUY"
+	buyBtn.TextColor3 = isLocked and Color3.fromRGB(120, 115, 130) or Color3.new(1, 1, 1)
 	buyBtn.Font = BUBBLE_FONT
 	buyBtn.TextSize = 16
 	buyBtn.BorderSizePixel = 0
@@ -450,7 +471,7 @@ local function buildPotionRow(potionType, potion, parent)
 	buyCorner.CornerRadius = UDim.new(0, 10)
 	buyCorner.Parent = buyBtn
 	local buyStroke = Instance.new("UIStroke")
-	buyStroke.Color = Color3.fromRGB(30, 140, 50)
+	buyStroke.Color = isLocked and Color3.fromRGB(50, 48, 60) or Color3.fromRGB(30, 140, 50)
 	buyStroke.Thickness = 2
 	buyStroke.Parent = buyBtn
 	local buyTextStroke = Instance.new("UIStroke")
@@ -460,18 +481,23 @@ local function buildPotionRow(potionType, potion, parent)
 	buyTextStroke.Parent = buyBtn
 
 	local bounceTI = TweenInfo.new(0.12, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
-	buyBtn.MouseEnter:Connect(function()
-		TweenService:Create(row, bounceTI, { BackgroundColor3 = CARD_HOVER }):Play()
-		TweenService:Create(buyBtn, bounceTI, { BackgroundColor3 = Color3.fromRGB(80, 235, 115) }):Play()
-	end)
-	buyBtn.MouseLeave:Connect(function()
-		TweenService:Create(row, bounceTI, { BackgroundColor3 = CARD_BG }):Play()
-		TweenService:Create(buyBtn, bounceTI, { BackgroundColor3 = Color3.fromRGB(60, 200, 90) }):Play()
-	end)
-
-	buyBtn.MouseButton1Click:Connect(function()
-		BuyPotionRequest:FireServer(potionType, potion.tier)
-	end)
+	if not isLocked then
+		buyBtn.MouseEnter:Connect(function()
+			TweenService:Create(row, bounceTI, { BackgroundColor3 = CARD_HOVER }):Play()
+			TweenService:Create(buyBtn, bounceTI, { BackgroundColor3 = Color3.fromRGB(80, 235, 115) }):Play()
+		end)
+		buyBtn.MouseLeave:Connect(function()
+			TweenService:Create(row, bounceTI, { BackgroundColor3 = CARD_BG }):Play()
+			TweenService:Create(buyBtn, bounceTI, { BackgroundColor3 = Color3.fromRGB(60, 200, 90) }):Play()
+		end)
+		buyBtn.MouseButton1Click:Connect(function()
+			BuyPotionRequest:FireServer(potionType, potion.tier)
+		end)
+	else
+		buyBtn.MouseButton1Click:Connect(function()
+			-- Optional: could show a toast "Reach Rebirth X to unlock"
+		end)
+	end
 
 	return row
 end

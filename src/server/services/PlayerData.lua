@@ -107,6 +107,19 @@ local DEFAULT_DATA = {
 	sacrificeOneTime = {},
 	sacrificeCharges = { FiftyFifty = {}, FeelingLucky = {} },
 	tutorialComplete = false,
+	-- Pity system: tracks spins since last rarity hit
+	pityCounters = {
+		Rare = 0,
+		Epic = 0,
+		Legendary = 0,
+		Mythic = 0,
+	},
+	-- Daily login streak
+	dailyLoginStreak = 0,
+	lastLoginDay = 0,
+	-- Quests
+	questProgress = {},
+	questClaimed = {},
 }
 
 local RemoteEvents = ReplicatedStorage:WaitForChild("RemoteEvents")

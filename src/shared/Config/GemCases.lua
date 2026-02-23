@@ -23,15 +23,15 @@ GemCases.RegularCases = {}
 -------------------------------------------------
 -- All effect cases use Lightning case odds (compression = 0.42)
 GemCases.EffectCases = {
-	{ id = "AcidCase",      effect = "Acid",      name = "Acid Case",      cost = 1200,   color = Color3.fromRGB(50, 255, 50),    compression = 0.42 },
-	{ id = "SnowCase",      effect = "Snow",      name = "Snow Case",      cost = 2500,   color = Color3.fromRGB(180, 220, 255),   compression = 0.42 },
-	{ id = "LavaCase",      effect = "Lava",      name = "Lava Case",      cost = 4000,   color = Color3.fromRGB(255, 100, 20),    compression = 0.42 },
-	{ id = "LightningCase", effect = "Lightning",  name = "Lightning Case", cost = 7000,  color = Color3.fromRGB(255, 255, 80),    compression = 0.42 },
-	{ id = "ShadowCase",    effect = "Shadow",     name = "Shadow Case",    cost = 11000, color = Color3.fromRGB(100, 60, 140),    compression = 0.42 },
-	{ id = "GlitchyCase",   effect = "Glitchy",    name = "Glitchy Case",   cost = 15000, color = Color3.fromRGB(0, 255, 255),     compression = 0.42 },
-	{ id = "LunarCase",     effect = "Lunar",      name = "Lunar Case",     cost = 30000, color = Color3.fromRGB(200, 220, 255),   compression = 0.42 },
-	{ id = "SolarCase",     effect = "Solar",      name = "Solar Case",     cost = 50000, color = Color3.fromRGB(255, 220, 60),    compression = 0.42 },
-	{ id = "VoidCase",      effect = "Void",       name = "Void Case",      cost = 75000, color = Color3.fromRGB(80, 40, 120),     compression = 0.42 },
+	{ id = "AcidCase",      effect = "Acid",      name = "Acid Case",      cost = 800,    rebirthRequired = 0,  color = Color3.fromRGB(50, 255, 50),    compression = 0.42, logoDecalId = 140731222251378, pictureDecalId = 70677539062100,  logoImageId = "rbxassetid://106022165638688", pictureImageId = "rbxassetid://77653297317137" },
+	{ id = "SnowCase",      effect = "Snow",      name = "Snow Case",      cost = 1500,   rebirthRequired = 2,  color = Color3.fromRGB(180, 220, 255),   compression = 0.42, logoDecalId = 122281038871207, pictureDecalId = 72856434029284,  logoImageId = "rbxassetid://129861999711220", pictureImageId = "rbxassetid://84473682665692" },
+	{ id = "LavaCase",      effect = "Lava",      name = "Lava Case",      cost = 3000,   rebirthRequired = 4,  color = Color3.fromRGB(255, 100, 20),    compression = 0.42, logoDecalId = 88446146523624,  pictureDecalId = 113163893650100, logoImageId = "rbxassetid://70978737223660",  pictureImageId = "rbxassetid://81387227723064" },
+	{ id = "LightningCase", effect = "Lightning",  name = "Lightning Case", cost = 5000,  rebirthRequired = 6,  color = Color3.fromRGB(255, 255, 80),    compression = 0.42, logoDecalId = 82785037374863,  pictureDecalId = 125845773409315, logoImageId = "rbxassetid://109285700967085", pictureImageId = "rbxassetid://105315968839248" },
+	{ id = "ShadowCase",    effect = "Shadow",     name = "Shadow Case",    cost = 8000,  rebirthRequired = 8,  color = Color3.fromRGB(100, 60, 140),    compression = 0.42, logoDecalId = 119205587806607, pictureDecalId = 71276747470276,  logoImageId = "rbxassetid://108280725908337", pictureImageId = "rbxassetid://96598727991252" },
+	{ id = "GlitchyCase",   effect = "Glitchy",    name = "Glitchy Case",   cost = 12000, rebirthRequired = 10, color = Color3.fromRGB(0, 255, 255),     compression = 0.42, logoDecalId = 106193845040729, pictureDecalId = 110881405837585, logoImageId = "rbxassetid://139648005730009", pictureImageId = "rbxassetid://134848230615869" },
+	{ id = "LunarCase",     effect = "Lunar",      name = "Lunar Case",     cost = 20000, rebirthRequired = 13, color = Color3.fromRGB(200, 220, 255),   compression = 0.42, logoDecalId = 138615019713440, pictureDecalId = 93336563085507,  logoImageId = "rbxassetid://138975330292478", pictureImageId = "rbxassetid://79169383651597" },
+	{ id = "SolarCase",     effect = "Solar",      name = "Solar Case",     cost = 35000, rebirthRequired = 16, color = Color3.fromRGB(255, 220, 60),    compression = 0.42, logoDecalId = 95353296948690,  pictureDecalId = 73067986687655,  logoImageId = "rbxassetid://72920890729278",  pictureImageId = "rbxassetid://86930873609580" },
+	{ id = "VoidCase",      effect = "Void",       name = "Void Case",      cost = 50000, rebirthRequired = 19, color = Color3.fromRGB(80, 40, 120),     compression = 0.42, logoDecalId = 94035448669971,  pictureDecalId = 84829230512116,  logoImageId = "rbxassetid://79498114124783",  pictureImageId = "rbxassetid://107424131791937" },
 }
 
 -------------------------------------------------

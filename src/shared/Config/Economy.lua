@@ -7,58 +7,59 @@
 local Economy = {}
 
 -------------------------------------------------
--- SPIN
+-- SPIN (base spin is FREE to keep players engaged)
 -------------------------------------------------
-Economy.SpinCost = 100        -- cash per single spin
-Economy.SpinCost5 = 450       -- discounted 5-pack
-Economy.SpinCost10 = 800      -- discounted 10-pack
+Economy.SpinCost = 0          -- free base spin
+Economy.SpinCost5 = 0         -- free 5-pack
+Economy.SpinCost10 = 0        -- free 10-pack
 
 -------------------------------------------------
 -- SPIN STAND CASES (18 total, buy at stall for luck bonus)
 -- Case 1 is free (no rebirth). Case N (2-18) requires Rebirth N-1.
+-- Case costs scale aggressively — the real cash sink.
 -------------------------------------------------
 Economy.TotalCases = 18
 
 Economy.CrateCosts = {
-	100,       -- Case 1
-	300,       -- Case 2
-	600,       -- Case 3
-	1000,      -- Case 4
-	2000,      -- Case 5
-	3500,      -- Case 6
-	5500,      -- Case 7
-	8000,      -- Case 8
-	12000,     -- Case 9
-	18000,     -- Case 10
-	28000,     -- Case 11
-	42000,     -- Case 12
-	65000,     -- Case 13
-	100000,    -- Case 14
-	150000,    -- Case 15
-	225000,    -- Case 16
-	350000,    -- Case 17
-	500000,    -- Case 18
+	0,          -- Case 1:  Free
+	500,        -- Case 2
+	1500,       -- Case 3
+	5000,       -- Case 4
+	15000,      -- Case 5
+	40000,      -- Case 6
+	100000,     -- Case 7
+	250000,     -- Case 8
+	500000,     -- Case 9
+	1000000,    -- Case 10
+	2500000,    -- Case 11
+	5000000,    -- Case 12
+	10000000,   -- Case 13
+	25000000,   -- Case 14
+	50000000,   -- Case 15
+	100000000,  -- Case 16
+	250000000,  -- Case 17
+	500000000,  -- Case 18
 }
 
 Economy.CrateLuckBonuses = {
 	0,       -- Case 1:  +0%
 	0.05,    -- Case 2:  +5%
-	0.15,    -- Case 3:  +15%
-	0.30,    -- Case 4:  +30%
-	0.50,    -- Case 5:  +50%
-	0.75,    -- Case 6:  +75%
-	1.00,    -- Case 7:  +100%
-	1.50,    -- Case 8:  +150%
-	2.00,    -- Case 9:  +200%
-	3.00,    -- Case 10: +300%
-	4.00,    -- Case 11: +400%
-	5.00,    -- Case 12: +500%
-	6.50,    -- Case 13: +650%
-	8.00,    -- Case 14: +800%
-	10.00,   -- Case 15: +1000%
-	12.50,   -- Case 16: +1250%
-	15.00,   -- Case 17: +1500%
-	20.00,   -- Case 18: +2000%
+	0.10,    -- Case 3:  +10%
+	0.20,    -- Case 4:  +20%
+	0.35,    -- Case 5:  +35%
+	0.50,    -- Case 6:  +50%
+	0.75,    -- Case 7:  +75%
+	1.00,    -- Case 8:  +100%
+	1.50,    -- Case 9:  +150%
+	2.00,    -- Case 10: +200%
+	2.75,    -- Case 11: +275%
+	3.50,    -- Case 12: +350%
+	4.50,    -- Case 13: +450%
+	5.50,    -- Case 14: +550%
+	7.00,    -- Case 15: +700%
+	8.50,    -- Case 16: +850%
+	10.00,   -- Case 17: +1000%
+	12.50,   -- Case 18: +1250%
 }
 
 Economy.CrateImageIds = {
@@ -126,17 +127,18 @@ Economy.CrateRarities = {
 
 -------------------------------------------------
 -- REBIRTH (19 levels)
--- Each gives +5% coin bonus. Rebirths 1-17 unlock cases 2-18.
+-- Escalating coin bonuses: 5% early, up to 20% late.
+-- Rebirths 1-17 unlock cases 2-18.
 -- Rebirth resets: cash + active potions.
 -------------------------------------------------
 Economy.MaxRebirths = 19
 
 Economy.RebirthCosts = {
-	1000000,       -- Rebirth 1:  $1M
-	3000000,       -- Rebirth 2:  $3M
-	7500000,       -- Rebirth 3:  $7.5M
-	15000000,      -- Rebirth 4:  $15M
-	30000000,      -- Rebirth 5:  $30M
+	500000,        -- Rebirth 1:  $500K  (fast first rebirth = early dopamine)
+	2000000,       -- Rebirth 2:  $2M
+	5000000,       -- Rebirth 3:  $5M
+	12000000,      -- Rebirth 4:  $12M
+	25000000,      -- Rebirth 5:  $25M
 	50000000,      -- Rebirth 6:  $50M
 	85000000,      -- Rebirth 7:  $85M
 	140000000,     -- Rebirth 8:  $140M
@@ -153,7 +155,13 @@ Economy.RebirthCosts = {
 	15000000000,   -- Rebirth 19: $15B
 }
 
-Economy.RebirthCoinBonusPercent = 5
+-- Escalating rebirth bonus percentages per level
+Economy.RebirthBonusPerLevel = {
+	5,  5,  5,  5,  5,    -- Rebirths 1-5:   +5% each
+	8,  8,  8,  8,  8,    -- Rebirths 6-10:  +8% each
+	12, 12, 12, 12, 12,   -- Rebirths 11-15: +12% each
+	20, 20, 20, 20,       -- Rebirths 16-19: +20% each
+}
 
 --- Get the cost of the next rebirth (0-indexed rebirthCount)
 function Economy.GetRebirthCost(currentRebirths: number): number
@@ -162,9 +170,22 @@ function Economy.GetRebirthCost(currentRebirths: number): number
 	return Economy.RebirthCosts[next] or math.huge
 end
 
---- Get the coin multiplier from rebirths (1.0 + rebirthCount * 0.05)
+--- Get the coin multiplier from rebirths (escalating per-level bonuses)
 function Economy.GetRebirthCoinMultiplier(rebirthCount: number): number
-	return 1 + (rebirthCount * Economy.RebirthCoinBonusPercent / 100)
+	local totalPercent = 0
+	for i = 1, math.min(rebirthCount, Economy.MaxRebirths) do
+		totalPercent = totalPercent + (Economy.RebirthBonusPerLevel[i] or 5)
+	end
+	return 1 + (totalPercent / 100)
+end
+
+--- Total bonus percent at a given rebirth level
+function Economy.GetRebirthBonusPercent(rebirthLevel: number): number
+	local totalPercent = 0
+	for i = 1, math.min(rebirthLevel, Economy.MaxRebirths) do
+		totalPercent = totalPercent + (Economy.RebirthBonusPerLevel[i] or 5)
+	end
+	return totalPercent
 end
 
 --- Case 1 is free. Case N (2-18) requires Rebirth (N-1).
@@ -177,7 +198,7 @@ end
 function Economy.GetRebirthInfo(rebirthLevel: number)
 	if rebirthLevel < 1 or rebirthLevel > Economy.MaxRebirths then return nil end
 	local cost = Economy.RebirthCosts[rebirthLevel]
-	local coinBonus = rebirthLevel * Economy.RebirthCoinBonusPercent
+	local coinBonus = Economy.GetRebirthBonusPercent(rebirthLevel)
 	local unlocksCase = rebirthLevel + 1
 	if unlocksCase > Economy.TotalCases then unlocksCase = nil end
 	return {
@@ -189,21 +210,24 @@ function Economy.GetRebirthInfo(rebirthLevel: number)
 end
 
 -------------------------------------------------
--- SELL PRICES (per rarity)
+-- SELL PRICES (per rarity — meaningful amounts)
+-- Effect streamers sell for 1.5x the base rarity price.
 -------------------------------------------------
 Economy.SellPrices = {
-	Common    = 10,
-	Rare      = 30,
-	Epic      = 75,
-	Legendary = 200,
-	Mythic    = 500,
+	Common    = 500,
+	Rare      = 5000,
+	Epic      = 75000,
+	Legendary = 750000,
+	Mythic    = 7500000,
 }
 
+Economy.EffectSellMultiplier = 1.5
+
 -------------------------------------------------
--- PASSIVE INCOME
+-- PASSIVE INCOME (meaningful safety net: 50/sec)
 -------------------------------------------------
-Economy.PassiveIncomeRate   = 25   -- cash per interval
-Economy.PassiveIncomeInterval = 60 -- seconds
+Economy.PassiveIncomeRate   = 50   -- cash per second (flat)
+Economy.PassiveIncomeInterval = 1  -- every second
 
 -------------------------------------------------
 -- LUCK (server-wide boost from Robux purchase)
@@ -213,14 +237,12 @@ Economy.BoostedLuckMultiplier = 2  -- 2x with boost
 
 -------------------------------------------------
 -- PERSONAL LUCK UPGRADE (at Upgrade stand; 1 luck = +1% drop luck)
--- First = 1,000, second = 4,000, then 4x each time (16k, 64k, ...)
+-- First = 1,000, then 3x each time (gentler than 4x)
 -------------------------------------------------
-Economy.LuckUpgradeCostFirst  = 1000   -- first upgrade
-Economy.LuckUpgradeCostSecond = 4000   -- second upgrade
-Economy.LuckUpgradeCostMultiplier = 4  -- each subsequent cost is 4x previous
+Economy.LuckUpgradeCostFirst  = 1000
+Economy.LuckUpgradeCostMultiplier = 3
 
---- Cost to buy the next +5 luck (based on current luck stat; each upgrade gives +5 luck)
---- First = 1,000, second = 4,000, then 4x each (16k, 64k, ...)
+--- Cost to buy the next +5 luck
 function Economy.GetLuckUpgradeCost(currentLuck: number): number
 	local upgradesBought = math.floor((currentLuck or 0) / 5)
 	return Economy.LuckUpgradeCostFirst * (Economy.LuckUpgradeCostMultiplier ^ upgradesBought)
@@ -228,28 +250,26 @@ end
 
 -------------------------------------------------
 -- CASH UPGRADE (coin multiplier at Upgrade stand; +2% cash per upgrade)
--- First = 1,000, second = 4,000, then 4x each time (16k, 64k, ...)
+-- First = 1,000, then 3x each time
 -------------------------------------------------
 Economy.CashUpgradeCostFirst  = 1000
-Economy.CashUpgradeCostSecond = 4000
-Economy.CashUpgradeCostMultiplier = 4
+Economy.CashUpgradeCostMultiplier = 3
 
---- Cost for the next cash multiplier upgrade (currentLevel = number of upgrades already bought)
+--- Cost for the next cash multiplier upgrade
 function Economy.GetCashUpgradeCost(currentLevel: number): number
-	if (currentLevel or 0) == 0 then return Economy.CashUpgradeCostFirst end
-	if currentLevel == 1 then return Economy.CashUpgradeCostSecond end
-	return Economy.CashUpgradeCostSecond * (Economy.CashUpgradeCostMultiplier ^ (currentLevel - 1))
+	local level = currentLevel or 0
+	return Economy.CashUpgradeCostFirst * (Economy.CashUpgradeCostMultiplier ^ level)
 end
 
 -------------------------------------------------
 -- ROBUX PRODUCT IDS (placeholder — set real ids in Studio)
 -------------------------------------------------
 Economy.Products = {
-	ServerLuck   = 0, -- Developer Product ID
+	ServerLuck   = 0,
 	Buy5Spins    = 0,
 	Buy10Spins   = 0,
 	DoubleCash   = 0,
-	PremiumSlot  = 0, -- GamePass or Developer Product
+	PremiumSlot  = 0,
 }
 
 -------------------------------------------------
@@ -262,24 +282,23 @@ Economy.DoubleCashMultiplier = 2
 -- Base per rarity; elemental variants multiply by IndexEffectMultipliers.
 -------------------------------------------------
 Economy.IndexGemRewards = {
-	Common    = 45,
-	Rare      = 80,
-	Epic      = 120,
-	Legendary = 250,
-	Mythic    = 500,
+	Common    = 50,
+	Rare      = 100,
+	Epic      = 200,
+	Legendary = 400,
+	Mythic    = 800,
 }
 
--- Effect multiplier for Index claims: Acid x4, Snow x8, Lava x12, ... Void x36 (increments of 4)
 Economy.IndexEffectMultipliers = {
-	Acid      = 4,
-	Snow      = 8,
-	Lava      = 12,
-	Lightning = 16,
-	Shadow    = 20,
-	Glitchy   = 24,
-	Lunar     = 28,
-	Solar     = 32,
-	Void      = 36,
+	Acid      = 3,
+	Snow      = 5,
+	Lava      = 8,
+	Lightning = 12,
+	Shadow    = 16,
+	Glitchy   = 20,
+	Lunar     = 25,
+	Solar     = 30,
+	Void      = 40,
 }
 
 --- Get gem reward for claiming an Index entry (rarity + optional effect).
@@ -291,5 +310,17 @@ function Economy.GetIndexGemReward(rarity: string, effect: string?): number
 	local mult = Economy.IndexEffectMultipliers[effect] or 1
 	return math.floor(base * mult)
 end
+
+-------------------------------------------------
+-- PITY SYSTEM
+-- Guaranteed rarity after N spins without hitting that tier.
+-- Counter resets when a streamer of that rarity (or higher) is obtained.
+-------------------------------------------------
+Economy.PityThresholds = {
+	Rare      = 200,
+	Epic      = 2000,
+	Legendary = 15000,
+	Mythic    = 75000,
+}
 
 return Economy

@@ -25,24 +25,22 @@ local EconomyService = {}
 
 local PlayerData
 local PotionService
+local QuestService
 
 -------------------------------------------------
 -- SELL HELPERS
 -------------------------------------------------
 
--- Calculate sell price for an inventory item (cashPerSecond * effect multiplier)
+-- Calculate sell price for an inventory item (rarity-based + effect bonus)
 local function getSellPrice(item)
 	local streamerId = type(item) == "table" and item.id or item
 	local effect = type(item) == "table" and item.effect or nil
 	local info = Streamers.ById[streamerId]
 	if not info then return 0 end
 
-	local price = info.cashPerSecond or 0
-	if effect then
-		local effectInfo = Effects.ByName[effect]
-		if effectInfo and effectInfo.cashMultiplier then
-			price = price * effectInfo.cashMultiplier
-		end
+	local price = Economy.SellPrices[info.rarity] or Economy.SellPrices.Common
+	if effect and effect ~= "" then
+		price = price * (Economy.EffectSellMultiplier or 1.5)
 	end
 	return math.floor(price)
 end
@@ -89,6 +87,10 @@ local function handleSell(player, streamerId: string)
 		streamerId = streamerId,
 		cashEarned = price,
 	})
+	if QuestService then
+		QuestService.Increment(player, "sells", 1)
+		QuestService.Increment(player, "cashEarned", price)
+	end
 end
 
 -------------------------------------------------
@@ -125,6 +127,10 @@ local function handleSellByIndex(player, inventoryIndex: number)
 		streamerId = type(item) == "table" and item.id or item,
 		cashEarned = price,
 	})
+	if QuestService then
+		QuestService.Increment(player, "sells", 1)
+		QuestService.Increment(player, "cashEarned", price)
+	end
 end
 
 -------------------------------------------------
@@ -160,6 +166,10 @@ local function handleSellAll(player)
 		soldCount = count,
 		sellAll = true,
 	})
+	if QuestService then
+		QuestService.Increment(player, "sells", count)
+		QuestService.Increment(player, "cashEarned", math.floor(totalCash))
+	end
 end
 
 -------------------------------------------------
@@ -233,9 +243,10 @@ end
 -- PUBLIC
 -------------------------------------------------
 
-function EconomyService.Init(playerDataModule, potionServiceModule)
+function EconomyService.Init(playerDataModule, potionServiceModule, questServiceModule)
 	PlayerData = playerDataModule
 	PotionService = potionServiceModule
+	QuestService = questServiceModule
 
 	-- SECURITY FIX: Wrap inventory-mutating handlers in per-player locks
 	SellRequest.OnServerEvent:Connect(function(player, streamerId)

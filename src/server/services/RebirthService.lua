@@ -18,6 +18,7 @@ local RebirthService = {}
 local PlayerData
 local BaseService
 local PotionService
+local QuestService
 
 -------------------------------------------------
 -- REBIRTH LOGIC
@@ -73,6 +74,10 @@ local function handleRebirth(player)
 			BaseService.UpdateBasePads(player)
 		end
 
+		if QuestService then
+			QuestService.Increment(player, "rebirths", 1)
+		end
+
 		RebirthResult:FireClient(player, {
 			success = true,
 			newRebirthCount = newCount,
@@ -85,10 +90,11 @@ end
 -- PUBLIC
 -------------------------------------------------
 
-function RebirthService.Init(playerDataModule, baseServiceModule, potionServiceModule)
+function RebirthService.Init(playerDataModule, baseServiceModule, potionServiceModule, questServiceModule)
 	PlayerData = playerDataModule
 	BaseService = baseServiceModule
 	PotionService = potionServiceModule
+	QuestService = questServiceModule
 
 	RebirthRequest.OnServerEvent:Connect(function(player)
 		handleRebirth(player)

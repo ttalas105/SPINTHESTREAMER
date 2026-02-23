@@ -11,11 +11,11 @@ local Sacrifice = {}
 -- Sacrifice X streamers of rarity → get Y gems
 -------------------------------------------------
 Sacrifice.GemTrades = {
-	{ rarity = "Common",    count = 100, gems = 300 },
-	{ rarity = "Rare",     count = 85,  gems = 600 },
-	{ rarity = "Epic",     count = 50,  gems = 2000 },
-	{ rarity = "Legendary", count = 25, gems = 3500 },
-	{ rarity = "Mythic",   count = 10,  gems = 5000 },
+	{ rarity = "Common",    count = 50,  gems = 400 },
+	{ rarity = "Rare",     count = 30,  gems = 800 },
+	{ rarity = "Epic",     count = 15,  gems = 2500 },
+	{ rarity = "Legendary", count = 8,  gems = 4000 },
+	{ rarity = "Mythic",   count = 3,   gems = 6000 },
 }
 
 -------------------------------------------------
@@ -250,10 +250,10 @@ Sacrifice.DontDoIt = {
 	name    = "Streamer Sacrifice",
 	desc    = "Pick any streamer to sacrifice for a chance to upgrade it to the next rarity!",
 	upgradeChances = {
-		Common    = 50,   -- common → rare
-		Rare      = 30,   -- rare → epic
-		Epic      = 10,   -- epic → legendary
-		Legendary = 4,    -- legendary → mythic
+		Common    = 50,   -- common -> rare
+		Rare      = 35,   -- rare -> epic
+		Epic      = 15,   -- epic -> legendary
+		Legendary = 8,    -- legendary -> mythic
 	},
 	-- infinite charges
 }
@@ -263,10 +263,10 @@ Sacrifice.DontDoIt = {
 -- X of same effect + same rarity → 1 random streamer of that rarity with that effect
 -------------------------------------------------
 Sacrifice.ElementalRates = {
-	Common    = 20,
-	Rare      = 15,
-	Epic      = 10,
-	Legendary = 8,
+	Common    = 10,
+	Rare      = 8,
+	Epic      = 5,
+	Legendary = 3,
 	-- Mythic = no conversion
 }
 

@@ -12,7 +12,8 @@ local Streamers = require(ReplicatedStorage.Shared.Config.Streamers)
 
 local IndexService = {}
 
-local PlayerData -- set in Init
+local PlayerData
+local QuestService
 
 local RemoteEvents = ReplicatedStorage:WaitForChild("RemoteEvents")
 local ClaimIndexGems = RemoteEvents:WaitForChild("ClaimIndexGems")
@@ -70,14 +71,19 @@ local function handleClaimGems(player, streamerId, effect)
 		gemsEarned = gemReward,
 		totalGems = PlayerData.GetGems(player),
 	})
+	if QuestService then
+		QuestService.Increment(player, "indexClaimed", 1)
+		QuestService.Increment(player, "gemsEarned", gemReward)
+	end
 end
 
 -------------------------------------------------
 -- INIT
 -------------------------------------------------
 
-function IndexService.Init(playerDataModule)
+function IndexService.Init(playerDataModule, questServiceModule)
 	PlayerData = playerDataModule
+	QuestService = questServiceModule
 
 	ClaimIndexGems.OnServerEvent:Connect(function(player, streamerId, effect)
 		handleClaimGems(player, streamerId, effect)

@@ -13,6 +13,7 @@ local Streamers  = require(ReplicatedStorage.Shared.Config.Streamers)
 local GemShopService = {}
 
 local PlayerData -- set in Init
+local QuestService
 
 local RemoteEvents = ReplicatedStorage:WaitForChild("RemoteEvents")
 local BuyGemCase   = RemoteEvents:WaitForChild("BuyGemCase")
@@ -104,6 +105,16 @@ local function handleBuyGemCase(player, caseId)
 		return
 	end
 
+	-- Check rebirth requirement for effect cases
+	local rebirthReq = caseData.rebirthRequired or 0
+	if rebirthReq > 0 then
+		local rebirthCount = PlayerData.GetRebirthCount(player)
+		if rebirthCount < rebirthReq then
+			GemCaseResult:FireClient(player, { success = false, reason = "Requires Rebirth " .. rebirthReq .. "! (You are Rebirth " .. rebirthCount .. ")" })
+			return
+		end
+	end
+
 	if (data.gems or 0) < caseData.cost then
 		GemCaseResult:FireClient(player, { success = false, reason = "Not enough gems! Need " .. caseData.cost .. " gems." })
 		return
@@ -156,14 +167,18 @@ local function handleBuyGemCase(player, caseId)
 		effect      = wonEffect,
 		caseId      = caseId,
 	})
+	if QuestService then
+		QuestService.Increment(player, "casesOpened", 1)
+	end
 end
 
 -------------------------------------------------
 -- INIT
 -------------------------------------------------
 
-function GemShopService.Init(playerDataModule)
+function GemShopService.Init(playerDataModule, questServiceModule)
 	PlayerData = playerDataModule
+	QuestService = questServiceModule
 
 	-- SECURITY FIX: Wrap in per-player lock to prevent race conditions
 	BuyGemCase.OnServerEvent:Connect(function(player, caseId)

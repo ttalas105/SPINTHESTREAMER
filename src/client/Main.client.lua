@@ -34,6 +34,8 @@ local StorageController      = require(controllers.StorageController)
 local MusicController        = require(controllers.MusicController)
 local SettingsController     = require(controllers.SettingsController)
 local TutorialController     = require(controllers.TutorialController)
+local DailyRewardController  = require(controllers.DailyRewardController)
+local QuestController        = require(controllers.QuestController)
 local UIHelper               = require(controllers.UIHelper)
 
 local RemoteEvents = ReplicatedStorage:WaitForChild("RemoteEvents")
@@ -62,6 +64,8 @@ StorageController.Init()
 MusicController.Init()
 SettingsController.Init()
 TutorialController.Init()
+DailyRewardController.Init()
+QuestController.Init()
 SlotPadController.Init(HoldController, InventoryController)
 
 -------------------------------------------------
@@ -171,6 +175,14 @@ RightSideNavController.OnClick("Settings", function()
 		SettingsController.Close()
 	else
 		SettingsController.Open()
+	end
+end)
+
+RightSideNavController.OnClick("Quests", function()
+	if QuestController.IsOpen() then
+		QuestController.Close()
+	else
+		QuestController.Open()
 	end
 end)
 

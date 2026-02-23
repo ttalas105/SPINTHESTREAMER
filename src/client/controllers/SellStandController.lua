@@ -11,6 +11,7 @@ local RunService = game:GetService("RunService")
 
 local DesignConfig = require(ReplicatedStorage.Shared.Config.DesignConfig)
 local Streamers = require(ReplicatedStorage.Shared.Config.Streamers)
+local Economy = require(ReplicatedStorage.Shared.Config.Economy)
 local Rarities = require(ReplicatedStorage.Shared.Config.Rarities)
 local Effects = require(ReplicatedStorage.Shared.Config.Effects)
 local UIHelper = require(script.Parent.UIHelper)
@@ -64,12 +65,9 @@ local function calcSellPrice(item)
 	local effect = getItemEffect(item)
 	local info = Streamers.ById[streamerId]
 	if not info then return 0 end
-	local price = info.cashPerSecond or 0
-	if effect then
-		local effectInfo = Effects.ByName[effect]
-		if effectInfo and effectInfo.cashMultiplier then
-			price = price * effectInfo.cashMultiplier
-		end
+	local price = Economy.SellPrices[info.rarity] or Economy.SellPrices.Common
+	if effect and effect ~= "" then
+		price = price * (Economy.EffectSellMultiplier or 1.5)
 	end
 	return math.floor(price)
 end
@@ -278,7 +276,7 @@ local function buildItemCard(item, originalIndex, parent)
 	cashLine.Size = UDim2.new(0, 180, 0, 14)
 	cashLine.Position = UDim2.new(0, textX, 0, nameY + 36)
 	cashLine.BackgroundTransparency = 1
-	cashLine.Text = "$" .. fmtNum(sellPrice) .. "/sec"
+	cashLine.Text = "$" .. fmtNum(sellPrice)
 	cashLine.TextColor3 = Color3.fromRGB(100, 255, 120)
 	cashLine.Font = FONT_SUB
 	cashLine.TextSize = 11

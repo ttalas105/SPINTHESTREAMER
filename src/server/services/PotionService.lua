@@ -15,6 +15,7 @@ local Potions = require(ReplicatedStorage.Shared.Config.Potions)
 local PotionService = {}
 
 local PlayerData -- set in Init
+local QuestService -- set via SetQuestService after Init
 
 local RemoteEvents = ReplicatedStorage:WaitForChild("RemoteEvents")
 local BuyPotionRequest = RemoteEvents:WaitForChild("BuyPotionRequest")
@@ -72,6 +73,19 @@ local function handleBuyPotion(player, potionType, tier)
 	if not potionInfo then
 		BuyPotionResult:FireClient(player, { success = false, reason = "Unknown potion." })
 		return
+	end
+
+	-- Check rebirth requirement
+	local rebirthRequired = potionInfo.rebirthRequired or 0
+	if rebirthRequired > 0 then
+		local rebirthCount = PlayerData.GetRebirthCount(player)
+		if rebirthCount < rebirthRequired then
+			BuyPotionResult:FireClient(player, {
+				success = false,
+				reason = "Requires Rebirth " .. rebirthRequired .. "! (You are Rebirth " .. rebirthCount .. ")",
+			})
+			return
+		end
 	end
 
 	-- Check cash
@@ -132,6 +146,9 @@ local function handleBuyPotion(player, potionType, tier)
 		tier = potionInfo.tier,
 		name = potionInfo.name,
 	})
+	if QuestService then
+		QuestService.Increment(player, "potionsBought", 1)
+	end
 end
 
 -------------------------------------------------
@@ -204,11 +221,19 @@ local function grantPrismaticPotions(player, amount)
 		name = amount .. "x Prismatic Potion" .. (amount > 1 and "s" or ""),
 		amount = amount,
 	})
+	if QuestService then
+		QuestService.Increment(player, "potionsBought", amount)
+	end
 end
 
 -------------------------------------------------
 -- PUBLIC API (used by SpinService / EconomyService)
 -------------------------------------------------
+
+--- Set QuestService reference (called from Main.server.lua after all services are initialized)
+function PotionService.SetQuestService(qs)
+	QuestService = qs
+end
 
 --- Get the active luck multiplier for a player (1 if no potion)
 function PotionService.GetLuckMultiplier(player): number

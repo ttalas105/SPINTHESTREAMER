@@ -12,9 +12,12 @@ local Streamers = require(ReplicatedStorage.Shared.Config.Streamers)
 local Economy = require(ReplicatedStorage.Shared.Config.Economy)
 local Effects = require(ReplicatedStorage.Shared.Config.Effects)
 
+local PITY_RARITY_ORDER = { "Rare", "Epic", "Legendary", "Mythic" }
+
 local SpinService = {}
 
 SpinService.ServerLuckMultiplier = Economy.DefaultLuckMultiplier
+local QuestService
 
 local RemoteEvents = ReplicatedStorage:WaitForChild("RemoteEvents")
 local SpinRequest = RemoteEvents:WaitForChild("SpinRequest")
@@ -151,7 +154,76 @@ local function rollEffect()
 			return effect.name
 		end
 	end
-	return nil -- no effect (normal pull)
+	return nil
+end
+
+-------------------------------------------------
+-- PITY SYSTEM
+-- Each spin increments all pity counters.
+-- If a counter reaches its threshold, that rarity is guaranteed.
+-- When a rarity is obtained (naturally or via pity), reset that
+-- counter and all lower-rarity counters.
+-------------------------------------------------
+
+local RARITY_RANK = { Common = 0, Rare = 1, Epic = 2, Legendary = 3, Mythic = 4 }
+
+local function checkPityGuarantee(data)
+	local pity = data.pityCounters
+	if not pity then return nil end
+	local bestRarity = nil
+	local bestRank = -1
+	for _, rarity in ipairs(PITY_RARITY_ORDER) do
+		local threshold = Economy.PityThresholds[rarity]
+		if threshold and (pity[rarity] or 0) >= threshold then
+			local rank = RARITY_RANK[rarity] or 0
+			if rank > bestRank then
+				bestRarity = rarity
+				bestRank = rank
+			end
+		end
+	end
+	return bestRarity
+end
+
+local function incrementPityCounters(data)
+	if not data.pityCounters then
+		data.pityCounters = { Rare = 0, Epic = 0, Legendary = 0, Mythic = 0 }
+	end
+	for _, rarity in ipairs(PITY_RARITY_ORDER) do
+		data.pityCounters[rarity] = (data.pityCounters[rarity] or 0) + 1
+	end
+end
+
+local function resetPityForRarity(data, obtainedRarity)
+	if not data.pityCounters then return end
+	local rank = RARITY_RANK[obtainedRarity] or 0
+	for _, rarity in ipairs(PITY_RARITY_ORDER) do
+		if (RARITY_RANK[rarity] or 0) <= rank then
+			data.pityCounters[rarity] = 0
+		end
+	end
+end
+
+local function pickStreamerFromRarity(rarity)
+	local candidates = Streamers.ByRarity[rarity]
+	if not candidates or #candidates == 0 then return nil end
+	if #candidates == 1 then return candidates[1] end
+	local weights = {}
+	local total = 0
+	for i, s in ipairs(candidates) do
+		local odds = type(s.odds) == "number" and s.odds or 100
+		if odds < 1 then odds = 1 end
+		local w = 1 / odds
+		weights[i] = w
+		total = total + w
+	end
+	local roll = rng:NextNumber() * total
+	local cum = 0
+	for i, w in ipairs(weights) do
+		cum = cum + w
+		if roll <= cum then return candidates[i] end
+	end
+	return candidates[1]
 end
 
 -------------------------------------------------
@@ -184,24 +256,36 @@ local function handleSpin(player)
 	-- Rebirth + personal luck (1 luck = +1%) + potion multiplier
 	local rebirthLuck = 1 + (data.rebirthCount * 0.02)
 	local playerLuck = data.luck or 0
-	local playerLuckPercent = (playerLuck / 100)  -- 1 luck = 1%
+	local playerLuckPercent = (playerLuck / 100)
 	local potionLuckMult = PotionService and PotionService.GetLuckMultiplier(player) or 1
 	local totalLuck = SpinService.ServerLuckMultiplier * rebirthLuck * (1 + playerLuckPercent) * potionLuckMult
 
-	-- Roll using two-phase rarity-first system
-	local streamer = pickStreamerByOdds(totalLuck)
+	-- Increment pity counters
+	incrementPityCounters(data)
+
+	-- Check for pity guarantee
+	local pityRarity = checkPityGuarantee(data)
+	local streamer
+	local isPityHit = false
+
+	if pityRarity then
+		streamer = pickStreamerFromRarity(pityRarity)
+		isPityHit = true
+	else
+		streamer = pickStreamerByOdds(totalLuck)
+	end
+
 	if not streamer then
 		SpinResult:FireClient(player, { success = false, reason = "Config error." })
 		return
 	end
 
-	-- Roll for an effect (e.g. Acid)
-	local effect = rollEffect()
+	-- Reset pity for the obtained rarity (and all lower)
+	resetPityForRarity(data, streamer.rarity)
 
-	-- Add to inventory with effect
+	local effect = rollEffect()
 	PlayerData.AddToInventory(player, streamer.id, effect)
 
-	-- Build display name with effect prefix
 	local displayName = streamer.displayName
 	if effect then
 		local effectInfo = Effects.ByName[effect]
@@ -210,7 +294,6 @@ local function handleSpin(player)
 		end
 	end
 
-	-- Compute effective odds (base odds × effect rarity multiplier)
 	local effectiveOdds = streamer.odds
 	if effect then
 		local ei = Effects.ByName[effect]
@@ -219,7 +302,6 @@ local function handleSpin(player)
 		end
 	end
 
-	-- Send result to client (include odds and effect for display)
 	SpinResult:FireClient(player, {
 		success = true,
 		streamerId = streamer.id,
@@ -227,9 +309,26 @@ local function handleSpin(player)
 		rarity = streamer.rarity,
 		odds = effectiveOdds,
 		effect = effect,
+		pity = isPityHit or nil,
 	})
 
-	-- Mythic server-wide alert
+	-- Quest tracking
+	if QuestService then
+		QuestService.Increment(player, "spins", 1)
+		if streamer.rarity == "Epic" or streamer.rarity == "Legendary" or streamer.rarity == "Mythic" then
+			QuestService.Increment(player, "epicPulls", 1)
+		end
+		if streamer.rarity == "Legendary" or streamer.rarity == "Mythic" then
+			QuestService.Increment(player, "legendaryPulls", 1)
+		end
+		if streamer.rarity == "Mythic" then
+			QuestService.Increment(player, "mythicPulls", 1)
+		end
+		if effect then
+			QuestService.Increment(player, "effectPulls", 1)
+		end
+	end
+
 	if streamer.rarity == "Mythic" then
 		MythicAlert:FireAllClients({
 			playerName = player.Name,
@@ -289,18 +388,34 @@ local function handleCrateSpin(player, crateId: number)
 	-- Rebirth + personal luck (1 luck = +1%) + crate luck (additive) + potion multiplier
 	local rebirthLuck = 1 + (data.rebirthCount * 0.02)
 	local playerLuck = data.luck or 0
-	local playerLuckPercent = (playerLuck / 100)  -- 1 luck = 1%
+	local playerLuckPercent = (playerLuck / 100)
 	local potionLuckMult = PotionService and PotionService.GetLuckMultiplier(player) or 1
 	local totalLuck = SpinService.ServerLuckMultiplier * rebirthLuck * (1 + playerLuckPercent + luckBonus) * potionLuckMult
 
-	local streamer = pickStreamerByOdds(totalLuck)
+	-- Increment pity counters
+	incrementPityCounters(data)
+
+	-- Check for pity guarantee
+	local pityRarity = checkPityGuarantee(data)
+	local streamer
+	local isPityHit = false
+
+	if pityRarity then
+		streamer = pickStreamerFromRarity(pityRarity)
+		isPityHit = true
+	else
+		streamer = pickStreamerByOdds(totalLuck)
+	end
+
 	if not streamer then
-		PlayerData.AddCash(player, cost) -- Refund
+		PlayerData.AddCash(player, cost)
 		SpinResult:FireClient(player, { success = false, reason = "Config error." })
 		return
 	end
 
-	-- Roll for effect
+	-- Reset pity for the obtained rarity (and all lower)
+	resetPityForRarity(data, streamer.rarity)
+
 	local effect = rollEffect()
 	PlayerData.AddToInventory(player, streamer.id, effect)
 
@@ -310,7 +425,6 @@ local function handleCrateSpin(player, crateId: number)
 		if effectInfo then displayName = effectInfo.prefix .. " " .. displayName end
 	end
 
-	-- Compute effective odds (base odds × effect rarity multiplier)
 	local effectiveOdds2 = streamer.odds
 	if effect then
 		local ei2 = Effects.ByName[effect]
@@ -326,7 +440,25 @@ local function handleCrateSpin(player, crateId: number)
 		rarity = streamer.rarity,
 		odds = effectiveOdds2,
 		effect = effect,
+		pity = isPityHit or nil,
 	})
+
+	-- Quest tracking
+	if QuestService then
+		QuestService.Increment(player, "spins", 1)
+		if streamer.rarity == "Epic" or streamer.rarity == "Legendary" or streamer.rarity == "Mythic" then
+			QuestService.Increment(player, "epicPulls", 1)
+		end
+		if streamer.rarity == "Legendary" or streamer.rarity == "Mythic" then
+			QuestService.Increment(player, "legendaryPulls", 1)
+		end
+		if streamer.rarity == "Mythic" then
+			QuestService.Increment(player, "mythicPulls", 1)
+		end
+		if effect then
+			QuestService.Increment(player, "effectPulls", 1)
+		end
+	end
 
 	if streamer.rarity == "Mythic" then
 		MythicAlert:FireAllClients({
@@ -342,10 +474,11 @@ end
 -- PUBLIC
 -------------------------------------------------
 
-function SpinService.Init(playerDataModule, baseServiceModule, potionServiceModule)
+function SpinService.Init(playerDataModule, baseServiceModule, potionServiceModule, questServiceModule)
 	PlayerData = playerDataModule
 	BaseService = baseServiceModule
 	PotionService = potionServiceModule
+	QuestService = questServiceModule
 
 	SpinRequest.OnServerEvent:Connect(function(player)
 		handleSpin(player)

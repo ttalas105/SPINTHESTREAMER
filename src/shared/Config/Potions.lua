@@ -15,14 +15,14 @@ Potions.MAX_DURATION = 3 * 60 * 60 -- 3 hours
 -- Luck3 and Prismatic imageIds = pending (no decal yet).
 Potions.Types = {
 	Luck = {
-		{ tier = 1, name = "Luck Potion 1",  multiplier = 2,   cost = 1, rarity = "Common",   color = Color3.fromRGB(80, 255, 100),  imageId = "rbxassetid://117397968445761", desc = "+2x luck multiplier for 5m" },
-		{ tier = 2, name = "Luck Potion 2",  multiplier = 3,   cost = 1, rarity = "Rare",     color = Color3.fromRGB(50, 220, 80),   imageId = "rbxassetid://79599948950862",  desc = "+3x luck multiplier for 5m" },
-		{ tier = 3, name = "Luck Potion 3",  multiplier = 5,   cost = 1, rarity = "Epic",     color = Color3.fromRGB(30, 180, 60),   imageId = "", desc = "+5x luck multiplier for 5m" },
+		{ tier = 1, name = "Luck Potion 1",  multiplier = 2,   cost = 10000,    rarity = "Common",   color = Color3.fromRGB(80, 255, 100),  imageId = "rbxassetid://117397968445761", desc = "+2x luck multiplier for 5m" },
+		{ tier = 2, name = "Luck Potion 2",  multiplier = 3,   cost = 100000,   rarity = "Rare",     color = Color3.fromRGB(50, 220, 80),   imageId = "rbxassetid://79599948950862",  desc = "+3x luck multiplier for 5m", rebirthRequired = 3 },
+		{ tier = 3, name = "Luck Potion 3",  multiplier = 5,   cost = 1000000,  rarity = "Epic",     color = Color3.fromRGB(30, 180, 60),   imageId = "", desc = "+5x luck multiplier for 5m", rebirthRequired = 8 },
 	},
 	Cash = {
-		{ tier = 1, name = "Money Potion 1", multiplier = 2,   cost = 1, rarity = "Common",   color = Color3.fromRGB(255, 220, 60),  imageId = "rbxassetid://77682596035149",  desc = "+2x money multiplier for 5m" },
-		{ tier = 2, name = "Money Potion 2", multiplier = 3,   cost = 1, rarity = "Rare",     color = Color3.fromRGB(255, 190, 40),  imageId = "rbxassetid://130221704783075", desc = "+3x money multiplier for 5m" },
-		{ tier = 3, name = "Money Potion 3", multiplier = 5,   cost = 1, rarity = "Epic",     color = Color3.fromRGB(255, 160, 20),  imageId = "rbxassetid://132127116771235", desc = "+5x money multiplier for 5m" },
+		{ tier = 1, name = "Money Potion 1", multiplier = 2,   cost = 10000,    rarity = "Common",   color = Color3.fromRGB(255, 220, 60),  imageId = "rbxassetid://77682596035149",  desc = "+2x money multiplier for 5m" },
+		{ tier = 2, name = "Money Potion 2", multiplier = 3,   cost = 100000,   rarity = "Rare",     color = Color3.fromRGB(255, 190, 40),  imageId = "rbxassetid://130221704783075", desc = "+3x money multiplier for 5m", rebirthRequired = 5 },
+		{ tier = 3, name = "Money Potion 3", multiplier = 5,   cost = 1000000,  rarity = "Epic",     color = Color3.fromRGB(255, 160, 20),  imageId = "rbxassetid://132127116771235", desc = "+5x money multiplier for 5m", rebirthRequired = 10 },
 	},
 }
 

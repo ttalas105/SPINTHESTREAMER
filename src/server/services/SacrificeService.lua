@@ -14,6 +14,7 @@ local SacrificeService = {}
 
 local PlayerData
 local PotionService
+local QuestService
 
 local RemoteEvents = ReplicatedStorage:WaitForChild("RemoteEvents")
 local SacrificeRequest = RemoteEvents:WaitForChild("SacrificeRequest")
@@ -237,6 +238,9 @@ local function handleGemTrade(player, tradeIndex)
 	removeByVirtualIndices(player, indices)
 	PlayerData.AddGems(player, trade.gems)
 	SacrificeResult:FireClient(player, { success = true, sacrificeType = "GemTrade", gems = trade.gems })
+	if QuestService then
+		QuestService.Increment(player, "sacrificesDone", 1)
+	end
 end
 
 -------------------------------------------------
@@ -280,6 +284,9 @@ local function handleOneTime(player, oneTimeId)
 	PlayerData.SetSacrificeOneTimeCompleted(player, oneTimeId)
 	PlayerData.AddGems(player, cfg.gems)
 	SacrificeResult:FireClient(player, { success = true, sacrificeType = "OneTime", oneTimeId = oneTimeId, gems = cfg.gems })
+	if QuestService then
+		QuestService.Increment(player, "sacrificesDone", 1)
+	end
 end
 
 -------------------------------------------------
@@ -314,9 +321,15 @@ local function handleFiftyFifty(player)
 	if math.random() < 0.5 then
 		PlayerData.SpendCash(player, cash - half)
 		SacrificeResult:FireClient(player, { success = true, sacrificeType = "FiftyFifty", outcome = "half", newCash = half })
+		if QuestService then
+			QuestService.Increment(player, "sacrificesDone", 1)
+		end
 	else
 		PlayerData.AddCash(player, cash)
 		SacrificeResult:FireClient(player, { success = true, sacrificeType = "FiftyFifty", outcome = "double", newCash = double })
+		if QuestService then
+			QuestService.Increment(player, "sacrificesDone", 1)
+		end
 	end
 end
 
@@ -347,6 +360,9 @@ local function handleFeelingLucky(player)
 	local mult = math.random() < 0.5 and 2 or 0
 	PotionService.SetSacrificeLuck(player, mult, cfg.durationSeconds)
 	SacrificeResult:FireClient(player, { success = true, sacrificeType = "FeelingLucky", outcome = mult == 2 and "buff" or "debuff", duration = cfg.durationSeconds })
+	if QuestService then
+		QuestService.Increment(player, "sacrificesDone", 1)
+	end
 end
 
 -------------------------------------------------
@@ -383,16 +399,25 @@ local function handleDontDoIt(player, chosenVI)
 	local chance = cfg.upgradeChances[baseRarity]
 	if not chance then
 		SacrificeResult:FireClient(player, { success = true, sacrificeType = "DontDoIt", upgraded = false, reason = "Already Mythic!" })
+		if QuestService then
+			QuestService.Increment(player, "sacrificesDone", 1)
+		end
 		return
 	end
 	local roll = math.random(1, 100)
 	if roll > chance then
 		SacrificeResult:FireClient(player, { success = true, sacrificeType = "DontDoIt", upgraded = false })
+		if QuestService then
+			QuestService.Increment(player, "sacrificesDone", 1)
+		end
 		return
 	end
 	local nextR = nextRarity(baseRarity)
 	if not nextR then
 		SacrificeResult:FireClient(player, { success = true, sacrificeType = "DontDoIt", upgraded = false })
+		if QuestService then
+			QuestService.Increment(player, "sacrificesDone", 1)
+		end
 		return
 	end
 	-- Preserve effect (Acid, Void, etc.) from the sacrificed streamer
@@ -401,8 +426,14 @@ local function handleDontDoIt(player, chosenVI)
 	if newId then
 		PlayerData.AddToInventory(player, newId, baseEffect)
 		SacrificeResult:FireClient(player, { success = true, sacrificeType = "DontDoIt", upgraded = true, streamerId = newId, rarity = nextR, effect = baseEffect })
+		if QuestService then
+			QuestService.Increment(player, "sacrificesDone", 1)
+		end
 	else
 		SacrificeResult:FireClient(player, { success = true, sacrificeType = "DontDoIt", upgraded = false })
+		if QuestService then
+			QuestService.Increment(player, "sacrificesDone", 1)
+		end
 	end
 end
 
@@ -437,11 +468,17 @@ local function handleGemRoulette(player, wagerAmount)
 		-- DOUBLE: add wagerAmount more gems (player keeps original + gains same amount)
 		PlayerData.AddGems(player, wagerAmount)
 		SacrificeResult:FireClient(player, { success = true, sacrificeType = "GemRoulette", outcome = "double", wager = wagerAmount, newGems = (data.gems or 0) + wagerAmount })
+		if QuestService then
+			QuestService.Increment(player, "sacrificesDone", 1)
+		end
 	else
 		-- GONE: remove the wagered gems
 		data.gems = math.max(0, (data.gems or 0) - wagerAmount)
 		PlayerData.Replicate(player)
 		SacrificeResult:FireClient(player, { success = true, sacrificeType = "GemRoulette", outcome = "gone", wager = wagerAmount, newGems = data.gems })
+		if QuestService then
+			QuestService.Increment(player, "sacrificesDone", 1)
+		end
 	end
 end
 
@@ -471,6 +508,9 @@ local function handleElemental(player, effect, rarity)
 	if newId then
 		PlayerData.AddToInventory(player, newId, effect)
 		SacrificeResult:FireClient(player, { success = true, sacrificeType = "Elemental", streamerId = newId, effect = effect, rarity = rarity })
+		if QuestService then
+			QuestService.Increment(player, "sacrificesDone", 1)
+		end
 	else
 		SacrificeResult:FireClient(player, { success = false, reason = "No streamer for that rarity." })
 	end
@@ -507,9 +547,10 @@ end
 -------------------------------------------------
 -- INIT
 -------------------------------------------------
-function SacrificeService.Init(playerDataModule, potionServiceModule)
+function SacrificeService.Init(playerDataModule, potionServiceModule, questServiceModule)
 	PlayerData = playerDataModule
 	PotionService = potionServiceModule
+	QuestService = questServiceModule
 	-- SECURITY FIX: Wrap sacrifice handler in per-player lock to prevent race conditions
 	SacrificeRequest.OnServerEvent:Connect(function(player, ...)
 		local args = {...}

@@ -342,17 +342,36 @@ do
 	end)
 end
 
+-- Ensure new remote events exist before services init
+do
+	local remotes = ReplicatedStorage:WaitForChild("RemoteEvents")
+	local newRemotes = { "DailyRewardNotify", "ClaimQuestReward", "QuestUpdate" }
+	for _, name in ipairs(newRemotes) do
+		if not remotes:FindFirstChild(name) then
+			local re = Instance.new("RemoteEvent")
+			re.Name = name
+			re.Parent = remotes
+		end
+	end
+end
+
+local DailyRewardService = require(services.DailyRewardService)
+local QuestService = require(services.QuestService)
+
 -- Initialize services (order matters: PlayerData first, then BaseService)
 PlayerData.Init()
 PotionService.Init(PlayerData)
 BaseService.Init(PlayerData, PotionService)
-SpinService.Init(PlayerData, BaseService, PotionService)
-EconomyService.Init(PlayerData, PotionService)
-RebirthService.Init(PlayerData, BaseService, PotionService)
+QuestService.Init(PlayerData)
+SpinService.Init(PlayerData, BaseService, PotionService, QuestService)
+EconomyService.Init(PlayerData, PotionService, QuestService)
+RebirthService.Init(PlayerData, BaseService, PotionService, QuestService)
 StoreService.Init(PlayerData, SpinService)
-IndexService.Init(PlayerData)
-GemShopService.Init(PlayerData)
-SacrificeService.Init(PlayerData, PotionService)
+IndexService.Init(PlayerData, QuestService)
+GemShopService.Init(PlayerData, QuestService)
+SacrificeService.Init(PlayerData, PotionService, QuestService)
 ReceiptHandler.Init(PlayerData, SpinService)
+DailyRewardService.Init(PlayerData)
+PotionService.SetQuestService(QuestService)
 
 print("[Server] Spin the Streamer initialized! Map size: 400x1000 studs, 8 base slots")

@@ -1,9 +1,8 @@
 --[[
 	GemShopController.lua
-	Gem Shop UI — spend gems on cases.
-	Tabs: Gem Case 1, Effect Cases (Acid→Void), All In.
-	Each effect case has a "View Drop Rate" popup with spinning models + percentages.
-	Walk up to the Gems stall → press E.
+	Gem Shop UI — single scrollable page of elemental cases.
+	Each case shows: logo image, case picture, gem price, and buy button.
+	Colorful, bubbly, kid-friendly design.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -28,33 +27,46 @@ local OpenGemShopGui = RemoteEvents:WaitForChild("OpenGemShopGui")
 local BuyGemCase     = RemoteEvents:WaitForChild("BuyGemCase")
 local GemCaseResult  = RemoteEvents:WaitForChild("GemCaseResult")
 
-local screenGui
-local modalFrame
+local screenGui, overlay, modalFrame
 local isOpen      = false
 local balanceLabel
-local contentFrame         -- right-side content area
-local sidebarBtns          = {}
-local activeTabId          = nil
-local dropRateFrame        = nil -- popup for viewing drop rates
-local vpConns              = {}   -- viewport heartbeat data (shared loop)
-local heartbeatConn        = nil
-local autoOpenEnabled      = false   -- auto-open toggle state
-local autoOpenCaseId       = nil     -- which case is being auto-opened
+local autoOpenEnabled  = false
+local autoOpenCaseId   = nil
 
 local FONT = Enum.Font.FredokaOne
+local FONT_SUB = Enum.Font.GothamBold
+local MODAL_BG = Color3.fromRGB(30, 25, 45)
+local MODAL_W, MODAL_H = 920, 680
+local RED = Color3.fromRGB(220, 55, 55)
+local RED_DARK = Color3.fromRGB(160, 30, 30)
+
+local bounceTween = TweenInfo.new(0.12, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+
+-- Viewport rotation data
+local vpConns = {}
+local heartbeatConn = nil
 
 -------------------------------------------------
 -- HELPERS
 -------------------------------------------------
 
-local function formatNumber(n)
+local function fmtNum(n)
 	local s = tostring(math.floor(n))
 	local f = ""
 	for i = 1, #s do
-		f = f .. s:sub(i,i)
+		f = f .. s:sub(i, i)
 		if (#s - i) % 3 == 0 and i < #s then f = f .. "," end
 	end
 	return f
+end
+
+local function addStroke(parent, color, thickness)
+	local s = Instance.new("UIStroke")
+	s.Color = color or Color3.new(0, 0, 0)
+	s.Thickness = thickness or 1
+	s.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+	s.Parent = parent
+	return s
 end
 
 local function stopViewports()
@@ -83,7 +95,6 @@ local function startViewportLoop()
 	end)
 end
 
--- Create a spinning model viewport (infinite)
 local function addSpinningViewport(parent, streamerId, width, height, speed)
 	local viewport = Instance.new("ViewportFrame")
 	viewport.Size = UDim2.new(0, width, 0, height)
@@ -91,17 +102,13 @@ local function addSpinningViewport(parent, streamerId, width, height, speed)
 	viewport.BackgroundTransparency = 0.2
 	viewport.BorderSizePixel = 0
 	viewport.Parent = parent
-	local vpCorner = Instance.new("UICorner")
-	vpCorner.CornerRadius = UDim.new(0, 8)
-	vpCorner.Parent = viewport
+	Instance.new("UICorner", viewport).CornerRadius = UDim.new(0, 8)
 
 	local modelsFolder = ReplicatedStorage:FindFirstChild("StreamerModels")
 	local tpl = modelsFolder and modelsFolder:FindFirstChild(streamerId)
 	if tpl then
-		local m = tpl:Clone()
-		m.Parent = viewport
-		local cam = Instance.new("Camera")
-		cam.Parent = viewport
+		local m = tpl:Clone(); m.Parent = viewport
+		local cam = Instance.new("Camera"); cam.Parent = viewport
 		viewport.CurrentCamera = cam
 		local ok, cf, sz = pcall(function() return m:GetBoundingBox() end)
 		if ok and cf and sz then
@@ -116,78 +123,34 @@ local function addSpinningViewport(parent, streamerId, width, height, speed)
 			})
 			startViewportLoop()
 		end
-	else
-		local ph = Instance.new("TextLabel")
-		ph.Size = UDim2.new(1, 0, 1, 0)
-		ph.BackgroundTransparency = 1
-		ph.Text = "\u{1F3AD}"; ph.TextSize = 20
-		ph.Font = Enum.Font.SourceSans; ph.Parent = viewport
 	end
 	return viewport
 end
 
--- Create a static model viewport (no spinning)
-local function addStaticViewport(parent, streamerId, width, height)
-	local viewport = Instance.new("ViewportFrame")
-	viewport.Size = UDim2.new(0, width, 0, height)
-	viewport.BackgroundColor3 = Color3.fromRGB(15, 15, 28)
-	viewport.BackgroundTransparency = 0.3
-	viewport.BorderSizePixel = 0
-	viewport.Parent = parent
-	local vpCorner = Instance.new("UICorner")
-	vpCorner.CornerRadius = UDim.new(0, 8)
-	vpCorner.Parent = viewport
-
-	local modelsFolder = ReplicatedStorage:FindFirstChild("StreamerModels")
-	local tpl = modelsFolder and modelsFolder:FindFirstChild(streamerId)
-	if tpl then
-		local m = tpl:Clone(); m.Parent = viewport
-		local cam = Instance.new("Camera"); cam.Parent = viewport
-		viewport.CurrentCamera = cam
-		local ok, cf, sz = pcall(function() return m:GetBoundingBox() end)
-		if ok and cf and sz then
-			local maxD = math.max(sz.X, sz.Y, sz.Z)
-			local dist = maxD * 1.8
-			cam.CFrame = CFrame.new(cf.Position + Vector3.new(dist*0.3, sz.Y*0.2, dist*0.9), cf.Position)
-		end
-	else
-		local ph = Instance.new("TextLabel")
-		ph.Size = UDim2.new(1, 0, 1, 0); ph.BackgroundTransparency = 1
-		ph.Text = "\u{1F3AD}"; ph.TextSize = 20; ph.Font = Enum.Font.SourceSans
-		ph.Parent = viewport
-	end
-	return viewport
-end
-
--- Compute effect case percentages client-side (mirrors server logic)
 local function computeEffectPercentages(compression)
 	local weights, total = {}, 0
 	for i, s in ipairs(Streamers.List) do
 		local w = (1 / s.odds) ^ compression
-		weights[i] = w
-		total = total + w
+		weights[i] = w; total = total + w
 	end
 	local result = {}
 	for i, s in ipairs(Streamers.List) do
 		result[i] = {
-			streamerId  = s.id,
-			displayName = s.displayName,
-			rarity      = s.rarity,
-			percent     = (weights[i] / total) * 100,
+			streamerId = s.id, displayName = s.displayName,
+			rarity = s.rarity, percent = (weights[i] / total) * 100,
 		}
 	end
 	return result
 end
 
 -------------------------------------------------
--- DROP RATE POPUP (spinning models + percentages)
+-- DROP RATE POPUP
 -------------------------------------------------
 
+local dropRateFrame = nil
+
 local function closeDropRatePopup()
-	if dropRateFrame then
-		dropRateFrame:Destroy()
-		dropRateFrame = nil
-	end
+	if dropRateFrame then dropRateFrame:Destroy(); dropRateFrame = nil end
 end
 
 local function openDropRatePopup(caseData)
@@ -195,163 +158,104 @@ local function openDropRatePopup(caseData)
 
 	local popup = Instance.new("Frame")
 	popup.Name = "DropRatePopup"
-	popup.Size = UDim2.new(0, 700, 0, 560)
+	popup.Size = UDim2.new(0, 700, 0, 580)
 	popup.Position = UDim2.new(0.5, 0, 0.5, 0)
 	popup.AnchorPoint = Vector2.new(0.5, 0.5)
-	popup.BackgroundColor3 = Color3.fromRGB(12, 10, 25)
-	popup.BorderSizePixel = 0
-	popup.ZIndex = 30
+	popup.BackgroundColor3 = MODAL_BG
+	popup.BorderSizePixel = 0; popup.ZIndex = 30
 	popup.ClipsDescendants = true
-	popup.Parent = modalFrame
-	local pCorner = Instance.new("UICorner")
-	pCorner.CornerRadius = UDim.new(0, 20)
-	pCorner.Parent = popup
+	popup.Parent = screenGui
+	Instance.new("UICorner", popup).CornerRadius = UDim.new(0, 20)
 	local pStroke = Instance.new("UIStroke")
-	pStroke.Color = caseData.color
-	pStroke.Thickness = 3
-	pStroke.Parent = popup
-	UIHelper.MakeResponsiveModal(popup, 700, 560)
+	pStroke.Color = caseData.color; pStroke.Thickness = 2; pStroke.Parent = popup
+	UIHelper.MakeResponsiveModal(popup, 700, 580)
 
-	-- Title
 	local title = Instance.new("TextLabel")
-	title.Size = UDim2.new(1, -80, 0, 44)
-	title.Position = UDim2.new(0.5, 0, 0, 12)
-	title.AnchorPoint = Vector2.new(0.5, 0)
+	title.Size = UDim2.new(0.7, 0, 0, 32)
+	title.Position = UDim2.new(0, 18, 0, 10)
 	title.BackgroundTransparency = 1
-	title.Text = caseData.name .. " — Drop Rates"
+	title.Text = caseData.name .. " — Drops"
 	title.TextColor3 = caseData.color
-	title.Font = FONT; title.TextSize = 26
-	title.Parent = popup
-	local tS = Instance.new("UIStroke")
-	tS.Color = Color3.fromRGB(0,0,0); tS.Thickness = 2
-	tS.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
-	tS.Parent = title
+	title.Font = FONT; title.TextSize = 22
+	title.TextXAlignment = Enum.TextXAlignment.Left
+	title.ZIndex = 31; title.Parent = popup
+	addStroke(title, Color3.new(0, 0, 0), 1.5)
 
-	-- Close button
 	local closeBtn = Instance.new("TextButton")
-	closeBtn.Size = UDim2.new(0, 46, 0, 46)
+	closeBtn.Size = UDim2.new(0, 36, 0, 36)
 	closeBtn.Position = UDim2.new(1, -12, 0, 8)
 	closeBtn.AnchorPoint = Vector2.new(1, 0)
-	closeBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-	closeBtn.Text = "X"; closeBtn.TextColor3 = Color3.new(1,1,1)
-	closeBtn.Font = FONT; closeBtn.TextSize = 22
-	closeBtn.BorderSizePixel = 0; closeBtn.ZIndex = 32
-	closeBtn.Parent = popup
-	local cbC = Instance.new("UICorner"); cbC.CornerRadius = UDim.new(1,0); cbC.Parent = closeBtn
+	closeBtn.BackgroundColor3 = RED; closeBtn.Text = "X"
+	closeBtn.TextColor3 = Color3.new(1, 1, 1)
+	closeBtn.Font = FONT; closeBtn.TextSize = 18
+	closeBtn.BorderSizePixel = 0; closeBtn.AutoButtonColor = false
+	closeBtn.ZIndex = 32; closeBtn.Parent = popup
+	Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(0, 10)
 	closeBtn.MouseButton1Click:Connect(closeDropRatePopup)
 
-	-- Scroll area
 	local scroll = Instance.new("ScrollingFrame")
-	scroll.Size = UDim2.new(1, -14, 1, -64)
-	scroll.Position = UDim2.new(0, 7, 0, 60)
-	scroll.BackgroundTransparency = 1
-	scroll.BorderSizePixel = 0
-	scroll.ScrollBarThickness = 6
-	scroll.ScrollBarImageColor3 = caseData.color
+	scroll.Size = UDim2.new(1, -14, 1, -52)
+	scroll.Position = UDim2.new(0, 7, 0, 48)
+	scroll.BackgroundTransparency = 1; scroll.BorderSizePixel = 0
+	scroll.ScrollBarThickness = 5; scroll.ScrollBarImageColor3 = caseData.color
 	scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
 	scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
-	scroll.ZIndex = 31
-	scroll.Parent = popup
+	scroll.ZIndex = 31; scroll.Parent = popup
 
 	local layout = Instance.new("UIListLayout")
 	layout.SortOrder = Enum.SortOrder.LayoutOrder
-	layout.Padding = UDim.new(0, 6)
-	layout.Parent = scroll
+	layout.Padding = UDim.new(0, 5); layout.Parent = scroll
 
-	local pad = Instance.new("UIPadding")
-	pad.PaddingTop = UDim.new(0, 6)
-	pad.PaddingLeft = UDim.new(0, 6)
-	pad.PaddingRight = UDim.new(0, 6)
-	pad.Parent = scroll
+	Instance.new("UIPadding", scroll).PaddingTop = UDim.new(0, 4)
 
-	-- Build items
-	local items
-	if caseData.compression then
-		items = computeEffectPercentages(caseData.compression)
-	elseif caseData.items then
-		items = {}
-		for i, item in ipairs(caseData.items) do
-			local sInfo = Streamers.ById[item.streamerId]
-			items[i] = {
-				streamerId  = item.streamerId,
-				displayName = item.displayName or (sInfo and sInfo.displayName) or item.streamerId,
-				rarity      = (sInfo and sInfo.rarity) or "Common",
-				percent     = item.chance,
-			}
-		end
-	end
-
+	local items = computeEffectPercentages(caseData.compression)
 	for idx, item in ipairs(items) do
 		local rarInfo = Rarities.ByName[item.rarity]
-		local rarColor = rarInfo and rarInfo.color or Color3.fromRGB(170,170,170)
+		local rarColor = rarInfo and rarInfo.color or Color3.fromRGB(170, 170, 170)
 
 		local row = Instance.new("Frame")
-		row.Name = "Row_" .. idx
-		row.Size = UDim2.new(1, 0, 0, 68)
-		row.BackgroundColor3 = Color3.fromRGB(22, 22, 40)
-		row.BorderSizePixel = 0
-		row.LayoutOrder = idx
-		row.ZIndex = 31
+		row.Size = UDim2.new(1, -8, 0, 50)
+		row.BackgroundColor3 = Color3.fromRGB(40, 35, 60)
+		row.BorderSizePixel = 0; row.LayoutOrder = idx; row.ZIndex = 31
 		row.Parent = scroll
-		local rCorner = Instance.new("UICorner")
-		rCorner.CornerRadius = UDim.new(0, 12)
-		rCorner.Parent = row
+		Instance.new("UICorner", row).CornerRadius = UDim.new(0, 10)
 
-		-- Spinning model
-		local vp = addSpinningViewport(row, item.streamerId, 58, 58, 0.8)
+		local vp = addSpinningViewport(row, item.streamerId, 42, 42, 0.8)
 		vp.Position = UDim2.new(0, 6, 0.5, 0)
-		vp.AnchorPoint = Vector2.new(0, 0.5)
-		vp.ZIndex = 32
+		vp.AnchorPoint = Vector2.new(0, 0.5); vp.ZIndex = 32
 
-		-- Name
 		local nm = Instance.new("TextLabel")
-		nm.Size = UDim2.new(0, 260, 0, 26)
-		nm.Position = UDim2.new(0, 72, 0, 8)
+		nm.Size = UDim2.new(0, 200, 0, 20)
+		nm.Position = UDim2.new(0, 54, 0, 6)
 		nm.BackgroundTransparency = 1
-		nm.Text = item.displayName
-		nm.TextColor3 = rarColor
-		nm.Font = FONT; nm.TextSize = 16
+		nm.Text = item.displayName; nm.TextColor3 = rarColor
+		nm.Font = FONT; nm.TextSize = 13
 		nm.TextXAlignment = Enum.TextXAlignment.Left
 		nm.TextTruncate = Enum.TextTruncate.AtEnd
-		nm.ZIndex = 32
-		nm.Parent = row
+		nm.ZIndex = 32; nm.Parent = row
 
-		-- Rarity
 		local rar = Instance.new("TextLabel")
-		rar.Size = UDim2.new(0, 260, 0, 20)
-		rar.Position = UDim2.new(0, 72, 0, 36)
+		rar.Size = UDim2.new(0, 200, 0, 14)
+		rar.Position = UDim2.new(0, 54, 0, 28)
 		rar.BackgroundTransparency = 1
-		rar.Text = item.rarity:upper()
-		rar.TextColor3 = rarColor
-		rar.Font = FONT; rar.TextSize = 12
+		rar.Text = item.rarity:upper(); rar.TextColor3 = Color3.fromRGB(120, 115, 140)
+		rar.Font = FONT_SUB; rar.TextSize = 10
 		rar.TextXAlignment = Enum.TextXAlignment.Left
-		rar.ZIndex = 32
-		rar.Parent = row
+		rar.ZIndex = 32; rar.Parent = row
 
-		-- Percentage
-		local pctText
-		if item.percent >= 1 then
-			pctText = string.format("%.1f%%", item.percent)
-		elseif item.percent >= 0.01 then
-			pctText = string.format("%.2f%%", item.percent)
-		else
-			pctText = string.format("%.4f%%", item.percent)
-		end
+		local pctText = item.percent >= 1 and string.format("%.1f%%", item.percent)
+			or item.percent >= 0.01 and string.format("%.2f%%", item.percent)
+			or string.format("%.4f%%", item.percent)
 		local pct = Instance.new("TextLabel")
-		pct.Size = UDim2.new(0, 130, 1, 0)
-		pct.Position = UDim2.new(1, -12, 0, 0)
+		pct.Size = UDim2.new(0, 80, 1, 0)
+		pct.Position = UDim2.new(1, -8, 0, 0)
 		pct.AnchorPoint = Vector2.new(1, 0)
 		pct.BackgroundTransparency = 1
-		pct.Text = pctText
-		pct.TextColor3 = Color3.fromRGB(255, 255, 100)
-		pct.Font = FONT; pct.TextSize = 20
+		pct.Text = pctText; pct.TextColor3 = Color3.fromRGB(255, 255, 100)
+		pct.Font = FONT; pct.TextSize = 16
 		pct.TextXAlignment = Enum.TextXAlignment.Right
-		pct.ZIndex = 32
-		pct.Parent = row
-		local pStk = Instance.new("UIStroke")
-		pStk.Color = Color3.fromRGB(0,0,0); pStk.Thickness = 1.2
-		pStk.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
-		pStk.ZIndex = 32; pStk.Parent = pct
+		pct.ZIndex = 32; pct.Parent = row
+		addStroke(pct, Color3.new(0, 0, 0), 1)
 	end
 
 	dropRateFrame = popup
@@ -359,245 +263,7 @@ local function openDropRatePopup(caseData)
 end
 
 -------------------------------------------------
--- BUILD CONTENT FOR A GIVEN CASE TAB
--------------------------------------------------
-
-local function clearContent()
-	if not contentFrame then return end
-	for _, child in ipairs(contentFrame:GetChildren()) do
-		if not child:IsA("UIListLayout") and not child:IsA("UIPadding") then
-			child:Destroy()
-		end
-	end
-end
-
-local function buildCaseContent(caseData)
-	clearContent()
-	closeDropRatePopup()
-
-	local isEffect = caseData.compression ~= nil
-	local isAllIn  = caseData.id == "AllInCase"
-
-	-- Case header
-	local header = Instance.new("Frame")
-	header.Name = "Header"
-	header.Size = UDim2.new(1, -10, 0, 110)
-	header.BackgroundColor3 = Color3.fromRGB(22, 22, 40)
-	header.BorderSizePixel = 0
-	header.Parent = contentFrame
-	local hCorner = Instance.new("UICorner")
-	hCorner.CornerRadius = UDim.new(0, 18)
-	hCorner.Parent = header
-	local hStroke = Instance.new("UIStroke")
-	hStroke.Color = caseData.color; hStroke.Thickness = 2.5
-	hStroke.Parent = header
-
-	-- Title
-	local titleEmoji = isAllIn and "\u{1F3B0}" or "\u{1F48E}"
-	local caseTitle = Instance.new("TextLabel")
-	caseTitle.Size = UDim2.new(1, -24, 0, 40)
-	caseTitle.Position = UDim2.new(0.5, 0, 0, 14)
-	caseTitle.AnchorPoint = Vector2.new(0.5, 0)
-	caseTitle.BackgroundTransparency = 1
-	caseTitle.Text = titleEmoji .. " " .. caseData.name .. " " .. titleEmoji
-	caseTitle.TextColor3 = caseData.color
-	caseTitle.Font = FONT; caseTitle.TextSize = 28
-	caseTitle.Parent = header
-	local ctS = Instance.new("UIStroke")
-	ctS.Color = Color3.fromRGB(0,0,0); ctS.Thickness = 2
-	ctS.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
-	ctS.Parent = caseTitle
-
-	-- Cost + effect info
-	local subtitle = ""
-	if isEffect then
-		local effInfo = Effects.ByName[caseData.effect]
-		local mult = effInfo and effInfo.cashMultiplier or 1
-		subtitle = "Cost: " .. formatNumber(caseData.cost) .. " Gems  •  All streamers with " .. caseData.effect .. " (x" .. mult .. " cash)"
-	elseif isAllIn then
-		subtitle = "Cost: " .. formatNumber(caseData.cost) .. " Gems  •  99.9% Rakai  |  0.1% Void xQc"
-	else
-		subtitle = "Cost: " .. formatNumber(caseData.cost) .. " Gems"
-	end
-	local costLabel = Instance.new("TextLabel")
-	costLabel.Size = UDim2.new(1, -24, 0, 28)
-	costLabel.Position = UDim2.new(0.5, 0, 0, 58)
-	costLabel.AnchorPoint = Vector2.new(0.5, 0)
-	costLabel.BackgroundTransparency = 1
-	costLabel.Text = subtitle
-	costLabel.TextColor3 = Color3.fromRGB(180, 200, 230)
-	costLabel.Font = FONT; costLabel.TextSize = 15
-	costLabel.TextWrapped = true
-	costLabel.Parent = header
-
-	-- Items preview (for regular cases or All In — static models)
-	if caseData.items and not isEffect then
-		local itemsRow = Instance.new("Frame")
-		itemsRow.Name = "ItemsRow"
-		itemsRow.Size = UDim2.new(1, -10, 0, 165)
-		itemsRow.BackgroundTransparency = 1
-		itemsRow.Parent = contentFrame
-
-		local rowLayout = Instance.new("UIListLayout")
-		rowLayout.FillDirection = Enum.FillDirection.Horizontal
-		rowLayout.Padding = UDim.new(0, 10)
-		rowLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-		rowLayout.Parent = itemsRow
-
-		local itemCount = #caseData.items
-		local itemW = math.min(120, math.floor(520 / itemCount) - 12)
-
-		for _, item in ipairs(caseData.items) do
-			local sInfo = Streamers.ById[item.streamerId]
-			local rInfo = sInfo and Rarities.ByName[sInfo.rarity]
-			local rColor = rInfo and rInfo.color or Color3.fromRGB(170,170,170)
-
-			local card = Instance.new("Frame")
-			card.Size = UDim2.new(0, itemW, 1, 0)
-			card.BackgroundColor3 = Color3.fromRGB(22, 22, 40)
-			card.BorderSizePixel = 0
-			card.Parent = itemsRow
-			local cC = Instance.new("UICorner"); cC.CornerRadius = UDim.new(0, 8); cC.Parent = card
-			local cS = Instance.new("UIStroke"); cS.Color = rColor; cS.Thickness = 1.5; cS.Transparency = 0.4; cS.Parent = card
-
-			local vp = addSpinningViewport(card, item.streamerId, itemW - 10, 78, 0.6)
-			vp.Position = UDim2.new(0.5, 0, 0, 6); vp.AnchorPoint = Vector2.new(0.5, 0)
-
-			local nm = Instance.new("TextLabel")
-			nm.Size = UDim2.new(1, -6, 0, 20)
-			nm.Position = UDim2.new(0.5, 0, 0, 86); nm.AnchorPoint = Vector2.new(0.5, 0)
-			nm.BackgroundTransparency = 1
-			nm.Text = item.displayName or item.streamerId
-			nm.TextColor3 = rColor
-			nm.Font = FONT; nm.TextSize = 12; nm.TextTruncate = Enum.TextTruncate.AtEnd
-			nm.Parent = card
-
-			local chanceText = item.chance >= 1 and string.format("%.0f%%", item.chance) or string.format("%.1f%%", item.chance)
-			local ch = Instance.new("TextLabel")
-			ch.Size = UDim2.new(1, -6, 0, 22)
-			ch.Position = UDim2.new(0.5, 0, 0, 106); ch.AnchorPoint = Vector2.new(0.5, 0)
-			ch.BackgroundTransparency = 1
-			ch.Text = chanceText
-			ch.TextColor3 = Color3.fromRGB(255, 255, 100)
-			ch.Font = FONT; ch.TextSize = 16
-			ch.Parent = card
-
-			if sInfo then
-				local rr = Instance.new("TextLabel")
-				rr.Size = UDim2.new(1, 0, 0, 16)
-				rr.Position = UDim2.new(0.5, 0, 0, 130); rr.AnchorPoint = Vector2.new(0.5, 0)
-				rr.BackgroundTransparency = 1
-				rr.Text = sInfo.rarity:upper()
-				rr.TextColor3 = rColor
-				rr.Font = FONT; rr.TextSize = 10
-				rr.Parent = card
-			end
-		end
-	end
-
-	-- Buttons row
-	local btnRow = Instance.new("Frame")
-	btnRow.Name = "Buttons"
-	btnRow.Size = UDim2.new(1, -10, 0, 50)
-	btnRow.BackgroundTransparency = 1
-	btnRow.Parent = contentFrame
-
-	local btnLayout = Instance.new("UIListLayout")
-	btnLayout.FillDirection = Enum.FillDirection.Horizontal
-	btnLayout.Padding = UDim.new(0, 10)
-	btnLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-	btnLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-	btnLayout.Parent = btnRow
-
-	-- BUY BUTTON
-	local buyBtn = Instance.new("TextButton")
-	buyBtn.Name = "BuyBtn"
-	buyBtn.Size = UDim2.new(0, 180, 0, 44)
-	buyBtn.BackgroundColor3 = Color3.fromRGB(80, 180, 255)
-	buyBtn.Text = "\u{1F48E} OPEN — " .. formatNumber(caseData.cost) .. " Gems"
-	buyBtn.TextColor3 = Color3.new(1,1,1)
-	buyBtn.Font = FONT; buyBtn.TextSize = 16
-	buyBtn.BorderSizePixel = 0
-	buyBtn.Parent = btnRow
-	local bbCorner = Instance.new("UICorner"); bbCorner.CornerRadius = UDim.new(0, 14); bbCorner.Parent = buyBtn
-	local bbStroke = Instance.new("UIStroke"); bbStroke.Color = Color3.fromRGB(40, 120, 200); bbStroke.Thickness = 2.5; bbStroke.Transparency = 0.15; bbStroke.Parent = buyBtn
-	UIHelper.AddPuffyGradient(buyBtn)
-
-	buyBtn.MouseEnter:Connect(function()
-		TweenService:Create(buyBtn, TweenInfo.new(0.1), { Size = UDim2.new(0, 188, 0, 46) }):Play()
-	end)
-	buyBtn.MouseLeave:Connect(function()
-		TweenService:Create(buyBtn, TweenInfo.new(0.1), { Size = UDim2.new(0, 180, 0, 44) }):Play()
-	end)
-	buyBtn.MouseButton1Click:Connect(function()
-		local gems = HUDController.Data.gems or 0
-		if gems < caseData.cost then
-			buyBtn.Text = "Not enough gems!"
-			buyBtn.BackgroundColor3 = Color3.fromRGB(200, 60, 60)
-			task.delay(1.5, function()
-				if buyBtn.Parent then
-					buyBtn.Text = "\u{1F48E} OPEN \u{2014} " .. formatNumber(caseData.cost) .. " Gems"
-					buyBtn.BackgroundColor3 = Color3.fromRGB(80, 180, 255)
-				end
-			end)
-			return
-		end
-		BuyGemCase:FireServer(caseData.id)
-	end)
-
-	-- AUTO TOGGLE BUTTON
-	local autoBtn = Instance.new("TextButton")
-	autoBtn.Name = "AutoBtn"
-	autoBtn.Size = UDim2.new(0, 80, 0, 44)
-	local isAutoForThis = autoOpenEnabled and autoOpenCaseId == caseData.id
-	autoBtn.BackgroundColor3 = isAutoForThis and Color3.fromRGB(60, 200, 80) or Color3.fromRGB(50, 50, 70)
-	autoBtn.Text = isAutoForThis and "AUTO: ON" or "AUTO"
-	autoBtn.TextColor3 = isAutoForThis and Color3.new(1, 1, 1) or Color3.fromRGB(180, 180, 200)
-	autoBtn.Font = FONT; autoBtn.TextSize = 14
-	autoBtn.BorderSizePixel = 0
-	autoBtn.Parent = btnRow
-	local abCorner = Instance.new("UICorner"); abCorner.CornerRadius = UDim.new(0, 12); abCorner.Parent = autoBtn
-	local abStroke = Instance.new("UIStroke")
-	abStroke.Color = isAutoForThis and Color3.fromRGB(40, 160, 60) or Color3.fromRGB(60, 60, 80)
-	abStroke.Thickness = 2; abStroke.Parent = autoBtn
-
-	autoBtn.MouseButton1Click:Connect(function()
-		if autoOpenEnabled and autoOpenCaseId == caseData.id then
-			autoOpenEnabled = false
-			autoOpenCaseId = nil
-			autoBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 70)
-			autoBtn.Text = "AUTO"
-			autoBtn.TextColor3 = Color3.fromRGB(180, 180, 200)
-			abStroke.Color = Color3.fromRGB(60, 60, 80)
-		else
-			autoOpenEnabled = true
-			autoOpenCaseId = caseData.id
-			autoBtn.BackgroundColor3 = Color3.fromRGB(60, 200, 80)
-			autoBtn.Text = "AUTO: ON"
-			autoBtn.TextColor3 = Color3.new(1, 1, 1)
-			abStroke.Color = Color3.fromRGB(40, 160, 60)
-		end
-	end)
-
-	-- VIEW DROP RATE BUTTON
-	local drBtn = Instance.new("TextButton")
-	drBtn.Name = "DropRateBtn"
-	drBtn.Size = UDim2.new(0, 220, 0, 54)
-	drBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 80)
-	drBtn.Text = "\u{1F4CA} View Drop Rate"
-	drBtn.TextColor3 = Color3.fromRGB(200, 200, 230)
-	drBtn.Font = FONT; drBtn.TextSize = 16
-	drBtn.BorderSizePixel = 0
-	drBtn.Parent = btnRow
-	local drCorner = Instance.new("UICorner"); drCorner.CornerRadius = UDim.new(0, 14); drCorner.Parent = drBtn
-	local drStroke = Instance.new("UIStroke"); drStroke.Color = Color3.fromRGB(80, 80, 120); drStroke.Thickness = 2; drStroke.Parent = drBtn
-	drBtn.MouseButton1Click:Connect(function()
-		openDropRatePopup(caseData)
-	end)
-end
-
--------------------------------------------------
--- CASE OPENING ANIMATION (CS:GO style horizontal strip)
+-- CASE OPENING ANIMATION (CS:GO style strip)
 -------------------------------------------------
 
 local caseAnimOverlay = nil
@@ -617,7 +283,6 @@ end
 local function showCaseOpenAnimation(caseData, resultData)
 	cleanupCaseAnim()
 
-	-- Build item pool from case data
 	local pool = {}
 	if caseData.items then
 		for _, item in ipairs(caseData.items) do
@@ -645,18 +310,14 @@ local function showCaseOpenAnimation(caseData, resultData)
 	local CARD_STEP = CARD_W + CARD_GAP
 	local DURATION = 5.0
 
-	-- Build strip: repeat & shuffle
 	local totalCards = math.max(60, #pool * 6)
 	local cards = {}
-	for i = 1, totalCards do
-		cards[i] = pool[((i - 1) % #pool) + 1]
-	end
+	for i = 1, totalCards do cards[i] = pool[((i - 1) % #pool) + 1] end
 	for i = #cards, 2, -1 do
 		local j = math.random(1, i)
 		cards[i], cards[j] = cards[j], cards[i]
 	end
 
-	-- Place winning item at ~72%
 	local winIdx = math.floor(totalCards * 0.72)
 	local winItem
 	for _, p in ipairs(pool) do
@@ -666,76 +327,49 @@ local function showCaseOpenAnimation(caseData, resultData)
 	end
 	if not winItem then
 		winItem = {
-			streamerId = resultData.streamerId,
-			displayName = resultData.displayName,
-			rarity = resultData.rarity,
-			effect = resultData.effect,
+			streamerId = resultData.streamerId, displayName = resultData.displayName,
+			rarity = resultData.rarity, effect = resultData.effect,
 		}
 	end
 	cards[winIdx] = winItem
 
-	-- Near-miss: place flashy items next to winner
 	local nearMissOffsets = { -2, -1, 1, 2 }
 	for _, off in ipairs(nearMissOffsets) do
 		local adj = winIdx + off
-		if adj >= 1 and adj <= totalCards then
-			if math.random() < 0.35 then
-				-- Place a rare/legendary item from pool
-				local rareItems = {}
-				for _, p in ipairs(pool) do
-					local rI = Rarities.ByName[p.rarity]
-					if rI and (p.rarity == "Epic" or p.rarity == "Legendary" or p.rarity == "Mythic") then
-						table.insert(rareItems, p)
-					end
-				end
-				if #rareItems > 0 then
-					cards[adj] = rareItems[math.random(1, #rareItems)]
+		if adj >= 1 and adj <= totalCards and math.random() < 0.35 then
+			local rareItems = {}
+			for _, p in ipairs(pool) do
+				if p.rarity == "Epic" or p.rarity == "Legendary" or p.rarity == "Mythic" then
+					table.insert(rareItems, p)
 				end
 			end
+			if #rareItems > 0 then cards[adj] = rareItems[math.random(1, #rareItems)] end
 		end
 	end
 
-	-- Dark overlay
-	local overlay = Instance.new("Frame")
-	overlay.Size = UDim2.new(1, 0, 1, 0)
-	overlay.BackgroundColor3 = Color3.new(0, 0, 0)
-	overlay.BackgroundTransparency = 0.3
-	overlay.BorderSizePixel = 0; overlay.ZIndex = 20
-	overlay.Parent = modalFrame
+	local aOverlay = Instance.new("Frame")
+	aOverlay.Size = UDim2.new(1, 0, 1, 0)
+	aOverlay.BackgroundColor3 = Color3.new(0, 0, 0)
+	aOverlay.BackgroundTransparency = 0.3
+	aOverlay.BorderSizePixel = 0; aOverlay.ZIndex = 20
+	aOverlay.Parent = modalFrame
 
-	-- Strip window (clips the scrolling cards)
 	local stripWin = Instance.new("Frame")
-	stripWin.Size = UDim2.new(0.92, 0, 0, CARD_H + 24)
+	stripWin.Size = UDim2.new(0.94, 0, 0, CARD_H + 24)
 	stripWin.Position = UDim2.new(0.5, 0, 0.42, 0)
 	stripWin.AnchorPoint = Vector2.new(0.5, 0.5)
 	stripWin.BackgroundColor3 = Color3.fromRGB(10, 10, 22)
 	stripWin.BorderSizePixel = 0; stripWin.ClipsDescendants = true
-	stripWin.ZIndex = 21; stripWin.Parent = overlay
+	stripWin.ZIndex = 21; stripWin.Parent = aOverlay
 	Instance.new("UICorner", stripWin).CornerRadius = UDim.new(0, 14)
 	local wStroke = Instance.new("UIStroke", stripWin)
-	wStroke.Color = caseData.color; wStroke.Thickness = 3
+	wStroke.Color = caseData.color; wStroke.Thickness = 2
 
-	-- Rainbow top line
-	local topLine = Instance.new("Frame")
-	topLine.Size = UDim2.new(1, 0, 0, 4)
-	topLine.BackgroundColor3 = Color3.new(1, 1, 1)
-	topLine.BorderSizePixel = 0; topLine.ZIndex = 26; topLine.Parent = stripWin
-	local tlg = Instance.new("UIGradient", topLine)
-	tlg.Color = ColorSequence.new({
-		ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 80, 120)),
-		ColorSequenceKeypoint.new(0.25, Color3.fromRGB(255, 200, 50)),
-		ColorSequenceKeypoint.new(0.5, Color3.fromRGB(80, 255, 150)),
-		ColorSequenceKeypoint.new(0.75, Color3.fromRGB(80, 150, 255)),
-		ColorSequenceKeypoint.new(1, Color3.fromRGB(200, 80, 255)),
-	})
-
-	-- Inner strip container
 	local strip = Instance.new("Frame")
 	strip.BackgroundTransparency = 1; strip.BorderSizePixel = 0
 	strip.Size = UDim2.new(0, totalCards * CARD_STEP, 1, 0)
 	strip.ZIndex = 22; strip.Parent = stripWin
 
-	-- Build card frames
 	for i, item in ipairs(cards) do
 		local rInfo = Rarities.ByName[item.rarity]
 		local rColor = rInfo and rInfo.color or Color3.fromRGB(170, 170, 170)
@@ -763,22 +397,12 @@ local function showCaseOpenAnimation(caseData, resultData)
 			ColorSequenceKeypoint.new(1, Color3.fromRGB(60, 60, 80)),
 		})
 		cg.Transparency = NumberSequence.new({
-			NumberSequenceKeypoint.new(0, 0.7),
-			NumberSequenceKeypoint.new(1, 0),
+			NumberSequenceKeypoint.new(0, 0.7), NumberSequenceKeypoint.new(1, 0),
 		})
 		cg.Rotation = 90
 
-		local cStk = Instance.new("UIStroke", card)
-		cStk.Color = rColor; cStk.Thickness = 2; cStk.Transparency = 0.5
+		Instance.new("UIStroke", card).Color = rColor
 
-		-- Bottom colour strip
-		local bs = Instance.new("Frame")
-		bs.Size = UDim2.new(1, 0, 0, 5)
-		bs.Position = UDim2.new(0, 0, 1, -5)
-		bs.BackgroundColor3 = rColor; bs.BorderSizePixel = 0; bs.ZIndex = 23
-		bs.Parent = card
-
-		-- Effect badge
 		if effInfo then
 			local badge = Instance.new("TextLabel")
 			badge.Size = UDim2.new(1, -6, 0, 16)
@@ -789,12 +413,9 @@ local function showCaseOpenAnimation(caseData, resultData)
 			badge.TextColor3 = effInfo.color
 			badge.Font = FONT; badge.TextSize = 11; badge.ZIndex = 23
 			badge.Parent = card
-			local eStk = Instance.new("UIStroke", badge)
-			eStk.Color = Color3.new(0, 0, 0); eStk.Thickness = 1
-			eStk.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+			addStroke(badge, Color3.new(0, 0, 0), 1)
 		end
 
-		-- Streamer name
 		local nm = Instance.new("TextLabel")
 		nm.Size = UDim2.new(1, -8, 0, 44)
 		nm.Position = UDim2.new(0.5, 0, effInfo and 0.16 or 0.06, 0)
@@ -804,56 +425,29 @@ local function showCaseOpenAnimation(caseData, resultData)
 		nm.TextColor3 = effInfo and effInfo.color or Color3.new(1, 1, 1)
 		nm.Font = FONT; nm.TextSize = 14; nm.TextWrapped = true
 		nm.ZIndex = 23; nm.Parent = card
-		local nStk = Instance.new("UIStroke", nm)
-		nStk.Color = Color3.new(0, 0, 0); nStk.Thickness = 1.2
-		nStk.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+		addStroke(nm, Color3.new(0, 0, 0), 1)
 
-		-- Rarity label
 		local rl = Instance.new("TextLabel")
 		rl.Size = UDim2.new(1, -6, 0, 18)
 		rl.Position = UDim2.new(0.5, 0, 1, -28)
 		rl.AnchorPoint = Vector2.new(0.5, 0)
 		rl.BackgroundTransparency = 1
-		rl.Text = item.rarity:upper()
-		rl.TextColor3 = rColor
+		rl.Text = item.rarity:upper(); rl.TextColor3 = rColor
 		rl.Font = FONT; rl.TextSize = 11; rl.ZIndex = 23
 		rl.Parent = card
 	end
 
-	-- Center selector line
 	local sel = Instance.new("Frame")
 	sel.Size = UDim2.new(0, 3, 1, 10)
 	sel.Position = UDim2.new(0.5, 0, 0.5, 0)
 	sel.AnchorPoint = Vector2.new(0.5, 0.5)
 	sel.BackgroundColor3 = Color3.fromRGB(255, 60, 60)
 	sel.BorderSizePixel = 0; sel.ZIndex = 25; sel.Parent = stripWin
-	Instance.new("UIStroke", sel).Color = Color3.fromRGB(255, 100, 100)
 
-	-- Top arrow
-	local topArrow = Instance.new("TextLabel")
-	topArrow.Size = UDim2.new(0, 30, 0, 22)
-	topArrow.Position = UDim2.new(0.5, 0, 0, 0)
-	topArrow.AnchorPoint = Vector2.new(0.5, 0)
-	topArrow.BackgroundTransparency = 1; topArrow.Text = "\u{25BC}"
-	topArrow.TextColor3 = Color3.fromRGB(255, 60, 60)
-	topArrow.Font = Enum.Font.GothamBold; topArrow.TextSize = 20
-	topArrow.ZIndex = 25; topArrow.Parent = stripWin
-
-	-- Bottom arrow
-	local botArrow = Instance.new("TextLabel")
-	botArrow.Size = UDim2.new(0, 30, 0, 22)
-	botArrow.Position = UDim2.new(0.5, 0, 1, 0)
-	botArrow.AnchorPoint = Vector2.new(0.5, 1)
-	botArrow.BackgroundTransparency = 1; botArrow.Text = "\u{25B2}"
-	botArrow.TextColor3 = Color3.fromRGB(255, 60, 60)
-	botArrow.Font = Enum.Font.GothamBold; botArrow.TextSize = 20
-	botArrow.ZIndex = 25; botArrow.Parent = stripWin
-
-	-- Dark edge fades (cinematic)
 	for _, side in ipairs({"Left", "Right"}) do
 		local fade = Instance.new("Frame")
-		fade.Size = UDim2.new(0, 90, 1, 0)
-		fade.Position = side == "Left" and UDim2.new(0, 0, 0, 0) or UDim2.new(1, -90, 0, 0)
+		fade.Size = UDim2.new(0, 70, 1, 0)
+		fade.Position = side == "Left" and UDim2.new(0, 0, 0, 0) or UDim2.new(1, -70, 0, 0)
 		fade.BackgroundColor3 = Color3.fromRGB(10, 10, 22)
 		fade.BorderSizePixel = 0; fade.ZIndex = 24; fade.Parent = stripWin
 		local ug = Instance.new("UIGradient", fade)
@@ -862,32 +456,28 @@ local function showCaseOpenAnimation(caseData, resultData)
 			or  NumberSequence.new({NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(1, 0)})
 	end
 
-	-- Skip button
 	caseSkipRequested = false
 	local skipBtn = Instance.new("TextButton")
-	skipBtn.Size = UDim2.new(0, 100, 0, 34)
-	skipBtn.Position = UDim2.new(0.5, 0, 0.42, (CARD_H + 24) / 2 + 22)
+	skipBtn.Size = UDim2.new(0, 90, 0, 30)
+	skipBtn.Position = UDim2.new(0.5, 0, 0.42, (CARD_H + 24) / 2 + 18)
 	skipBtn.AnchorPoint = Vector2.new(0.5, 0)
-	skipBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 80)
-	skipBtn.Text = "SKIP"; skipBtn.TextColor3 = Color3.fromRGB(200, 200, 220)
-	skipBtn.Font = FONT; skipBtn.TextSize = 15
-	skipBtn.BorderSizePixel = 0; skipBtn.ZIndex = 25
-	skipBtn.Parent = overlay
-	Instance.new("UICorner", skipBtn).CornerRadius = UDim.new(0, 10)
+	skipBtn.BackgroundColor3 = Color3.fromRGB(60, 55, 80)
+	skipBtn.Text = "SKIP"; skipBtn.TextColor3 = Color3.fromRGB(180, 180, 200)
+	skipBtn.Font = FONT; skipBtn.TextSize = 13
+	skipBtn.BorderSizePixel = 0; skipBtn.ZIndex = 25; skipBtn.Parent = aOverlay
+	Instance.new("UICorner", skipBtn).CornerRadius = UDim.new(0, 8)
 	skipBtn.MouseButton1Click:Connect(function() caseSkipRequested = true end)
 
-	caseAnimOverlay = overlay
+	caseAnimOverlay = aOverlay
 
-	-- Animation positions
 	local frameWidth = stripWin.AbsoluteSize.X
-	if frameWidth == 0 then frameWidth = 700 end
+	if frameWidth == 0 then frameWidth = 480 end
 	local halfFrame = frameWidth / 2
 	local targetCenterX = (winIdx - 1) * CARD_STEP + CARD_W / 2
 	local endX = halfFrame - targetCenterX + math.random(-15, 15)
 	local startX = endX + #pool * CARD_STEP * 3
 
 	strip.Position = UDim2.new(0, startX, 0, 0)
-
 	local totalDist = startX - endX
 	local startTime = tick()
 	local done = false
@@ -896,80 +486,66 @@ local function showCaseOpenAnimation(caseData, resultData)
 		strip.Position = UDim2.new(0, endX, 0, 0)
 		if skipBtn and skipBtn.Parent then skipBtn:Destroy() end
 
-		-- Glow on winning card
 		local winCard = strip:FindFirstChild("C" .. winIdx)
 		if winCard then
 			local rInfo = Rarities.ByName[winItem.rarity]
-			local glowC = rInfo and rInfo.color or Color3.new(1, 1, 1)
 			local glow = Instance.new("UIStroke")
-			glow.Name = "WinGlow"
-			glow.Color = glowC; glow.Thickness = 0; glow.Parent = winCard
+			glow.Color = rInfo and rInfo.color or Color3.new(1, 1, 1)
+			glow.Thickness = 0; glow.Parent = winCard
 			TweenService:Create(glow, TweenInfo.new(0.35, Enum.EasingStyle.Back), { Thickness = 5 }):Play()
 		end
 
-		-- Flash for Epic+ items
 		local rarityRank = ({ Common = 1, Rare = 2, Epic = 3, Legendary = 4, Mythic = 5 })[resultData.rarity or "Common"] or 1
 		if rarityRank >= 3 then
 			local flash = Instance.new("Frame")
 			flash.Size = UDim2.new(1, 0, 1, 0)
 			flash.BackgroundColor3 = Rarities.ByName[resultData.rarity] and Rarities.ByName[resultData.rarity].color or Color3.new(1, 1, 1)
-			flash.BackgroundTransparency = 0.5; flash.ZIndex = 28; flash.Parent = overlay
+			flash.BackgroundTransparency = 0.5; flash.ZIndex = 28; flash.Parent = aOverlay
 			TweenService:Create(flash, TweenInfo.new(0.5), { BackgroundTransparency = 1 }):Play()
 			task.delay(0.5, function() if flash.Parent then flash:Destroy() end end)
 		end
-
-		-- Camera shake for Legendary/Mythic
-		if rarityRank >= 4 then
-			UIHelper.CameraShake(rarityRank * 0.15, 0.4)
-		end
+		if rarityRank >= 4 then UIHelper.CameraShake(rarityRank * 0.15, 0.4) end
 
 		task.wait(0.6)
 
-		-- Result popup
 		local rInfo2 = Rarities.ByName[resultData.rarity or "Common"]
 		local rColor2 = rInfo2 and rInfo2.color or Color3.new(1, 1, 1)
 		local effInfo2 = resultData.effect and Effects.ByName[resultData.effect]
 		local displayColor = effInfo2 and effInfo2.color or rColor2
 
 		local popup = Instance.new("Frame")
-		popup.Size = UDim2.new(0.65, 0, 0, 120)
-		popup.Position = UDim2.new(0.5, 0, 0.73, 0)
+		popup.Size = UDim2.new(0.7, 0, 0, 100)
+		popup.Position = UDim2.new(0.5, 0, 0.75, 0)
 		popup.AnchorPoint = Vector2.new(0.5, 0.5)
-		popup.BackgroundColor3 = Color3.fromRGB(20, 20, 38)
-		popup.BorderSizePixel = 0; popup.ZIndex = 26; popup.Parent = overlay
-		Instance.new("UICorner", popup).CornerRadius = UDim.new(0, 18)
-		local pStk = Instance.new("UIStroke", popup)
-		pStk.Color = displayColor; pStk.Thickness = 3
+		popup.BackgroundColor3 = Color3.fromRGB(40, 35, 60)
+		popup.BorderSizePixel = 0; popup.ZIndex = 26; popup.Parent = aOverlay
+		Instance.new("UICorner", popup).CornerRadius = UDim.new(0, 16)
+		Instance.new("UIStroke", popup).Color = displayColor
 
 		local displayName = resultData.displayName or "???"
-		local fullText = "\u{2728} You got: " .. displayName .. "! \u{2728}\n" .. (resultData.rarity or ""):upper()
+		local fullText = "You got: " .. displayName .. "!\n" .. (resultData.rarity or ""):upper()
 		if effInfo2 then
-			fullText = fullText .. "\n" .. effInfo2.prefix:upper() .. " EFFECT (x" .. effInfo2.cashMultiplier .. " cash)"
+			fullText = fullText .. "\n" .. effInfo2.prefix:upper() .. " (x" .. effInfo2.cashMultiplier .. " cash)"
 		end
 
 		local ppL = Instance.new("TextLabel")
-		ppL.Size = UDim2.new(1, -28, 1, 0)
+		ppL.Size = UDim2.new(1, -20, 1, 0)
 		ppL.Position = UDim2.new(0.5, 0, 0.5, 0)
 		ppL.AnchorPoint = Vector2.new(0.5, 0.5)
 		ppL.BackgroundTransparency = 1
-		ppL.Text = fullText
-		ppL.TextColor3 = displayColor
-		ppL.Font = FONT; ppL.TextSize = 22; ppL.TextWrapped = true
+		ppL.Text = fullText; ppL.TextColor3 = displayColor
+		ppL.Font = FONT; ppL.TextSize = 18; ppL.TextWrapped = true
 		ppL.ZIndex = 27; ppL.Parent = popup
-		local ppStk = Instance.new("UIStroke", ppL)
-		ppStk.Color = Color3.new(0, 0, 0); ppStk.Thickness = 2
-		ppStk.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+		addStroke(ppL, Color3.new(0, 0, 0), 1.5)
 
 		UIHelper.ScaleIn(popup, 0.3)
 
-		-- Auto-dismiss after delay (shorter if auto-open is active)
 		local dismissDelay = autoOpenEnabled and 1.5 or 3
 		task.delay(dismissDelay, function()
-			if overlay and overlay.Parent then
-				TweenService:Create(overlay, TweenInfo.new(0.3), { BackgroundTransparency = 1 }):Play()
+			if aOverlay and aOverlay.Parent then
+				TweenService:Create(aOverlay, TweenInfo.new(0.3), { BackgroundTransparency = 1 }):Play()
 				task.delay(0.3, function()
 					cleanupCaseAnim()
-					-- Auto-open: fire next case if toggle is on and player can afford it
 					if autoOpenEnabled and autoOpenCaseId and isOpen then
 						local autoCaseData = GemCases.ById[autoOpenCaseId]
 						if autoCaseData then
@@ -977,12 +553,7 @@ local function showCaseOpenAnimation(caseData, resultData)
 							if gems >= autoCaseData.cost then
 								BuyGemCase:FireServer(autoOpenCaseId)
 							else
-								autoOpenEnabled = false
-								autoOpenCaseId = nil
-								if activeTabId then
-									local cd = GemCases.ById[activeTabId]
-									if cd then buildCaseContent(cd) end
-								end
+								autoOpenEnabled = false; autoOpenCaseId = nil
 							end
 						end
 					end
@@ -991,43 +562,190 @@ local function showCaseOpenAnimation(caseData, resultData)
 		end)
 	end
 
-	-- Animate!
 	caseAnimConn = RunService.RenderStepped:Connect(function()
 		if caseSkipRequested and not done then
-			done = true
-			caseAnimConn:Disconnect(); caseAnimConn = nil
+			done = true; caseAnimConn:Disconnect(); caseAnimConn = nil
 			local tw = TweenService:Create(strip, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 				Position = UDim2.new(0, endX, 0, 0)
 			})
-			tw:Play()
-			tw.Completed:Connect(function() task.spawn(finishAnim) end)
+			tw:Play(); tw.Completed:Connect(function() task.spawn(finishAnim) end)
 			return
 		end
-
-		local t = (tick() - startTime) / DURATION
-		if t >= 1 then t = 1 end
-		local eased = easeOutQuint(t)
-		strip.Position = UDim2.new(0, startX - totalDist * eased, 0, 0)
-
+		local t = math.min((tick() - startTime) / DURATION, 1)
+		strip.Position = UDim2.new(0, startX - totalDist * easeOutQuint(t), 0, 0)
 		if t >= 1 and not done then
-			done = true
-			caseAnimConn:Disconnect(); caseAnimConn = nil
+			done = true; caseAnimConn:Disconnect(); caseAnimConn = nil
 			task.spawn(finishAnim)
 		end
 	end)
 end
 
 -------------------------------------------------
--- SIDEBAR HIGHLIGHT
+-- BUILD CASE CARD (single card in the scroll)
 -------------------------------------------------
-local function highlightSidebar(tabId)
-	activeTabId = tabId
-	for _, info in ipairs(sidebarBtns) do
-		local isActive = info.id == tabId
-		info.btn.BackgroundColor3 = isActive and Color3.fromRGB(50, 50, 80) or Color3.fromRGB(22, 22, 38)
-		local lbl = info.btn:FindFirstChild("TabLabel")
-		if lbl then lbl.TextSize = isActive and 16 or 14 end
+
+local function buildCaseCard(caseData, parent, order)
+	local card = Instance.new("Frame")
+	card.Name = "Case_" .. caseData.id
+	card.Size = UDim2.new(0, 280, 0, 370)
+	card.BackgroundColor3 = Color3.fromRGB(40, 35, 60)
+	card.BorderSizePixel = 0
+	card.LayoutOrder = order
+	card.ZIndex = 3; card.ClipsDescendants = true
+	card.Parent = parent
+	Instance.new("UICorner", card).CornerRadius = UDim.new(0, 18)
+
+	-- Subtle colored border
+	local cardStroke = Instance.new("UIStroke")
+	cardStroke.Color = caseData.color
+	cardStroke.Thickness = 2.5
+	cardStroke.Transparency = 0.2
+	cardStroke.Parent = card
+
+	-- Color accent strip at top
+	local accent = Instance.new("Frame")
+	accent.Size = UDim2.new(1, 0, 0, 5)
+	accent.BackgroundColor3 = caseData.color
+	accent.BorderSizePixel = 0; accent.ZIndex = 4
+	accent.Parent = card
+	Instance.new("UICorner", accent).CornerRadius = UDim.new(0, 18)
+
+	-- Logo image (case name) -- BIG
+	local logoImage = Instance.new("ImageLabel")
+	logoImage.Name = "Logo"
+	logoImage.Size = UDim2.new(1, -16, 0, 75)
+	logoImage.Position = UDim2.new(0.5, 0, 0, 10)
+	logoImage.AnchorPoint = Vector2.new(0.5, 0)
+	logoImage.BackgroundTransparency = 1
+	logoImage.ScaleType = Enum.ScaleType.Fit
+	logoImage.ZIndex = 4
+	logoImage.Parent = card
+	if caseData.logoImageId and caseData.logoImageId ~= "" then
+		logoImage.Image = caseData.logoImageId
 	end
+
+	-- Case picture (center image)
+	local casePic = Instance.new("ImageLabel")
+	casePic.Name = "CasePicture"
+	casePic.Size = UDim2.new(0, 160, 0, 160)
+	casePic.Position = UDim2.new(0.5, 0, 0, 88)
+	casePic.AnchorPoint = Vector2.new(0.5, 0)
+	casePic.BackgroundTransparency = 1
+	casePic.ScaleType = Enum.ScaleType.Fit
+	casePic.ZIndex = 4
+	casePic.Parent = card
+	if caseData.pictureImageId and caseData.pictureImageId ~= "" then
+		casePic.Image = caseData.pictureImageId
+	end
+
+	-- Rebirth requirement check
+	local rebirthReq = caseData.rebirthRequired or 0
+	local currentRebirth = HUDController.Data.rebirthCount or 0
+	local isLocked = rebirthReq > 0 and currentRebirth < rebirthReq
+
+	-- Price label
+	local priceLabel = Instance.new("TextLabel")
+	priceLabel.Size = UDim2.new(1, 0, 0, 26)
+	priceLabel.Position = UDim2.new(0.5, 0, 0, 252)
+	priceLabel.AnchorPoint = Vector2.new(0.5, 0)
+	priceLabel.BackgroundTransparency = 1
+	priceLabel.Text = fmtNum(caseData.cost) .. " Gems"
+	priceLabel.TextColor3 = Color3.fromRGB(120, 200, 255)
+	priceLabel.Font = FONT; priceLabel.TextSize = 20
+	priceLabel.ZIndex = 4; priceLabel.Parent = card
+	addStroke(priceLabel, Color3.new(0, 0, 0), 1.2)
+
+	-- Rebirth requirement label
+	if rebirthReq > 0 then
+		local reqLabel = Instance.new("TextLabel")
+		reqLabel.Size = UDim2.new(1, 0, 0, 16)
+		reqLabel.Position = UDim2.new(0.5, 0, 0, 275)
+		reqLabel.AnchorPoint = Vector2.new(0.5, 0)
+		reqLabel.BackgroundTransparency = 1
+		reqLabel.Text = isLocked and ("Requires Rebirth " .. rebirthReq) or ("Rebirth " .. rebirthReq .. " ✓")
+		reqLabel.TextColor3 = isLocked and Color3.fromRGB(255, 120, 80) or Color3.fromRGB(100, 200, 120)
+		reqLabel.Font = FONT_SUB; reqLabel.TextSize = 12
+		reqLabel.ZIndex = 4; reqLabel.Parent = card
+	end
+
+	-- OPEN button (wide, element-colored)
+	local buyBtn = Instance.new("TextButton")
+	buyBtn.Name = "BuyBtn"
+	buyBtn.Size = UDim2.new(1, -24, 0, 34)
+	buyBtn.Position = UDim2.new(0.5, 0, 0, rebirthReq > 0 and 294 or 284)
+	buyBtn.AnchorPoint = Vector2.new(0.5, 0)
+	buyBtn.BackgroundColor3 = isLocked and Color3.fromRGB(70, 65, 80) or caseData.color
+	buyBtn.Text = ""; buyBtn.BorderSizePixel = 0
+	buyBtn.AutoButtonColor = false; buyBtn.ZIndex = 5
+	buyBtn.Parent = card
+	Instance.new("UICorner", buyBtn).CornerRadius = UDim.new(0, 10)
+	local buyStroke = Instance.new("UIStroke")
+	buyStroke.Color = Color3.fromRGB(
+		math.max(math.floor(caseData.color.R * 255 * 0.6), 0),
+		math.max(math.floor(caseData.color.G * 255 * 0.6), 0),
+		math.max(math.floor(caseData.color.B * 255 * 0.6), 0))
+	buyStroke.Thickness = 1.5; buyStroke.Parent = buyBtn
+
+	local buyText = Instance.new("TextLabel")
+	buyText.Size = UDim2.new(1, 0, 1, 0)
+	buyText.BackgroundTransparency = 1
+	buyText.Text = isLocked and "LOCKED" or "OPEN"
+	buyText.TextColor3 = isLocked and Color3.fromRGB(120, 115, 130) or Color3.new(1, 1, 1)
+	buyText.Font = FONT; buyText.TextSize = 17; buyText.ZIndex = 6
+	buyText.Parent = buyBtn
+	addStroke(buyText, Color3.new(0, 0, 0), 1.2)
+
+	if not isLocked then
+		buyBtn.MouseEnter:Connect(function()
+			TweenService:Create(buyBtn, bounceTween, { Size = UDim2.new(1, -18, 0, 38) }):Play()
+		end)
+		buyBtn.MouseLeave:Connect(function()
+			TweenService:Create(buyBtn, bounceTween, { Size = UDim2.new(1, -24, 0, 34) }):Play()
+		end)
+		buyBtn.MouseButton1Click:Connect(function()
+			local gems = HUDController.Data.gems or 0
+			if gems < caseData.cost then
+				buyText.Text = "Need more gems!"
+				task.delay(1.5, function()
+					if buyText.Parent then buyText.Text = "OPEN" end
+				end)
+				return
+			end
+			BuyGemCase:FireServer(caseData.id)
+		end)
+	end
+
+	-- Drop Rate button (below OPEN)
+	local drBtn = Instance.new("TextButton")
+	drBtn.Size = UDim2.new(1, -24, 0, 28)
+	drBtn.Position = UDim2.new(0.5, 0, 0, rebirthReq > 0 and 334 or 324)
+	drBtn.AnchorPoint = Vector2.new(0.5, 0)
+	drBtn.BackgroundColor3 = Color3.fromRGB(55, 50, 75)
+	drBtn.Text = ""; drBtn.BorderSizePixel = 0
+	drBtn.AutoButtonColor = false; drBtn.ZIndex = 5
+	drBtn.Parent = card
+	Instance.new("UICorner", drBtn).CornerRadius = UDim.new(0, 8)
+
+	local drText = Instance.new("TextLabel")
+	drText.Size = UDim2.new(1, 0, 1, 0)
+	drText.BackgroundTransparency = 1
+	drText.Text = "View Drop Rates"; drText.TextColor3 = Color3.fromRGB(160, 155, 185)
+	drText.Font = FONT_SUB; drText.TextSize = 11; drText.ZIndex = 6
+	drText.Parent = drBtn
+
+	drBtn.MouseEnter:Connect(function()
+		TweenService:Create(drBtn, bounceTween, { Size = UDim2.new(1, -18, 0, 32) }):Play()
+		drText.TextColor3 = Color3.new(1, 1, 1)
+	end)
+	drBtn.MouseLeave:Connect(function()
+		TweenService:Create(drBtn, bounceTween, { Size = UDim2.new(1, -24, 0, 28) }):Play()
+		drText.TextColor3 = Color3.fromRGB(160, 155, 185)
+	end)
+	drBtn.MouseButton1Click:Connect(function()
+		openDropRatePopup(caseData)
+	end)
+
+	return card
 end
 
 -------------------------------------------------
@@ -1038,12 +756,8 @@ function GemShopController.Open()
 	if isOpen then GemShopController.Close(); return end
 	isOpen = true
 	if modalFrame then
+		overlay.Visible = true
 		modalFrame.Visible = true
-		-- default to first tab
-		if sidebarBtns[1] then
-			highlightSidebar(sidebarBtns[1].id)
-			buildCaseContent(GemCases.ById[sidebarBtns[1].id])
-		end
 		UIHelper.ScaleIn(modalFrame, 0.25)
 	end
 end
@@ -1051,11 +765,11 @@ end
 function GemShopController.Close()
 	if not isOpen then return end
 	isOpen = false
-	autoOpenEnabled = false
-	autoOpenCaseId = nil
+	autoOpenEnabled = false; autoOpenCaseId = nil
 	closeDropRatePopup()
 	cleanupCaseAnim()
 	stopViewports()
+	if overlay then overlay.Visible = false end
 	if modalFrame then UIHelper.ScaleOut(modalFrame, 0.2) end
 end
 
@@ -1067,255 +781,158 @@ function GemShopController.Init()
 	screenGui = UIHelper.CreateScreenGui("GemShopGui", 10)
 	screenGui.Parent = playerGui
 
+	-- Overlay
+	overlay = Instance.new("Frame")
+	overlay.Name = "Overlay"
+	overlay.Size = UDim2.new(1, 0, 1, 0)
+	overlay.BackgroundColor3 = Color3.new(0, 0, 0)
+	overlay.BackgroundTransparency = 0.45
+	overlay.BorderSizePixel = 0; overlay.Visible = false
+	overlay.ZIndex = 1; overlay.Parent = screenGui
+
+	-- Modal
 	modalFrame = Instance.new("Frame")
 	modalFrame.Name = "GemShopModal"
-	modalFrame.Size = UDim2.new(0, 880, 0, 640)
+	modalFrame.Size = UDim2.new(0, MODAL_W, 0, MODAL_H)
 	modalFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
 	modalFrame.AnchorPoint = Vector2.new(0.5, 0.5)
-	modalFrame.BackgroundColor3 = Color3.fromRGB(14, 12, 28)
-	modalFrame.BorderSizePixel = 0
-	modalFrame.Visible = false
-	modalFrame.ClipsDescendants = true
+	modalFrame.BackgroundColor3 = MODAL_BG
+	modalFrame.BorderSizePixel = 0; modalFrame.Visible = false
+	modalFrame.ZIndex = 2; modalFrame.ClipsDescendants = true
 	modalFrame.Parent = screenGui
-	local mCorner = Instance.new("UICorner"); mCorner.CornerRadius = UDim.new(0, 24); mCorner.Parent = modalFrame
-	local mStroke = Instance.new("UIStroke"); mStroke.Color = Color3.fromRGB(100, 200, 255); mStroke.Thickness = 3; mStroke.Transparency = 0.15; mStroke.Parent = modalFrame
+	Instance.new("UICorner", modalFrame).CornerRadius = UDim.new(0, 20)
+	local mStroke = Instance.new("UIStroke")
+	mStroke.Color = Color3.fromRGB(70, 60, 100)
+	mStroke.Thickness = 1.5; mStroke.Transparency = 0.3
+	mStroke.Parent = modalFrame
 	UIHelper.CreateShadow(modalFrame)
-	UIHelper.MakeResponsiveModal(modalFrame, 880, 640)
+	UIHelper.MakeResponsiveModal(modalFrame, MODAL_W, MODAL_H)
 
-	-- Top bar gradient
-	local topBar = Instance.new("Frame")
-	topBar.Size = UDim2.new(1, 0, 0, 8)
-	topBar.BackgroundColor3 = Color3.new(1,1,1)
-	topBar.BorderSizePixel = 0; topBar.ZIndex = 5
-	topBar.Parent = modalFrame
-	local tbG = Instance.new("UIGradient")
-	tbG.Color = ColorSequence.new({
-		ColorSequenceKeypoint.new(0, Color3.fromRGB(80, 180, 255)),
-		ColorSequenceKeypoint.new(0.5, Color3.fromRGB(200, 230, 255)),
-		ColorSequenceKeypoint.new(1, Color3.fromRGB(80, 180, 255)),
-	}); tbG.Parent = topBar
+	-- ===== HEADER =====
+	local header = Instance.new("Frame")
+	header.Size = UDim2.new(1, 0, 0, 60)
+	header.BackgroundTransparency = 1; header.ZIndex = 3
+	header.Parent = modalFrame
 
-	-- Title
 	local title = Instance.new("TextLabel")
-	title.Size = UDim2.new(1, -100, 0, 48)
-	title.Position = UDim2.new(0.5, 0, 0, 10)
-	title.AnchorPoint = Vector2.new(0.5, 0)
+	title.Size = UDim2.new(0.6, 0, 0, 32)
+	title.Position = UDim2.new(0, 20, 0, 10)
 	title.BackgroundTransparency = 1
-	title.Text = "\u{1F48E} GEM SHOP \u{1F48E}"
-	title.TextColor3 = Color3.fromRGB(100, 200, 255)
-	title.Font = FONT; title.TextSize = 32
-	title.Parent = modalFrame
-	local tStroke = Instance.new("UIStroke")
-	tStroke.Color = Color3.fromRGB(0,0,80); tStroke.Thickness = 2.5
-	tStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
-	tStroke.Parent = title
+	title.Text = "Gem Shop"
+	title.TextColor3 = Color3.new(1, 1, 1)
+	title.Font = FONT; title.TextSize = 28
+	title.TextXAlignment = Enum.TextXAlignment.Left
+	title.ZIndex = 3; title.Parent = header
+	addStroke(title, Color3.new(0, 0, 0), 1.5)
 
-	-- Gem balance
 	balanceLabel = Instance.new("TextLabel")
-	balanceLabel.Name = "Balance"
-	balanceLabel.Size = UDim2.new(1, -20, 0, 24)
-	balanceLabel.Position = UDim2.new(0.5, 0, 0, 58)
-	balanceLabel.AnchorPoint = Vector2.new(0.5, 0)
+	balanceLabel.Size = UDim2.new(0.5, 0, 0, 16)
+	balanceLabel.Position = UDim2.new(0, 22, 0, 42)
 	balanceLabel.BackgroundTransparency = 1
-	balanceLabel.Text = "\u{1F48E} " .. formatNumber(HUDController.Data.gems or 0) .. " Gems"
-	balanceLabel.TextColor3 = Color3.fromRGB(150, 210, 255)
-	balanceLabel.Font = FONT; balanceLabel.TextSize = 18
-	balanceLabel.Parent = modalFrame
+	balanceLabel.Text = fmtNum(HUDController.Data.gems or 0) .. " Gems"
+	balanceLabel.TextColor3 = Color3.fromRGB(120, 200, 255)
+	balanceLabel.Font = FONT_SUB; balanceLabel.TextSize = 12
+	balanceLabel.TextXAlignment = Enum.TextXAlignment.Left
+	balanceLabel.ZIndex = 3; balanceLabel.Parent = header
 
-	-- Close
+	-- Close button
 	local closeBtn = Instance.new("TextButton")
-	closeBtn.Size = UDim2.new(0, 48, 0, 48)
+	closeBtn.Size = UDim2.new(0, 40, 0, 40)
 	closeBtn.Position = UDim2.new(1, -14, 0, 10)
 	closeBtn.AnchorPoint = Vector2.new(1, 0)
-	closeBtn.BackgroundColor3 = Color3.fromRGB(220, 60, 60)
-	closeBtn.Text = "X"; closeBtn.TextColor3 = Color3.new(1,1,1)
-	closeBtn.Font = FONT; closeBtn.TextSize = 24
-	closeBtn.BorderSizePixel = 0; closeBtn.ZIndex = 10
-	closeBtn.Parent = modalFrame
-	local ccC = Instance.new("UICorner"); ccC.CornerRadius = UDim.new(1,0); ccC.Parent = closeBtn
+	closeBtn.BackgroundColor3 = RED; closeBtn.Text = "X"
+	closeBtn.TextColor3 = Color3.new(1, 1, 1)
+	closeBtn.Font = FONT; closeBtn.TextSize = 20
+	closeBtn.BorderSizePixel = 0; closeBtn.AutoButtonColor = false
+	closeBtn.ZIndex = 5; closeBtn.Parent = modalFrame
+	Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(0, 10)
+	local cStroke = Instance.new("UIStroke")
+	cStroke.Color = RED_DARK; cStroke.Thickness = 1.5; cStroke.Parent = closeBtn
+
+	closeBtn.MouseEnter:Connect(function()
+		TweenService:Create(closeBtn, bounceTween, { Size = UDim2.new(0, 46, 0, 46), BackgroundColor3 = Color3.fromRGB(255, 75, 75) }):Play()
+	end)
+	closeBtn.MouseLeave:Connect(function()
+		TweenService:Create(closeBtn, bounceTween, { Size = UDim2.new(0, 40, 0, 40), BackgroundColor3 = RED }):Play()
+	end)
 	closeBtn.MouseButton1Click:Connect(function() GemShopController.Close() end)
 
-	-------------------------------------------------
-	-- SIDEBAR (left, scrollable list of all cases)
-	-------------------------------------------------
-	local sidebarWidth = 200
-	local sidebar = Instance.new("ScrollingFrame")
-	sidebar.Name = "Sidebar"
-	sidebar.Size = UDim2.new(0, sidebarWidth, 1, -88)
-	sidebar.Position = UDim2.new(0, 0, 0, 88)
-	sidebar.BackgroundColor3 = Color3.fromRGB(16, 14, 30)
-	sidebar.BackgroundTransparency = 0.3
-	sidebar.BorderSizePixel = 0
-	sidebar.ScrollBarThickness = 3
-	sidebar.ScrollBarImageColor3 = Color3.fromRGB(100, 180, 255)
-	sidebar.CanvasSize = UDim2.new(0, 0, 0, 0)
-	sidebar.AutomaticCanvasSize = Enum.AutomaticSize.Y
-	sidebar.Parent = modalFrame
+	-- Divider
+	local divider = Instance.new("Frame")
+	divider.Size = UDim2.new(1, -30, 0, 1)
+	divider.Position = UDim2.new(0.5, 0, 0, 62)
+	divider.AnchorPoint = Vector2.new(0.5, 0)
+	divider.BackgroundColor3 = Color3.fromRGB(60, 55, 80)
+	divider.BorderSizePixel = 0; divider.ZIndex = 3
+	divider.Parent = modalFrame
 
-	local sbLayout = Instance.new("UIListLayout")
-	sbLayout.SortOrder = Enum.SortOrder.LayoutOrder
-	sbLayout.Padding = UDim.new(0, 5)
-	sbLayout.Parent = sidebar
+	-- ===== SCROLLABLE CASE GRID (3 columns) =====
+	local scrollFrame = Instance.new("ScrollingFrame")
+	scrollFrame.Name = "CaseList"
+	scrollFrame.Size = UDim2.new(1, -16, 1, -72)
+	scrollFrame.Position = UDim2.new(0.5, 0, 0, 68)
+	scrollFrame.AnchorPoint = Vector2.new(0.5, 0)
+	scrollFrame.BackgroundTransparency = 1
+	scrollFrame.BorderSizePixel = 0
+	scrollFrame.ScrollBarThickness = 5
+	scrollFrame.ScrollBarImageColor3 = Color3.fromRGB(100, 80, 150)
+	scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+	scrollFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
+	scrollFrame.ZIndex = 3; scrollFrame.Parent = modalFrame
 
-	local sbPad = Instance.new("UIPadding")
-	sbPad.PaddingTop = UDim.new(0, 6)
-	sbPad.PaddingLeft = UDim.new(0, 6)
-	sbPad.PaddingRight = UDim.new(0, 6)
-	sbPad.Parent = sidebar
+	local gridLayout = Instance.new("UIGridLayout")
+	gridLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	gridLayout.CellSize = UDim2.new(0, 280, 0, 370)
+	gridLayout.CellPadding = UDim2.new(0, 12, 0, 14)
+	gridLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	gridLayout.Parent = scrollFrame
 
-	-- Build sidebar tabs
-	local tabOrder = 0
-	local function addSidebarTab(caseData, emoji)
-		tabOrder = tabOrder + 1
-		local btn = Instance.new("TextButton")
-		btn.Name = "Tab_" .. caseData.id
-		btn.Size = UDim2.new(1, 0, 0, 44)
-		btn.BackgroundColor3 = Color3.fromRGB(22, 22, 38)
-		btn.BorderSizePixel = 0
-		btn.LayoutOrder = tabOrder
-		btn.Text = "" -- no default "Button" text
-		btn.Parent = sidebar
-		local bCorner = Instance.new("UICorner"); bCorner.CornerRadius = UDim.new(0, 10); bCorner.Parent = btn
+	local listPad = Instance.new("UIPadding")
+	listPad.PaddingTop = UDim.new(0, 8)
+	listPad.PaddingBottom = UDim.new(0, 10)
+	listPad.PaddingLeft = UDim.new(0, 6)
+	listPad.PaddingRight = UDim.new(0, 6)
+	listPad.Parent = scrollFrame
 
-		-- Color strip
-		local strip = Instance.new("Frame")
-		strip.Size = UDim2.new(0, 6, 0.7, 0)
-		strip.Position = UDim2.new(0, 4, 0.15, 0)
-		strip.BackgroundColor3 = caseData.color
-		strip.BorderSizePixel = 0
-		strip.Parent = btn
-		local sC = Instance.new("UICorner"); sC.CornerRadius = UDim.new(0, 2); sC.Parent = strip
-
-		local lbl = Instance.new("TextLabel")
-		lbl.Name = "TabLabel"
-		lbl.Size = UDim2.new(1, -18, 1, 0)
-		lbl.Position = UDim2.new(0, 16, 0, 0)
-		lbl.BackgroundTransparency = 1
-		lbl.Text = (emoji or "") .. " " .. caseData.name
-		lbl.TextColor3 = caseData.color
-		lbl.Font = FONT; lbl.TextSize = 14
-		lbl.TextXAlignment = Enum.TextXAlignment.Left
-		lbl.TextTruncate = Enum.TextTruncate.AtEnd
-		lbl.Parent = btn
-
-		btn.MouseButton1Click:Connect(function()
-			stopViewports()
-			highlightSidebar(caseData.id)
-			buildCaseContent(caseData)
-		end)
-
-		table.insert(sidebarBtns, { id = caseData.id, btn = btn })
+	-- Build all effect case cards (cheapest to most expensive)
+	for i, ec in ipairs(GemCases.EffectCases) do
+		buildCaseCard(ec, scrollFrame, i)
 	end
-
-	-- Section label helper
-	local function addSectionLabel(text, order)
-		tabOrder = tabOrder + 1
-		local lbl = Instance.new("TextLabel")
-		lbl.Name = "Section_" .. text
-		lbl.Size = UDim2.new(1, 0, 0, 28)
-		lbl.BackgroundTransparency = 1
-		lbl.Text = text
-		lbl.TextColor3 = Color3.fromRGB(100, 100, 130)
-		lbl.Font = FONT; lbl.TextSize = 12
-		lbl.LayoutOrder = tabOrder
-		lbl.Parent = sidebar
-	end
-
-	-- Add regular cases
-	addSectionLabel("— CASES —")
-	for _, rc in ipairs(GemCases.RegularCases) do
-		addSidebarTab(rc, "\u{1F4E6}")
-	end
-
-	-- Add effect cases
-	addSectionLabel("— EFFECT CASES —")
-	for _, ec in ipairs(GemCases.EffectCases) do
-		addSidebarTab(ec, "\u{2728}")
-	end
-
-	-- Add special cases
-	addSectionLabel("— SPECIAL —")
-	for _, sc in ipairs(GemCases.SpecialCases) do
-		local emoji = "\u{1F3B0}"
-		if sc.id == "QueensCase" then emoji = "\u{1F451}"
-		elseif sc.id == "LuckySevenCase" then emoji = "\u{1F340}"
-		elseif sc.id == "FiftyFiftyCase" then emoji = "\u{1F3B2}"
-		elseif sc.id == "MythicOrBustCase" then emoji = "\u{1F525}"
-		elseif sc.id == "WRizzCase" then emoji = "\u{1F60E}"
-		elseif sc.id == "OGCase" then emoji = "\u{1F3AE}"
-		end
-		addSidebarTab(sc, emoji)
-	end
-
-	-------------------------------------------------
-	-- CONTENT AREA (right side)
-	-------------------------------------------------
-	contentFrame = Instance.new("ScrollingFrame")
-	contentFrame.Name = "Content"
-	contentFrame.Size = UDim2.new(1, -sidebarWidth - 14, 1, -88)
-	contentFrame.Position = UDim2.new(0, sidebarWidth + 8, 0, 88)
-	contentFrame.BackgroundTransparency = 1
-	contentFrame.BorderSizePixel = 0
-	contentFrame.ScrollBarThickness = 6
-	contentFrame.ScrollBarImageColor3 = Color3.fromRGB(100, 180, 255)
-	contentFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
-	contentFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
-	contentFrame.Parent = modalFrame
-
-	local cLayout = Instance.new("UIListLayout")
-	cLayout.SortOrder = Enum.SortOrder.LayoutOrder
-	cLayout.Padding = UDim.new(0, 12)
-	cLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-	cLayout.Parent = contentFrame
-
-	local cPad = Instance.new("UIPadding")
-	cPad.PaddingTop = UDim.new(0, 10)
-	cPad.PaddingBottom = UDim.new(0, 10)
-	cPad.Parent = contentFrame
 
 	-------------------------------------------------
 	-- EVENTS
 	-------------------------------------------------
 	HUDController.OnDataUpdated(function()
 		if balanceLabel then
-			balanceLabel.Text = "\u{1F48E} " .. formatNumber(HUDController.Data.gems or 0) .. " Gems"
+			balanceLabel.Text = fmtNum(HUDController.Data.gems or 0) .. " Gems"
 		end
 	end)
 
 	GemCaseResult.OnClientEvent:Connect(function(result)
 		if not isOpen then return end
 		if result.success then
-			-- Play case opening animation!
 			local caseData2 = result.caseId and GemCases.ById[result.caseId]
-			if caseData2 then
-				showCaseOpenAnimation(caseData2, result)
-			end
+			if caseData2 then showCaseOpenAnimation(caseData2, result) end
 		else
-			-- Disable auto-open on failure
 			if autoOpenEnabled then
-				autoOpenEnabled = false
-				autoOpenCaseId = nil
-				if activeTabId then
-					local cd = GemCases.ById[activeTabId]
-					if cd then buildCaseContent(cd) end
-				end
+				autoOpenEnabled = false; autoOpenCaseId = nil
 			end
 			local toast = Instance.new("Frame")
-			toast.Size = UDim2.new(0.6, 0, 0, 48)
-			toast.Position = UDim2.new(0.5, 0, 0.9, 0)
+			toast.Size = UDim2.new(0.7, 0, 0, 42)
+			toast.Position = UDim2.new(0.5, 0, 0.92, 0)
 			toast.AnchorPoint = Vector2.new(0.5, 0.5)
 			toast.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
 			toast.BorderSizePixel = 0; toast.ZIndex = 25
 			toast.Parent = modalFrame
-			local tC = Instance.new("UICorner"); tC.CornerRadius = UDim.new(0, 12); tC.Parent = toast
+			Instance.new("UICorner", toast).CornerRadius = UDim.new(0, 10)
 			local tL = Instance.new("TextLabel")
-			tL.Size = UDim2.new(1, -16, 1, 0)
+			tL.Size = UDim2.new(1, -12, 1, 0)
 			tL.Position = UDim2.new(0.5, 0, 0.5, 0)
 			tL.AnchorPoint = Vector2.new(0.5, 0.5)
 			tL.BackgroundTransparency = 1
 			tL.Text = result.reason or "Error!"
-			tL.TextColor3 = Color3.new(1,1,1)
-			tL.Font = FONT; tL.TextSize = 16; tL.ZIndex = 26
+			tL.TextColor3 = Color3.new(1, 1, 1)
+			tL.Font = FONT; tL.TextSize = 14; tL.ZIndex = 26
 			tL.Parent = toast
 			task.delay(2, function() if toast.Parent then toast:Destroy() end end)
 		end

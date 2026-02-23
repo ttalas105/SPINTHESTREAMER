@@ -85,7 +85,7 @@ local function updateDisplay()
 		if titleRef then titleRef.Text = "Max Rebirth" end
 		if levelTextRef then levelTextRef.Text = "MAX" end
 		if bonusValueRef then
-			bonusValueRef.Text = "+" .. (current * Economy.RebirthCoinBonusPercent) .. "% coins"
+			bonusValueRef.Text = "+" .. Economy.GetRebirthBonusPercent(current) .. "% coins"
 		end
 		if caseImageRef then caseImageRef.Visible = false end
 		if caseNameRef then caseNameRef.Text = "All cases unlocked!" end
