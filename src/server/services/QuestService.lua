@@ -148,28 +148,28 @@ function QuestService.Init(playerDataModule)
 		end)
 	end)
 
+	local function onPlayerReady(player)
+		PlayerData.WithLock(player, function()
+			local data = PlayerData.Get(player)
+			if data then
+				resetIfNeeded(data)
+				sendQuestUpdate(player, data)
+			end
+		end)
+
+		QuestService.Increment(player, "logins", 1)
+	end
+
 	Players.PlayerAdded:Connect(function(player)
 		task.delay(4, function()
-			PlayerData.WithLock(player, function()
-				local data = PlayerData.Get(player)
-				if data then
-					resetIfNeeded(data)
-					sendQuestUpdate(player, data)
-				end
-			end)
+			onPlayerReady(player)
 		end)
 	end)
 
-	for _, p in ipairs(Players:GetPlayers()) do
+	for _, existingPlayer in ipairs(Players:GetPlayers()) do
 		task.spawn(function()
 			task.delay(4, function()
-				PlayerData.WithLock(p, function()
-					local data = PlayerData.Get(p)
-					if data then
-						resetIfNeeded(data)
-						sendQuestUpdate(p, data)
-					end
-				end)
+				onPlayerReady(existingPlayer)
 			end)
 		end)
 	end

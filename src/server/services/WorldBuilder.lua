@@ -909,6 +909,219 @@ local function buildBoundaries()
 end
 
 -------------------------------------------------
+-- GLOBAL LEADERBOARDS (4 physical boards)
+-------------------------------------------------
+
+local LEADERBOARD_CATEGORIES = {
+	{ key = "Leaderboard_Spins",      title = "TOP ROLLS",      color = Color3.fromRGB(60, 140, 255),  valuePrefix = "" },
+	{ key = "Leaderboard_Cash",       title = "TOP CASH",       color = Color3.fromRGB(80, 220, 80),   valuePrefix = "$" },
+	{ key = "Leaderboard_TimePlayed", title = "TIME PLAYED",    color = Color3.fromRGB(170, 80, 230),  valuePrefix = "" },
+	{ key = "Leaderboard_Robux",      title = "ROBUX SPENT",    color = Color3.fromRGB(255, 200, 50),  valuePrefix = "R$" },
+}
+
+local LB_BOARD_W      = 16
+local LB_BOARD_H      = 22
+local LB_BOARD_DEPTH  = 1.5
+local LB_SPACING      = 20
+local LB_DISPLAY_ROWS = 10
+
+local function buildLeaderboards()
+	local folder = Instance.new("Folder")
+	folder.Name = "Leaderboards"
+	folder.Parent = Workspace
+
+	local ctr = DesignConfig.HubCenter
+	local totalW = (#LEADERBOARD_CATEGORIES - 1) * LB_SPACING
+	local startX = ctr.X - totalW / 2 - 150
+	local boardZ = ctr.Z
+
+	for i, cat in ipairs(LEADERBOARD_CATEGORIES) do
+		local x = startX + (i - 1) * LB_SPACING
+		local boardY = ctr.Y + LB_BOARD_H / 2 + 0.5
+
+		local boardCF = CFrame.new(Vector3.new(x, boardY, boardZ)) * CFrame.Angles(0, math.rad(180), 0)
+
+		local boardPart = p({
+			Name = cat.key,
+			Size = Vector3.new(LB_BOARD_W, LB_BOARD_H, LB_BOARD_DEPTH),
+			CFrame = boardCF,
+			Color = cat.color,
+			Material = Enum.Material.SmoothPlastic,
+			Parent = folder,
+		})
+
+		local BORDER = 30
+		local PX_W = 800
+		local PX_H = 1100
+
+		local surfaceGui = Instance.new("SurfaceGui")
+		surfaceGui.Name = "LeaderboardGui"
+		surfaceGui.Face = Enum.NormalId.Front
+		surfaceGui.SizingMode = Enum.SurfaceGuiSizingMode.FixedSize
+		surfaceGui.CanvasSize = Vector2.new(PX_W, PX_H)
+		surfaceGui.ClipsDescendants = true
+		surfaceGui.LightInfluence = 0
+		surfaceGui.Brightness = 1
+		surfaceGui.ZOffset = 1
+		surfaceGui.Parent = boardPart
+
+		local container = Instance.new("Frame")
+		container.Name = "Container"
+		container.Size = UDim2.new(1, -BORDER * 2, 1, -BORDER * 2)
+		container.Position = UDim2.new(0, BORDER, 0, BORDER)
+		container.BackgroundColor3 = Color3.fromRGB(15, 12, 25)
+		container.BackgroundTransparency = 0
+		container.BorderSizePixel = 0
+		container.Parent = surfaceGui
+
+		local containerCorner = Instance.new("UICorner")
+		containerCorner.CornerRadius = UDim.new(0, 12)
+		containerCorner.Parent = container
+
+		local cPad = Instance.new("UIPadding")
+		cPad.PaddingTop = UDim.new(0, 20)
+		cPad.PaddingBottom = UDim.new(0, 20)
+		cPad.PaddingLeft = UDim.new(0, 20)
+		cPad.PaddingRight = UDim.new(0, 20)
+		cPad.Parent = container
+
+		local HEADER_H = 110
+		local headerBg = Instance.new("Frame")
+		headerBg.Name = "HeaderBg"
+		headerBg.Size = UDim2.new(1, 0, 0, HEADER_H)
+		headerBg.Position = UDim2.new(0, 0, 0, 0)
+		headerBg.BackgroundColor3 = cat.color
+		headerBg.BackgroundTransparency = 0.1
+		headerBg.BorderSizePixel = 0
+		headerBg.Parent = container
+		local hCorner = Instance.new("UICorner")
+		hCorner.CornerRadius = UDim.new(0, 14)
+		hCorner.Parent = headerBg
+
+		local titleLabel = Instance.new("TextLabel")
+		titleLabel.Name = "Title"
+		titleLabel.Size = UDim2.new(1, -20, 1, -10)
+		titleLabel.Position = UDim2.new(0, 10, 0, 5)
+		titleLabel.BackgroundTransparency = 1
+		titleLabel.Text = cat.title
+		titleLabel.TextColor3 = Color3.new(1, 1, 1)
+		titleLabel.Font = Enum.Font.FredokaOne
+		titleLabel.TextScaled = true
+		titleLabel.Parent = headerBg
+
+		local titleStroke = Instance.new("UIStroke")
+		titleStroke.Thickness = 4
+		titleStroke.Color = Color3.fromRGB(0, 0, 0)
+		titleStroke.Parent = titleLabel
+
+		local innerH = PX_H - BORDER * 2 - 40
+		local entriesTop = HEADER_H + 12
+		local entriesH = innerH - entriesTop
+		local ROW_H = math.floor((entriesH - (LB_DISPLAY_ROWS - 1) * 6) / LB_DISPLAY_ROWS)
+
+		local entriesFrame = Instance.new("Frame")
+		entriesFrame.Name = "Entries"
+		entriesFrame.Size = UDim2.new(1, 0, 0, entriesH)
+		entriesFrame.Position = UDim2.new(0, 0, 0, entriesTop)
+		entriesFrame.BackgroundTransparency = 1
+		entriesFrame.BorderSizePixel = 0
+		entriesFrame.Parent = container
+
+		local layout = Instance.new("UIListLayout")
+		layout.FillDirection = Enum.FillDirection.Vertical
+		layout.SortOrder = Enum.SortOrder.LayoutOrder
+		layout.Padding = UDim.new(0, 6)
+		layout.Parent = entriesFrame
+
+		for rank = 1, LB_DISPLAY_ROWS do
+			local row = Instance.new("Frame")
+			row.Name = "Row_" .. rank
+			row.Size = UDim2.new(1, 0, 0, ROW_H)
+			row.LayoutOrder = rank
+			row.BorderSizePixel = 0
+			row.Parent = entriesFrame
+
+			if rank % 2 == 0 then
+				row.BackgroundColor3 = Color3.fromRGB(30, 26, 50)
+			else
+				row.BackgroundColor3 = Color3.fromRGB(22, 18, 38)
+			end
+			row.BackgroundTransparency = 0
+
+			local rowCorner = Instance.new("UICorner")
+			rowCorner.CornerRadius = UDim.new(0, 8)
+			rowCorner.Parent = row
+
+			local rankColor
+			if rank == 1 then
+				rankColor = Color3.fromRGB(255, 215, 0)
+			elseif rank == 2 then
+				rankColor = Color3.fromRGB(210, 210, 220)
+			elseif rank == 3 then
+				rankColor = Color3.fromRGB(220, 145, 60)
+			else
+				rankColor = Color3.fromRGB(170, 165, 190)
+			end
+
+			local rankLabel = Instance.new("TextLabel")
+			rankLabel.Name = "Rank"
+			rankLabel.Size = UDim2.new(0, 80, 1, -8)
+			rankLabel.Position = UDim2.new(0, 10, 0, 4)
+			rankLabel.BackgroundTransparency = 1
+			rankLabel.Text = "#" .. rank
+			rankLabel.TextColor3 = rankColor
+			rankLabel.Font = Enum.Font.FredokaOne
+			rankLabel.TextScaled = true
+			rankLabel.TextXAlignment = Enum.TextXAlignment.Left
+			rankLabel.Parent = row
+
+			local rkStroke = Instance.new("UIStroke")
+			rkStroke.Thickness = 2
+			rkStroke.Color = Color3.fromRGB(0, 0, 0)
+			rkStroke.Parent = rankLabel
+
+			local nameLabel = Instance.new("TextLabel")
+			nameLabel.Name = "PlayerName"
+			nameLabel.Size = UDim2.new(1, -280, 1, -8)
+			nameLabel.Position = UDim2.new(0, 95, 0, 4)
+			nameLabel.BackgroundTransparency = 1
+			nameLabel.Text = "---"
+			nameLabel.TextColor3 = Color3.fromRGB(240, 235, 255)
+			nameLabel.Font = Enum.Font.GothamBold
+			nameLabel.TextScaled = true
+			nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+			nameLabel.TextTruncate = Enum.TextTruncate.AtEnd
+			nameLabel.Parent = row
+
+			local nameStroke = Instance.new("UIStroke")
+			nameStroke.Thickness = 2
+			nameStroke.Color = Color3.fromRGB(0, 0, 0)
+			nameStroke.Parent = nameLabel
+
+			local valueLabel = Instance.new("TextLabel")
+			valueLabel.Name = "Value"
+			valueLabel.Size = UDim2.new(0, 180, 1, -8)
+			valueLabel.Position = UDim2.new(1, -185, 0, 4)
+			valueLabel.BackgroundTransparency = 1
+			valueLabel.Text = ""
+			valueLabel.TextColor3 = cat.color
+			valueLabel.Font = Enum.Font.FredokaOne
+			valueLabel.TextScaled = true
+			valueLabel.TextXAlignment = Enum.TextXAlignment.Right
+			valueLabel.Parent = row
+
+			local valStroke = Instance.new("UIStroke")
+			valStroke.Thickness = 2
+			valStroke.Color = Color3.fromRGB(0, 0, 0)
+			valStroke.Parent = valueLabel
+		end
+
+	end
+
+	print("[WorldBuilder] 4 global leaderboard boards built")
+end
+
+-------------------------------------------------
 -- PUBLIC
 -------------------------------------------------
 
@@ -916,6 +1129,7 @@ function WorldBuilder.Build()
 	for _, name in ipairs({
 		"Baseplate", "Water", "Hub", "Decorations", "Boundaries",
 		"SpawnPoint", "Paths", "PlayerBases", "PlayerBaseData", "SpeedPads", "Conveyors",
+		"Leaderboards",
 	}) do
 		local e = Workspace:FindFirstChild(name)
 		if e then e:Destroy() end
@@ -924,13 +1138,14 @@ function WorldBuilder.Build()
 	setupLighting()
 	buildBaseplate()
 	buildHub()
+	buildLeaderboards()
 	buildSpeedPads()
 	buildBaseSlots()
 	buildSpawn()
 	buildPaths()
 	buildBoundaries()
 
-	print("[WorldBuilder] Built — shops + speed pads + 4 base structures placed")
+	print("[WorldBuilder] Built — shops + leaderboards + speed pads + 4 base structures placed")
 end
 
 return WorldBuilder

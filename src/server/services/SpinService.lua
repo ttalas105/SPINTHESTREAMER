@@ -312,6 +312,8 @@ local function handleSpin(player)
 		pity = isPityHit or nil,
 	})
 
+	PlayerData.IncrementStat(player, "totalSpins", 1)
+
 	-- Quest tracking
 	if QuestService then
 		QuestService.Increment(player, "spins", 1)
@@ -442,6 +444,8 @@ local function handleCrateSpin(player, crateId: number)
 		effect = effect,
 		pity = isPityHit or nil,
 	})
+
+	PlayerData.IncrementStat(player, "totalSpins", 1)
 
 	-- Quest tracking
 	if QuestService then

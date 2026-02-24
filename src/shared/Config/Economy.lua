@@ -292,13 +292,13 @@ Economy.IndexGemRewards = {
 Economy.IndexEffectMultipliers = {
 	Acid      = 3,
 	Snow      = 5,
-	Lava      = 8,
-	Lightning = 12,
-	Shadow    = 16,
-	Glitchy   = 20,
-	Lunar     = 25,
-	Solar     = 30,
-	Void      = 40,
+	Lava      = 10,
+	Lightning = 20,
+	Shadow    = 40,
+	Glitchy   = 100,
+	Lunar     = 200,
+	Solar     = 500,
+	Void      = 1000,
 }
 
 --- Get gem reward for claiming an Index entry (rarity + optional effect).

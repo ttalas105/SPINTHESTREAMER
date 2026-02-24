@@ -121,6 +121,11 @@ local DEFAULT_DATA = {
 	-- Quests
 	questProgress = {},
 	questClaimed = {},
+	-- Lifetime stats (for global leaderboards)
+	totalSpins = 0,
+	totalCashEarned = 0,
+	timePlayed = 0,
+	robuxSpent = 0,
 }
 
 local RemoteEvents = ReplicatedStorage:WaitForChild("RemoteEvents")
@@ -892,6 +897,18 @@ function PlayerData.HasDoubleCash(player): boolean
 	local data = PlayerData.Get(player)
 	if not data then return false end
 	return data.doubleCash == true
+end
+
+function PlayerData.IncrementStat(player, statName: string, amount: number)
+	local data = PlayerData.Get(player)
+	if not data then return end
+	data[statName] = (data[statName] or 0) + amount
+end
+
+function PlayerData.GetStat(player, statName: string): number
+	local data = PlayerData.Get(player)
+	if not data then return 0 end
+	return data[statName] or 0
 end
 
 return PlayerData

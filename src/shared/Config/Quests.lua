@@ -18,50 +18,35 @@
 	  sacrificesDone – any sacrifice performed
 	  casesOpened – gem cases opened
 	  indexClaimed – index entries claimed
+	  logins      – daily login (auto-incremented on join)
 ]]
 
 local Quests = {}
 
 Quests.Daily = {
 	{
-		id = "daily_spin_50",
-		name = "Spin Enthusiast",
-		desc = "Spin 50 times today",
+		id = "daily_spin_100",
+		name = "Spin Grinder",
+		desc = "Spin 100 cases today",
 		type = "spins",
-		goal = 50,
-		reward = { cash = 25000, gems = 50 },
+		goal = 100,
+		reward = { gems = 200 },
 	},
 	{
-		id = "daily_sell_20",
-		name = "Spring Cleaning",
-		desc = "Sell 20 streamers",
-		type = "sells",
-		goal = 20,
-		reward = { cash = 15000 },
-	},
-	{
-		id = "daily_earn_100k",
-		name = "Cash Collector",
-		desc = "Earn $100K total",
-		type = "cashEarned",
-		goal = 100000,
-		reward = { gems = 75 },
-	},
-	{
-		id = "daily_epic_pull",
-		name = "Epic Finder",
-		desc = "Pull an Epic or better streamer",
-		type = "epicPulls",
+		id = "daily_login",
+		name = "Daily Login",
+		desc = "Log in today",
+		type = "logins",
 		goal = 1,
-		reward = { cash = 50000, gems = 30 },
+		reward = { gems = 100 },
 	},
 	{
-		id = "daily_potion",
-		name = "Brew Master",
-		desc = "Buy 2 potions",
-		type = "potionsBought",
-		goal = 2,
-		reward = { cash = 20000 },
+		id = "daily_elements_5",
+		name = "Element Hunter",
+		desc = "Unbox 5 elemental mutations",
+		type = "effectPulls",
+		goal = 5,
+		reward = { gems = 300 },
 	},
 }
 

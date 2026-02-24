@@ -29,36 +29,52 @@ function ReceiptHandler.Init(playerDataModule, spinServiceModule)
 
 		local productId = receiptInfo.ProductId
 
+		local function trackRobux()
+			local ok, info = pcall(function()
+				return MarketplaceService:GetProductInfo(productId, Enum.InfoType.Product)
+			end)
+			if ok and info and info.PriceInRobux then
+				PlayerData.IncrementStat(player, "robuxSpent", info.PriceInRobux)
+			else
+				PlayerData.IncrementStat(player, "robuxSpent", 1)
+			end
+		end
+
 		-- Store products (ServerLuck, Spins, DoubleCash, PremiumSlot)
 		if productId == Economy.Products.ServerLuck then
 			if SpinService then
 				SpinService.SetServerLuck(Economy.BoostedLuckMultiplier)
 			end
+			task.spawn(trackRobux)
 			return Enum.ProductPurchaseDecision.PurchaseGranted
 
 		elseif productId == Economy.Products.Buy5Spins then
 			PlayerData.AddSpinCredits(player, 5)
+			task.spawn(trackRobux)
 			return Enum.ProductPurchaseDecision.PurchaseGranted
 
 		elseif productId == Economy.Products.Buy10Spins then
 			PlayerData.AddSpinCredits(player, 10)
+			task.spawn(trackRobux)
 			return Enum.ProductPurchaseDecision.PurchaseGranted
 
 		elseif productId == Economy.Products.DoubleCash then
 			PlayerData.SetDoubleCash(player, true)
+			task.spawn(trackRobux)
 			return Enum.ProductPurchaseDecision.PurchaseGranted
 
 		elseif productId == Economy.Products.PremiumSlot then
 			PlayerData.SetPremiumSlot(player, true)
+			task.spawn(trackRobux)
 			return Enum.ProductPurchaseDecision.PurchaseGranted
 		end
 
 		-- Potion products (Prismatic packs)
 		local potionAmount = Potions.ProductIdToAmount[productId]
 		if potionAmount then
-			-- Delegate to PotionService via its public grant function
 			local PotionService = require(script.Parent.PotionService)
 			PotionService.GrantPrismaticPotions(player, potionAmount)
+			task.spawn(trackRobux)
 			return Enum.ProductPurchaseDecision.PurchaseGranted
 		end
 
