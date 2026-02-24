@@ -23,9 +23,25 @@ local GemShopService  = require(services.GemShopService)
 local SacrificeService = require(services.SacrificeService)
 local ReceiptHandler   = require(services.ReceiptHandler)
 
--- Spin stand: add ProximityPrompt so players can open the crate shop
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
+
+-- Remove duplicate RemoteEvents (Studio can save extras alongside Rojo-synced ones)
+do
+	local remotes = ReplicatedStorage:WaitForChild("RemoteEvents")
+	local seen = {}
+	for _, child in ipairs(remotes:GetChildren()) do
+		if child:IsA("RemoteEvent") then
+			if seen[child.Name] then
+				child:Destroy()
+			else
+				seen[child.Name] = true
+			end
+		end
+	end
+end
+
+-- Spin stand: add ProximityPrompt so players can open the crate shop
 local hub = Workspace:WaitForChild("Hub") -- wait until hub exists
 do
 	-- Prefer the full stall model if it exists, otherwise fall back to the sign part

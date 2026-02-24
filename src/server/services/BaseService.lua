@@ -18,9 +18,9 @@ local VFXHelper = require(ReplicatedStorage.Shared.VFXHelper)
 
 local RemoteEvents = ReplicatedStorage:WaitForChild("RemoteEvents")
 local BaseReady = RemoteEvents:WaitForChild("BaseReady")
-local DisplayInteract = RemoteEvents:WaitForChild("DisplayInteract")
 local EquipResult = RemoteEvents:WaitForChild("EquipResult")
 local UnequipResult = RemoteEvents:WaitForChild("UnequipResult")
+local DisplayInteract -- resolved in Init
 
 local BaseService = {}
 
@@ -977,10 +977,22 @@ local function assignBase(player)
 	BaseService._occupiedSlots[slot] = true
 	local slotInfo = BASE_POSITIONS[slot]
 	local playerBasesFolder = Workspace:FindFirstChild("PlayerBases")
+	if not playerBasesFolder then
+		playerBasesFolder = Workspace:WaitForChild("PlayerBases", 15)
+	end
 	local baseModel = playerBasesFolder and playerBasesFolder:FindFirstChild("BaseSlot_" .. slot)
+	if not baseModel and playerBasesFolder then
+		baseModel = playerBasesFolder:WaitForChild("BaseSlot_" .. slot, 10)
+	end
+
 	local displays = {}
 	if baseModel and baseModel:IsA("Model") then
-		displays = buildDisplayPairs(baseModel)
+		-- Retry up to 10 times waiting for the model's children to stream in
+		for attempt = 1, 10 do
+			displays = buildDisplayPairs(baseModel)
+			if next(displays) ~= nil then break end
+			task.wait(1)
+		end
 	end
 
 	BaseService._bases[player.UserId] = {
@@ -1077,6 +1089,19 @@ function BaseService.Init(playerDataModule, potionServiceModule)
 		end
 	end
 
+	-- Remove duplicate DisplayInteract remote events (can happen if Studio saves extras)
+	local diFound = nil
+	for _, child in ipairs(RemoteEvents:GetChildren()) do
+		if child.Name == "DisplayInteract" and child:IsA("RemoteEvent") then
+			if diFound then
+				child:Destroy()
+			else
+				diFound = child
+			end
+		end
+	end
+	DisplayInteract = diFound or RemoteEvents:WaitForChild("DisplayInteract")
+
 	local EQUIP_DEBOUNCE_SEC = 0.6
 
 	DisplayInteract.OnServerEvent:Connect(function(player, padSlot, heldStreamerId, heldEffect)
@@ -1086,7 +1111,6 @@ function BaseService.Init(playerDataModule, potionServiceModule)
 			return
 		end
 
-		-- Per-player per-pad debounce to prevent rapid equip→unequip oscillation
 		local userId = player.UserId
 		local debounceBySlot = getNestedTable(BaseService._equipDebounce, userId)
 		local now = os.clock()
@@ -1099,7 +1123,15 @@ function BaseService.Init(playerDataModule, potionServiceModule)
 			local data = PlayerData and PlayerData.Get(player)
 			local baseInfo = BaseService._bases[userId]
 			local displayInfo = baseInfo and baseInfo.displays and baseInfo.displays[slot]
-			if not data or not baseInfo or not displayInfo then
+			if not data then
+				EquipResult:FireClient(player, { success = false, reason = "Base slot not ready." })
+				return
+			end
+			if not baseInfo then
+				EquipResult:FireClient(player, { success = false, reason = "Base slot not ready." })
+				return
+			end
+			if not displayInfo then
 				EquipResult:FireClient(player, { success = false, reason = "Base slot not ready." })
 				return
 			end
@@ -1161,8 +1193,6 @@ function BaseService.Init(playerDataModule, potionServiceModule)
 						streamerId = heldStreamerId,
 					})
 				else
-					-- Placement failed (typically missing/invalid model). Roll back
-					-- so the player doesn't get stuck with a ghost equipped item.
 					PlayerData.UnequipFromPad(player, slot)
 					updateMoneyText(player, slot)
 					updatePromptText(player, slot)

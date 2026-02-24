@@ -99,7 +99,8 @@ function SlotPadController.Init(_holdCtrl, _inventoryCtrl)
 		if not prompt or prompt.Name ~= "BaseSingleSlotPrompt" then return end
 		local padSlot = tonumber(prompt:GetAttribute("PadSlot")) or 1
 		local heldId, heldEffect = nil, nil
-		if HoldController and HoldController.IsHolding() then
+		local isHolding = HoldController and HoldController.IsHolding()
+		if isHolding then
 			heldId, heldEffect = HoldController.GetHeld()
 		end
 		DisplayInteract:FireServer(padSlot, heldId, heldEffect)
