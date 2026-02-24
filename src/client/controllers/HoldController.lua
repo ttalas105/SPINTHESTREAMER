@@ -81,7 +81,7 @@ local function createBillboard(adornee, streamerInfo, effect)
 	local bb = Instance.new("BillboardGui")
 	bb.Name = "HeldStreamerInfo"
 	bb.Size = UDim2.new(0, 260, 0, totalHeight)
-	bb.StudsOffset = Vector3.new(0, 2.5, 0)
+	bb.StudsOffset = Vector3.new(0, 5, 0)
 	bb.AlwaysOnTop = true
 	bb.Adornee = adornee
 	bb.MaxDistance = 80

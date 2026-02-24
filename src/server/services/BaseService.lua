@@ -159,7 +159,7 @@ local function addDisplayBillboard(model: Model, adornee: BasePart, streamerItem
 	bb.Name = "DisplayInfo"
 	bb.Adornee = adornee
 	bb.Size = UDim2.new(0, 280, 0, hasEffect and 95 or 70)
-	bb.StudsOffset = Vector3.new(0, hasEffect and 5 or 4.5, 0)
+	bb.StudsOffset = Vector3.new(0, hasEffect and 7.5 or 7, 0)
 	bb.AlwaysOnTop = false
 	bb.MaxDistance = 60
 	bb.Parent = model
@@ -280,7 +280,7 @@ local function updateDisplayBillboardCps(player: Player, padSlot: number)
 			label.Text = buildBillboardText(info, streamerId, effectName, rarityColor, cps)
 		end
 		bb.Size = UDim2.new(0, 280, 0, effectName and 95 or 70)
-		bb.StudsOffset = Vector3.new(0, effectName and 5 or 4.5, 0)
+		bb.StudsOffset = Vector3.new(0, effectName and 7.5 or 7, 0)
 	end
 end
 

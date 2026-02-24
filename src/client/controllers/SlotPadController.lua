@@ -7,7 +7,7 @@ local ProximityPromptService = game:GetService("ProximityPromptService")
 
 local SlotPadController = {}
 local player = Players.LocalPlayer
-local DisplayInteract = ReplicatedStorage:WaitForChild("RemoteEvents"):WaitForChild("DisplayInteract")
+local DisplayInteract = nil -- resolved in Init to avoid race with server dedup
 local TOUCH_SOUND_ID = "rbxassetid://7112275565"
 
 local HoldController = nil
@@ -93,8 +93,20 @@ local function scanAndWire()
 	end
 end
 
+local function getDisplayInteract()
+	if DisplayInteract and DisplayInteract.Parent then
+		return DisplayInteract
+	end
+	local remotes = ReplicatedStorage:WaitForChild("RemoteEvents")
+	DisplayInteract = remotes:WaitForChild("DisplayInteract", 5)
+	return DisplayInteract
+end
+
 function SlotPadController.Init(_holdCtrl, _inventoryCtrl)
 	HoldController = _holdCtrl
+
+	task.defer(getDisplayInteract)
+
 	ProximityPromptService.PromptTriggered:Connect(function(prompt, _inputType)
 		if not prompt or prompt.Name ~= "BaseSingleSlotPrompt" then return end
 		local padSlot = tonumber(prompt:GetAttribute("PadSlot")) or 1
@@ -103,7 +115,10 @@ function SlotPadController.Init(_holdCtrl, _inventoryCtrl)
 		if isHolding then
 			heldId, heldEffect = HoldController.GetHeld()
 		end
-		DisplayInteract:FireServer(padSlot, heldId, heldEffect)
+
+		local remote = getDisplayInteract()
+		if not remote then return end
+		remote:FireServer(padSlot, heldId, heldEffect)
 	end)
 	task.defer(scanAndWire)
 	Workspace.DescendantAdded:Connect(function(inst)

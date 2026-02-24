@@ -39,7 +39,7 @@ function TopNavController.Init()
 
 	local container = Instance.new("Frame")
 	container.Name = "TopNavContainer"
-	container.Size = UDim2.new(0, 380, 0, 56)
+	container.Size = UDim2.new(0, 500, 0, 72)
 	container.Position = UDim2.new(0.5, 0, 0, 8)
 	container.AnchorPoint = Vector2.new(0.5, 0)
 	container.BackgroundTransparency = 1
@@ -58,33 +58,33 @@ function TopNavController.Init()
 
 		local btn = Instance.new("TextButton")
 		btn.Name = "Tab_" .. tabInfo.name
-		btn.Size = UDim2.new(0, 160, 0, 50)
+		btn.Size = UDim2.new(0, 210, 0, 62)
 		btn.BackgroundColor3 = tabInfo.color
 		btn.BorderSizePixel = 0
 		btn.Text = tabInfo.name
 		btn.TextColor3 = Color3.new(1, 1, 1)
 		btn.Font = Enum.Font.FredokaOne
-		btn.TextSize = 26
+		btn.TextSize = 34
 		btn.AutoButtonColor = false
 		btn.Parent = container
 
-		Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 22)
+		Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 26)
 
 		local btnStroke = Instance.new("UIStroke")
 		btnStroke.Color = Color3.fromRGB(255, 255, 255)
-		btnStroke.Thickness = isActive and 2 or 1
-		btnStroke.Transparency = 0.3
+		btnStroke.Thickness = isActive and 1.5 or 0.5
+		btnStroke.Transparency = 0.7
 		btnStroke.Parent = btn
 
 		local textStroke = Instance.new("UIStroke")
 		textStroke.Color = Color3.fromRGB(30, 30, 30)
-		textStroke.Thickness = 1.5
+		textStroke.Thickness = 2
 		textStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
 		textStroke.Parent = btn
 
 		local bounceTween = TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 		local idleSize = btn.Size
-		local hoverSize = UDim2.new(0, 170, 0, 54)
+		local hoverSize = UDim2.new(0, 220, 0, 66)
 		local hoverColor = Color3.new(
 			math.min(tabInfo.color.R + 0.1, 1),
 			math.min(tabInfo.color.G + 0.1, 1),
@@ -124,7 +124,8 @@ function TopNavController.SetActiveTab(tabName: string)
 		for _, child in ipairs(data.button:GetChildren()) do
 			if child:IsA("UIStroke") and child.ApplyStrokeMode ~= Enum.ApplyStrokeMode.Contextual then
 				TweenService:Create(child, tweenInfo, {
-					Thickness = isActive and 3.5 or 2,
+					Thickness = isActive and 1.5 or 0.5,
+					Transparency = isActive and 0.55 or 0.7,
 				}):Play()
 			end
 		end

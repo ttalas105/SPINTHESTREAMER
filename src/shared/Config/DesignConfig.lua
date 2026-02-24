@@ -34,10 +34,10 @@ DesignConfig.Colors = {
 	Water            = Color3.fromRGB(80, 180, 255),
 	PathColor        = Color3.fromRGB(105, 205, 145),
 
-	-- Conveyor — single wide dark blue-purple strip
-	ConveyorBase     = Color3.fromRGB(30, 30, 80),      -- dark blue-purple
-	ConveyorStripe   = Color3.fromRGB(50, 40, 110),     -- side accent
-	ConveyorArrow    = Color3.fromRGB(40, 220, 100),    -- bright green chevrons
+	-- Conveyor / speed pad colors
+	ConveyorBase     = Color3.fromRGB(80, 160, 220),    -- sky blue, deeper
+	ConveyorStripe   = Color3.fromRGB(160, 220, 245),   -- lighter accent
+	ConveyorArrow    = Color3.fromRGB(255, 255, 255),   -- white chevrons
 	ConveyorGlow     = Color3.fromRGB(120, 60, 255),    -- purple glow
 	ConveyorBorder   = Color3.fromRGB(40, 35, 90),      -- side rail
 
@@ -130,7 +130,7 @@ DesignConfig.MapLength = 1000
 -- STALLS (open-air market stalls near spawn)
 -- Layout: striped canopy, wooden cart, NPC behind counter
 -------------------------------------------------
-DesignConfig.HubCenter = Vector3.new(0, 0.5, -100)
+DesignConfig.HubCenter = Vector3.new(0, 0.5, -50)
 
 DesignConfig.Stalls = {
 	{
@@ -200,10 +200,10 @@ DesignConfig.Stalls = {
 -- One going forward (+Z), one going backward (-Z)
 -------------------------------------------------
 DesignConfig.SpeedPad = {
-	AssetId      = 288415410,
+	AssetId      = 90025292529196,
 	Speed        = 55,
 	StripGap     = 12,          -- X offset from center for each strip
-	CenterZ      = 200,         -- center Z of the speed pad area
+	CenterZ      = 210,         -- center Z of the speed pad area
 	Length        = 400,         -- how long the speed pad area is
 }
 

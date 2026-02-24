@@ -13,6 +13,7 @@ local Workspace = game:GetService("Workspace")
 local Lighting = game:GetService("Lighting")
 local Players = game:GetService("Players")
 local InsertService = game:GetService("InsertService")
+local TweenService = game:GetService("TweenService")
 
 local DesignConfig = require(ReplicatedStorage.Shared.Config.DesignConfig)
 
@@ -44,7 +45,8 @@ local function p(props)
 	return part
 end
 
-local function billboard(parent, text, textColor, bgColor, size, offset)
+local function billboard(parent, text, textColor, bgColor, size, offset, opts)
+	opts = opts or {}
 	local bb = Instance.new("BillboardGui")
 	bb.Size = size or UDim2.new(8, 0, 2, 0)
 	bb.StudsOffset = offset or Vector3.new(0, 4, 0)
@@ -55,7 +57,7 @@ local function billboard(parent, text, textColor, bgColor, size, offset)
 	lbl.BackgroundTransparency = bgColor and 0.15 or 1
 	lbl.BackgroundColor3 = bgColor or Color3.new(0, 0, 0)
 	lbl.TextColor3 = textColor or DesignConfig.Colors.White
-	lbl.Font = DesignConfig.Fonts.Accent
+	lbl.Font = opts.font or DesignConfig.Fonts.Accent
 	lbl.TextScaled = true
 	lbl.Text = text
 	lbl.Parent = bb
@@ -65,8 +67,8 @@ local function billboard(parent, text, textColor, bgColor, size, offset)
 		c.Parent = lbl
 	end
 	local stroke = Instance.new("UIStroke")
-	stroke.Thickness = 2
-	stroke.Color = Color3.fromRGB(0, 0, 0)
+	stroke.Thickness = opts.strokeThickness or 2
+	stroke.Color = opts.strokeColor or Color3.fromRGB(0, 0, 0)
 	stroke.Parent = lbl
 	return bb
 end
@@ -317,12 +319,13 @@ local function buildHub()
 			local bmin, bmax = getModelBounds(clone)
 			local signAnchor = p({ Name = "Sign_" .. stallCfg.name,
 				Size = Vector3.new(1, 1, 1),
-				Position = targetPos + Vector3.new(0, (bmax.Y - bmin.Y) + 3, 0),
+				Position = targetPos + Vector3.new(0, (bmax.Y - bmin.Y) + 5, 0),
 				Transparency = 1, CanCollide = false, Parent = hub })
-			billboard(signAnchor, stallCfg.name,
+			billboard(signAnchor, string.upper(stallCfg.name),
 				DesignConfig.Colors.White,
 				stallCfg.color or Color3.fromRGB(100, 100, 200),
-				UDim2.new(10, 0, 3, 0), Vector3.new(0, 0, 0))
+				UDim2.new(16, 0, 4.5, 0), Vector3.new(0, 0, 0),
+				{ font = Enum.Font.FredokaOne, strokeThickness = 4, strokeColor = Color3.fromRGB(20, 20, 40) })
 
 			if stallCfg.npc then
 				local npcCfg = stallCfg.npc
@@ -333,8 +336,8 @@ local function buildHub()
 
 		shopLoaded = true
 		p({ Name = "MarketFloor",
-			Size = Vector3.new(totalW + 50, 0.2, 60),
-			Position = ctr + Vector3.new(0, 0.1, 0),
+			Size = Vector3.new(totalW + 50, 0.4, 60),
+			Position = ctr + Vector3.new(0, 0.3, 0),
 			Color = Color3.fromRGB(60, 75, 120),
 			Material = Enum.Material.Cobblestone, Parent = hub })
 		print("[WorldBuilder] Hub built with shop stand asset")
@@ -351,8 +354,9 @@ local function buildHub()
 				Size = Vector3.new(12, 3.5, 0.4),
 				Position = pos + Vector3.new(0, 13, 0),
 				Color = cfg.color, Transparency = 0.1, Parent = hub })
-			billboard(signPart, cfg.name, DesignConfig.Colors.White, nil,
-				UDim2.new(10, 0, 3, 0), Vector3.new(0, 0, 0))
+			billboard(signPart, string.upper(cfg.name), DesignConfig.Colors.White, nil,
+				UDim2.new(16, 0, 4.5, 0), Vector3.new(0, 0, 0),
+				{ font = Enum.Font.FredokaOne, strokeThickness = 4, strokeColor = Color3.fromRGB(20, 20, 40) })
 			if cfg.npc then
 				local npcCfg = cfg.npc
 				npcCfg.name = cfg.name
@@ -360,8 +364,8 @@ local function buildHub()
 			end
 		end
 		p({ Name = "MarketFloor",
-			Size = Vector3.new(totalW + 40, 0.2, 50),
-			Position = ctr + Vector3.new(0, 0.1, 0),
+			Size = Vector3.new(totalW + 40, 0.4, 50),
+			Position = ctr + Vector3.new(0, 0.3, 0),
 			Color = Color3.fromRGB(60, 75, 120),
 			Material = Enum.Material.Cobblestone, Parent = hub })
 	end
@@ -429,11 +433,27 @@ local function buildSpeedPads()
 
 			print("[WorldBuilder] Tiling " .. numTiles .. " pads seamlessly (step=" .. string.format("%.1f", effectiveStep) .. ")")
 
+			local skyBlue = Color3.fromRGB(135, 206, 235)
 			for i = 0, numTiles - 1 do
 				local tile = padTemplate:Clone()
 				tile.Name = "Tile_" .. i
+				for _, desc in ipairs(tile:GetDescendants()) do
+					if desc:IsA("Texture") or desc:IsA("Decal") or desc:IsA("SurfaceAppearance") then
+						desc:Destroy()
+					end
+				end
 				for _, part in ipairs(tile:GetDescendants()) do
-					if part:IsA("BasePart") then part.Anchored = true end
+					if part:IsA("BasePart") then
+						part.Anchored = true
+						part.Color = skyBlue
+						part.Material = Enum.Material.SmoothPlastic
+						if part:IsA("MeshPart") then
+							part.TextureID = ""
+						end
+					end
+					if part:IsA("SpecialMesh") then
+						part.TextureId = ""
+					end
 				end
 				local tileZ = startZ + i * effectiveStep
 				positionModel(tile, Vector3.new(xPos, 0.5, tileZ), baseRot + yRot)
@@ -506,9 +526,94 @@ local function buildSpeedPads()
 		return stripFolder
 	end
 
+	-- Add scrolling arrow indicators to a strip
+	local function addArrows(stripFolder, direction)
+		local arrowSpacing = 16
+		local stripMin, stripMax = getModelBounds(stripFolder)
+		local centerX = (stripMin.X + stripMax.X) / 2
+		local topY = stripMax.Y + 0.05
+		local stripWidth = math.abs(stripMax.X - stripMin.X)
+		local arrowW = math.min(stripWidth * 0.9, 22)
+		local arrowD = 20
+		local minZ = stripMin.Z + arrowD / 2
+		local maxZ = stripMax.Z - arrowD / 2
+
+		for z = minZ, maxZ, arrowSpacing do
+			local arrowPart = Instance.new("Part")
+			arrowPart.Name = "ArrowIndicator"
+			arrowPart.Size = Vector3.new(arrowW, 0.05, arrowD)
+			arrowPart.Position = Vector3.new(centerX, topY, z)
+			arrowPart.Anchored = true
+			arrowPart.CanCollide = false
+			arrowPart.CanTouch = false
+			arrowPart.CanQuery = false
+			arrowPart.Transparency = 1
+			arrowPart.Parent = stripFolder
+
+			-- Rotate part so SurfaceGui scroll aligns with travel direction
+			local yRot = direction > 0 and 90 or -90
+			arrowPart.CFrame = CFrame.new(arrowPart.Position) * CFrame.Angles(0, math.rad(yRot), 0)
+
+			local sg = Instance.new("SurfaceGui")
+			sg.Name = "ArrowGui"
+			sg.Face = Enum.NormalId.Top
+			sg.CanvasSize = Vector2.new(400, 400)
+			sg.LightInfluence = 0
+			sg.Brightness = 1.5
+			sg.AlwaysOnTop = false
+			sg.Parent = arrowPart
+
+			local container = Instance.new("Frame")
+			container.Name = "ArrowContainer"
+			container.Size = UDim2.new(1, 0, 1, 0)
+			container.BackgroundTransparency = 1
+			container.ClipsDescendants = true
+			container.Parent = sg
+
+			local ROWS = 2
+			for copy = 0, 1 do
+				local arrowFrame = Instance.new("Frame")
+				arrowFrame.Name = "Arrows_" .. copy
+				arrowFrame.Size = UDim2.new(1, 0, 1, 0)
+				arrowFrame.Position = UDim2.new(0, 0, copy, 0)
+				arrowFrame.BackgroundTransparency = 1
+				arrowFrame.Parent = container
+
+				for i = 0, ROWS - 1 do
+					local lbl = Instance.new("TextLabel")
+					lbl.Size = UDim2.new(0.9, 0, 1 / ROWS, 0)
+					lbl.Position = UDim2.new(0.05, 0, i / ROWS, 0)
+					lbl.BackgroundTransparency = 1
+					lbl.Text = "▲"
+					lbl.TextColor3 = Color3.fromRGB(255, 255, 255)
+					lbl.TextTransparency = 0.2
+					lbl.Font = Enum.Font.GothamBold
+					lbl.TextScaled = true
+					lbl.Parent = arrowFrame
+				end
+			end
+
+			-- Animate: scroll frames upward continuously
+			task.spawn(function()
+				local tweenInfo = TweenInfo.new(1, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut, -1)
+				for _, child in ipairs(container:GetChildren()) do
+					if child:IsA("Frame") then
+						local startY = child.Position.Y.Scale
+						TweenService:Create(child, tweenInfo, {
+							Position = UDim2.new(0, 0, startY - 1, 0)
+						}):Play()
+					end
+				end
+			end)
+		end
+	end
+
 	-- Forward (+Z) on the left, Backward (-Z) on the right rotated 180
 	local fwd = placeStrip("SpeedPad_Forward",  -cfg.StripGap, 0,   speed)
 	local bwd = placeStrip("SpeedPad_Backward",  cfg.StripGap, 180, -speed)
+
+	if fwd then addArrows(fwd, 1) end
+	if bwd then addArrows(bwd, -1) end
 
 	-- Debug: log final positions
 	if fwd then
@@ -689,9 +794,10 @@ local function buildSpawn()
 	sp.Name = "SpawnPoint"
 	sp.Anchored = true
 	sp.Size = Vector3.new(12, 1, 12)
-	sp.Position = Vector3.new(0, 0.5, -40)
-	sp.Color = Color3.fromRGB(140, 230, 175)
+	sp.Position = Vector3.new(0, 0.5, 15)
+	sp.Color = DesignConfig.Colors.Baseplate
 	sp.Material = Enum.Material.SmoothPlastic
+	sp.Transparency = 1
 	sp.TopSurface = Enum.SurfaceType.Smooth
 	sp.BottomSurface = Enum.SurfaceType.Smooth
 	sp.Parent = Workspace
