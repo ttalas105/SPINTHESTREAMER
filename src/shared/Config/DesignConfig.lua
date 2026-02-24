@@ -238,14 +238,14 @@ DesignConfig.Base = {
 DesignConfig.BasePositions = {
 	-- Left side (rotation 90 = entrance faces right toward speed pad)
 	{ position = Vector3.new(-70, 0.5, 80),   rotation = 90  },  -- Left 1
-	{ position = Vector3.new(-70, 0.5, 160),  rotation = 90  },  -- Left 2
-	{ position = Vector3.new(-70, 0.5, 240),  rotation = 90  },  -- Left 3
-	{ position = Vector3.new(-70, 0.5, 320),  rotation = 90  },  -- Left 4
+	{ position = Vector3.new(-70, 0.5, 180),  rotation = 90  },  -- Left 2
+	{ position = Vector3.new(-70, 0.5, 280),  rotation = 90  },  -- Left 3
+	{ position = Vector3.new(-70, 0.5, 380),  rotation = 90  },  -- Left 4
 	-- Right side (rotation -90 = entrance faces left toward speed pad)
 	{ position = Vector3.new(70,  0.5, 80),   rotation = -90 },  -- Right 1
-	{ position = Vector3.new(70,  0.5, 160),  rotation = -90 },  -- Right 2
-	{ position = Vector3.new(70,  0.5, 240),  rotation = -90 },  -- Right 3
-	{ position = Vector3.new(70,  0.5, 320),  rotation = -90 },  -- Right 4
+	{ position = Vector3.new(70,  0.5, 180),  rotation = -90 },  -- Right 2
+	{ position = Vector3.new(70,  0.5, 280),  rotation = -90 },  -- Right 3
+	{ position = Vector3.new(70,  0.5, 380),  rotation = -90 },  -- Right 4
 }
 
 -- Calculate base floor size (still needed for pad grid)

@@ -309,8 +309,36 @@ local function buildHub()
 			end
 			for _, m in ipairs(humModels) do m:Destroy() end
 
+			-- Recolor shop to match its title color
+			local stallColor = stallCfg.color or Color3.fromRGB(100, 100, 200)
+			local toRemove = {}
+			for _, desc in ipairs(clone:GetDescendants()) do
+				if desc:IsA("Texture") or desc:IsA("Decal") or desc:IsA("SurfaceAppearance") then
+					table.insert(toRemove, desc)
+				elseif desc:IsA("BasePart") then
+					local sz = desc.Size
+					if sz.X < 4 and sz.Y < 1 and sz.Z < 4 then
+						table.insert(toRemove, desc)
+					end
+				end
+			end
+			for _, obj in ipairs(toRemove) do
+				pcall(function() obj:Destroy() end)
+			end
 			for _, part in ipairs(clone:GetDescendants()) do
-				if part:IsA("BasePart") then part.Anchored = true end
+				if part:IsA("BasePart") then
+					part.Anchored = true
+					if part:IsA("MeshPart") then
+						part.TextureID = ""
+					end
+					local h, s, _ = stallColor:ToHSV()
+					local _, _, partV = part.Color:ToHSV()
+					part.Color = Color3.fromHSV(h, math.clamp(s * 0.8, 0, 1), math.clamp(partV * 0.9 + 0.1, 0.3, 1))
+					part.Material = Enum.Material.SmoothPlastic
+				end
+				if part:IsA("SpecialMesh") then
+					part.TextureId = ""
+				end
 			end
 
 			positionModel(clone, targetPos)
@@ -720,13 +748,18 @@ local function buildBaseSlots()
 
 			for _, part in ipairs(clone:GetDescendants()) do
 				if part:IsA("BasePart") then
-					local r, g, b = part.Color.R, part.Color.G, part.Color.B
-					local isYellow = (r > 0.7 and g > 0.6 and b < 0.4)
-					local isSmallCircle = (part.Shape == Enum.PartType.Cylinder or part.Shape == Enum.PartType.Ball)
-						and math.max(part.Size.X, part.Size.Y, part.Size.Z) < 10
-					local isGlowing = part.Material == Enum.Material.Neon
-					if (isYellow and (isSmallCircle or isGlowing)) or (isGlowing and isYellow) then
+					local sz = part.Size
+					if sz.X < 2 and sz.Y < 2 and sz.Z < 2 then
 						part:Destroy()
+					else
+						local r, g, b = part.Color.R, part.Color.G, part.Color.B
+						local isYellow = (r > 0.7 and g > 0.6 and b < 0.4)
+						local isSmallCircle = (part.Shape == Enum.PartType.Cylinder or part.Shape == Enum.PartType.Ball)
+							and math.max(sz.X, sz.Y, sz.Z) < 10
+						local isGlowing = part.Material == Enum.Material.Neon
+						if (isYellow and (isSmallCircle or isGlowing)) or (isGlowing and isYellow) then
+							part:Destroy()
+						end
 					end
 				end
 				if part:IsA("SpawnLocation") then part:Destroy() end
