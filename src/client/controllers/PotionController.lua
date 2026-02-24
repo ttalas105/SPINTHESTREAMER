@@ -911,6 +911,10 @@ function PotionController.CloseShop()
 	end
 end
 
+function PotionController.IsShopOpen()
+	return isShopOpen
+end
+
 function PotionController.Init()
 	screenGui = UIHelper.CreateScreenGui("PotionGui", 15)
 	screenGui.Parent = playerGui

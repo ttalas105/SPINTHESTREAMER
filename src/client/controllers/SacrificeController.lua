@@ -1812,7 +1812,10 @@ function SacrificeController.Close()
 	if confirmFrame then confirmFrame:Destroy(); confirmFrame = nil end
 	if modalFrame then UIHelper.ScaleOut(modalFrame, 0.2) end
 	for _, cb in ipairs(onCloseCallbacks) do task.spawn(cb) end
-	-- NOTE: queues are NOT cleared — they persist for next open
+end
+
+function SacrificeController.IsOpen()
+	return isOpen
 end
 
 -------------------------------------------------

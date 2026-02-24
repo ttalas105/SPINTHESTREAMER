@@ -1455,4 +1455,8 @@ function SpinController.OnSpinResult(callback)
 	onSpinResult = callback
 end
 
+function SpinController.IsAnimating()
+	return isSpinning and not animationDone
+end
+
 return SpinController

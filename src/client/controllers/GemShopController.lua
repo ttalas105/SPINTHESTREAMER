@@ -773,6 +773,10 @@ function GemShopController.Close()
 	if modalFrame then UIHelper.ScaleOut(modalFrame, 0.2) end
 end
 
+function GemShopController.IsOpen()
+	return isOpen
+end
+
 -------------------------------------------------
 -- INIT
 -------------------------------------------------

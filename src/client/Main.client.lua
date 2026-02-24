@@ -6,6 +6,7 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
 
 -- Wait for shared modules
 ReplicatedStorage:WaitForChild("Shared")
@@ -122,6 +123,9 @@ local function closeAllModals(except)
 	if except ~= "Rebirth"     and RebirthController.IsOpen()        then RebirthController.Close() end
 	if except ~= "Settings"    and SettingsController.IsOpen()       then SettingsController.Close() end
 	if except ~= "Quests"      and QuestController.IsOpen()          then QuestController.Close() end
+	if except ~= "Potion"      and PotionController.IsShopOpen()     then PotionController.CloseShop() end
+	if except ~= "GemShop"     and GemShopController.IsOpen()        then GemShopController.Close() end
+	if except ~= "Sacrifice"   and SacrificeController.IsOpen()      then SacrificeController.Close() end
 	SpinController.Hide()
 end
 
@@ -219,9 +223,15 @@ end)
 -------------------------------------------------
 
 local tutorialStarted = false
+local pendingInventoryData = nil
+
 HUDController.OnDataUpdated(function(data)
-	InventoryController.UpdateInventory(data.inventory, data.storage)
-	StorageController.Refresh()
+	if SpinController.IsAnimating() then
+		pendingInventoryData = data
+	else
+		InventoryController.UpdateInventory(data.inventory, data.storage)
+		StorageController.Refresh()
+	end
 	SlotPadController.Refresh(data)
 
 	if not tutorialStarted and data.tutorialComplete ~= nil then
@@ -267,6 +277,12 @@ end)
 -------------------------------------------------
 
 SpinController.OnSpinResult(function(data)
+	-- Flush deferred inventory update now that animation is done
+	if pendingInventoryData then
+		InventoryController.UpdateInventory(pendingInventoryData.inventory, pendingInventoryData.storage)
+		StorageController.Refresh()
+		pendingInventoryData = nil
+	end
 	if data.streamerId then
 		InventoryController.FlashNewItem(data.streamerId)
 	end
@@ -347,6 +363,55 @@ local OpenSpinStandGuiTutorial = RemoteEvents:WaitForChild("OpenSpinStandGui")
 OpenSpinStandGuiTutorial.OnClientEvent:Connect(function()
 	if TutorialController.IsActive() then
 		TutorialController.OnSpinStandOpened()
+	end
+end)
+
+-------------------------------------------------
+-- AUTO-CLOSE STALL UIs WHEN PLAYER WALKS AWAY
+-------------------------------------------------
+
+local STALL_CLOSE_DISTANCE = 40
+
+local stallUIMap = {
+	{ stallName = "Stall_Spin",      isOpen = function() return SpinStandController.IsOpen() end, close = function() SpinStandController.Close(); SpinController.Hide() end },
+	{ stallName = "Stall_Sell",      isOpen = function() return SellStandController.IsOpen() end, close = function() SellStandController.Close() end },
+	{ stallName = "Stall_Upgrades",  isOpen = function() return UpgradeStandController.IsOpen() end, close = function() UpgradeStandController.Close() end },
+	{ stallName = "Stall_Potions",   isOpen = function() return PotionController.IsShopOpen() end, close = function() PotionController.CloseShop() end },
+	{ stallName = "Stall_Gems",      isOpen = function() return GemShopController.IsOpen() end, close = function() GemShopController.Close() end },
+	{ stallName = "Stall_Sacrifice", isOpen = function() return SacrificeController.IsOpen() end, close = function() SacrificeController.Close() end },
+}
+
+local distCheckTimer = 0
+RunService.Heartbeat:Connect(function(dt)
+	distCheckTimer = distCheckTimer + dt
+	if distCheckTimer < 0.5 then return end
+	distCheckTimer = 0
+
+	local character = Players.LocalPlayer.Character
+	if not character then return end
+	local rootPart = character:FindFirstChild("HumanoidRootPart")
+	if not rootPart then return end
+	local playerPos = rootPart.Position
+
+	local hub = workspace:FindFirstChild("Hub")
+	if not hub then return end
+
+	for _, entry in ipairs(stallUIMap) do
+		if entry.isOpen() then
+			local stall = hub:FindFirstChild(entry.stallName)
+			if stall then
+				local stallPos
+				if stall:IsA("Model") then
+					local cf = stall:GetBoundingBox()
+					stallPos = cf.Position
+				elseif stall:IsA("BasePart") then
+					stallPos = stall.Position
+				end
+				if stallPos and (playerPos - stallPos).Magnitude > STALL_CLOSE_DISTANCE then
+					entry.close()
+				end
+			end
+		end
 	end
 end)
 
