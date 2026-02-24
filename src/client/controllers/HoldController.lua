@@ -226,6 +226,17 @@ local function attachModel(modelTemplate, streamerInfo, effect)
 	local bb = createBillboard(primaryPart, streamerInfo, effect)
 	bb.Parent = clone
 
+	-- Compute Y offset so the model's feet sit at a consistent height (before VFX)
+	local pivotToBottom = 0
+	do
+		local ok, bbCF, bbSize = pcall(function() return clone:GetBoundingBox() end)
+		if ok and bbCF and bbSize then
+			local pivotY = clone:GetPivot().Position.Y
+			local bottomY = bbCF.Position.Y - (bbSize.Y / 2)
+			pivotToBottom = pivotY - bottomY
+		end
+	end
+
 	-- Attach element VFX/aura
 	if effect then
 		local effectName = type(effect) == "table" and effect.name or effect
@@ -235,19 +246,19 @@ local function attachModel(modelTemplate, streamerInfo, effect)
 	-- Follow hand every render frame. Model is anchored so PivotTo just sets CFrame.
 	followConn = RunService.RenderStepped:Connect(function()
 		local char = player.Character
-		if not char then clearHeld() return end
-		local hand = char:FindFirstChild("RightHand") or char:FindFirstChild("Right Arm")
-		if not hand then clearHeld() return end
+		if not char then return end
 		if not heldModel or not heldModel.Parent or not heldModel.PrimaryPart then
-			clearHeld()
 			return
 		end
 
 		local root = char:FindFirstChild("HumanoidRootPart")
-		if not root then clearHeld() return end
+		if not root then return end
 
-		local targetCF = root.CFrame * CFrame.new(2.5, 0, -2)
-		heldModel:PivotTo(targetCF)
+		local groundY = root.CFrame.Position.Y - 3
+		local baseCF = root.CFrame * CFrame.new(2.5, 0, -2)
+		local pos = Vector3.new(baseCF.Position.X, groundY + pivotToBottom, baseCF.Position.Z)
+		local _, yRot, _ = root.CFrame:ToEulerAnglesYXZ()
+		heldModel:PivotTo(CFrame.new(pos) * CFrame.Angles(0, yRot, 0))
 		VFXHelper.Reposition(heldModel)
 	end)
 end

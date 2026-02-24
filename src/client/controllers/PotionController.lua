@@ -582,7 +582,7 @@ local function buildShopModal()
 	closeBtn.ZIndex = 55
 	closeBtn.Parent = modal
 	local closeCorner = Instance.new("UICorner")
-	closeCorner.CornerRadius = UDim.new(0, 10)
+	closeCorner.CornerRadius = UDim.new(1, 0)
 	closeCorner.Parent = closeBtn
 	local closeStroke = Instance.new("UIStroke")
 	closeStroke.Color = Color3.fromRGB(160, 30, 30)
@@ -632,6 +632,7 @@ local function buildShopModal()
 
 	local listLayout = Instance.new("UIListLayout")
 	listLayout.FillDirection = Enum.FillDirection.Vertical
+	listLayout.SortOrder = Enum.SortOrder.LayoutOrder
 	listLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 	listLayout.Padding = UDim.new(0, 10)
 	listLayout.Parent = scroll
@@ -816,6 +817,7 @@ local function buildShopModal()
 		packBtn.Name = "Pack_" .. pack.amount
 		packBtn.Size = UDim2.new(0, 120, 0, 40)
 		packBtn.BackgroundColor3 = Color3.fromRGB(60, 45, 85)
+		packBtn.Text = ""
 		packBtn.BorderSizePixel = 0
 		packBtn.AutoButtonColor = false
 		packBtn.ZIndex = 54

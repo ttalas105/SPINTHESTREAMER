@@ -104,15 +104,6 @@ local function buildUpgradeCard(parent, cfg)
 	card.Parent = parent
 	Instance.new("UICorner", card).CornerRadius = UDim.new(0, 14)
 
-	-- Color indicator strip (left edge)
-	local strip = Instance.new("Frame")
-	strip.Size = UDim2.new(0, 5, 0.7, 0)
-	strip.Position = UDim2.new(0, 8, 0.15, 0)
-	strip.BackgroundColor3 = cfg.accent
-	strip.BorderSizePixel = 0
-	strip.Parent = card
-	Instance.new("UICorner", strip).CornerRadius = UDim.new(0, 3)
-
 	-- Title
 	local title = Instance.new("TextLabel")
 	title.Size = UDim2.new(0.6, 0, 0, 24)
@@ -219,6 +210,10 @@ function UpgradeStandController.Open()
 	end
 end
 
+function UpgradeStandController.IsOpen()
+	return isOpen
+end
+
 function UpgradeStandController.Close()
 	if not isOpen then return end
 	isOpen = false
@@ -288,18 +283,6 @@ function UpgradeStandController.Init()
 	title.Parent = header
 	addStroke(title, Color3.new(0, 0, 0), 1.5)
 
-	local subtitle = Instance.new("TextLabel")
-	subtitle.Size = UDim2.new(0.6, 0, 0, 16)
-	subtitle.Position = UDim2.new(0, 22, 0, 42)
-	subtitle.BackgroundTransparency = 1
-	subtitle.Text = "Boost your luck and income"
-	subtitle.TextColor3 = Color3.fromRGB(150, 145, 170)
-	subtitle.Font = FONT_SUB
-	subtitle.TextSize = 11
-	subtitle.TextXAlignment = Enum.TextXAlignment.Left
-	subtitle.ZIndex = 3
-	subtitle.Parent = header
-
 	-- Close button
 	local closeBtn = Instance.new("TextButton")
 	closeBtn.Size = UDim2.new(0, 40, 0, 40)
@@ -314,7 +297,7 @@ function UpgradeStandController.Init()
 	closeBtn.AutoButtonColor = false
 	closeBtn.ZIndex = 5
 	closeBtn.Parent = modalFrame
-	Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(0, 10)
+	Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(1, 0)
 	local cStroke = Instance.new("UIStroke")
 	cStroke.Color = RED_DARK
 	cStroke.Thickness = 1.5
@@ -390,19 +373,6 @@ function UpgradeStandController.Init()
 	cashBtn.MouseButton1Click:Connect(function()
 		UpgradeCashRequest:FireServer()
 	end)
-
-	-- Bottom hint
-	local hint = Instance.new("TextLabel")
-	hint.Size = UDim2.new(1, -20, 0, 18)
-	hint.Position = UDim2.new(0.5, 0, 1, -8)
-	hint.AnchorPoint = Vector2.new(0.5, 1)
-	hint.BackgroundTransparency = 1
-	hint.Text = "Luck = better drops  •  Coins = more income"
-	hint.TextColor3 = Color3.fromRGB(100, 95, 120)
-	hint.Font = FONT_SUB
-	hint.TextSize = 10
-	hint.ZIndex = 3
-	hint.Parent = modalFrame
 
 	-------------------------------------------------
 	-- EVENTS

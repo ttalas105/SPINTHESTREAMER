@@ -391,7 +391,7 @@ function StorageController.Init()
 	closeBtn.Text = "X"; closeBtn.TextColor3 = Color3.new(1, 1, 1)
 	closeBtn.Font = FONT; closeBtn.TextSize = 18; closeBtn.BorderSizePixel = 0
 	closeBtn.Parent = titleBar
-	Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(0, 10)
+	Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(1, 0)
 	closeBtn.MouseButton1Click:Connect(function() StorageController.Close() end)
 
 	-- Sort buttons row

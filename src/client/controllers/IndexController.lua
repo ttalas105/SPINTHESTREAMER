@@ -475,6 +475,10 @@ function IndexController.Close()
 	if modalFrame then UIHelper.ScaleOut(modalFrame, 0.2) end
 end
 
+function IndexController.IsOpen()
+	return isOpen
+end
+
 -------------------------------------------------
 -- INIT
 -------------------------------------------------

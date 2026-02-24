@@ -177,6 +177,8 @@ local function updateSlotVisuals()
 
 		local oldEffectTag = slotData.frame:FindFirstChild("EffectTag")
 		if oldEffectTag then oldEffectTag:Destroy() end
+		slotData.iconLabel.Position = UDim2.new(0.5, 0, 0.25, 0)
+		slotData.iconLabel.Size = UDim2.new(1, -4, 0.5, 0)
 
 		if isQueued then
 			slotData.iconLabel.Text = ""
@@ -202,16 +204,19 @@ local function updateSlotVisuals()
 			slotData.rarityLabel.TextColor3 = Color3.new(1, 1, 1)
 
 			if effectInfo then
+				slotData.iconLabel.Position = UDim2.new(0.5, 0, 0.38, 0)
+				slotData.iconLabel.Size = UDim2.new(1, -4, 0.4, 0)
+
 				local effectTag = Instance.new("TextLabel")
 				effectTag.Name = "EffectTag"
-				effectTag.Size = UDim2.new(1, -4, 0, 14)
-				effectTag.Position = UDim2.new(0.5, 0, 0, 14)
+				effectTag.Size = UDim2.new(1, -4, 0, 12)
+				effectTag.Position = UDim2.new(0.5, 0, 0, 13)
 				effectTag.AnchorPoint = Vector2.new(0.5, 0)
 				effectTag.BackgroundTransparency = 1
 				effectTag.Text = effectInfo.prefix:upper()
 				effectTag.TextColor3 = effectInfo.color
 				effectTag.Font = Enum.Font.FredokaOne
-				effectTag.TextSize = 11
+				effectTag.TextSize = 9
 				effectTag.TextScaled = false
 				effectTag.ZIndex = 4
 				effectTag.Parent = slotData.frame
@@ -279,7 +284,7 @@ function InventoryController.Init()
 	-- Bottom bar container
 	barContainer = UIHelper.CreateRoundedFrame({
 		Name = "InventoryBar",
-		Size = UDim2.new(0, (VISIBLE_SLOTS * 60) + 80, 0, 72),
+		Size = UDim2.new(0, (VISIBLE_SLOTS * 56) + ((VISIBLE_SLOTS - 1) * 4) + 12, 0, 72),
 		Position = UDim2.new(0.5, 0, 1, -10),
 		AnchorPoint = Vector2.new(0.5, 1),
 		Color = DesignConfig.Colors.InventoryBg,
@@ -299,14 +304,14 @@ function InventoryController.Init()
 	-- Slots container
 	slotsFrame = Instance.new("Frame")
 	slotsFrame.Name = "Slots"
-	slotsFrame.Size = UDim2.new(1, -64, 1, 0)
+	slotsFrame.Size = UDim2.new(1, 0, 1, 0)
 	slotsFrame.Position = UDim2.new(0, 0, 0, 0)
 	slotsFrame.BackgroundTransparency = 1
 	slotsFrame.Parent = barContainer
 
 	local layout = Instance.new("UIListLayout")
 	layout.FillDirection = Enum.FillDirection.Horizontal
-	layout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+	layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 	layout.VerticalAlignment = Enum.VerticalAlignment.Center
 	layout.Padding = UDim.new(0, 4)
 	layout.Parent = slotsFrame
@@ -315,48 +320,6 @@ function InventoryController.Init()
 	for i = 1, VISIBLE_SLOTS do
 		slots[i] = createSlot(slotsFrame, i)
 	end
-
-	-- Backpack button with real icon (right side)
-	backpackButton = Instance.new("ImageButton")
-	backpackButton.Name = "BackpackBtn"
-	backpackButton.Size = UDim2.new(0, 52, 0, 52)
-	backpackButton.Position = UDim2.new(1, -2, 0.5, 0)
-	backpackButton.AnchorPoint = Vector2.new(1, 0.5)
-	backpackButton.BackgroundColor3 = Color3.fromRGB(80, 70, 120)
-	backpackButton.Image = "rbxassetid://12878997124"
-	backpackButton.ScaleType = Enum.ScaleType.Fit
-	backpackButton.BorderSizePixel = 0
-	backpackButton.Parent = barContainer
-
-	local bpCorner = Instance.new("UICorner")
-	bpCorner.CornerRadius = UDim.new(0, 8)
-	bpCorner.Parent = backpackButton
-
-	local bpStroke = Instance.new("UIStroke")
-	bpStroke.Color = Color3.fromRGB(120, 100, 200)
-	bpStroke.Thickness = 1
-	bpStroke.Parent = backpackButton
-
-	-- Item count badge on backpack
-	local countBadge = UIHelper.CreateRoundedFrame({
-		Name = "CountBadge",
-		Size = UDim2.new(0, 22, 0, 16),
-		Position = UDim2.new(1, -2, 0, -2),
-		AnchorPoint = Vector2.new(1, 0),
-		Color = DesignConfig.Colors.Accent,
-		CornerRadius = UDim.new(0, 6),
-		Parent = backpackButton,
-	})
-
-	local countText = Instance.new("TextLabel")
-	countText.Name = "Count"
-	countText.Size = UDim2.new(1, 0, 1, 0)
-	countText.BackgroundTransparency = 1
-	countText.TextColor3 = Color3.new(0, 0, 0)
-	countText.Font = DesignConfig.Fonts.Primary
-	countText.TextScaled = true
-	countText.Text = "0"
-	countText.Parent = countBadge
 
 	-- Selected item label (above the bar)
 	selectedLabel = Instance.new("TextLabel")
@@ -458,17 +421,6 @@ end
 
 function InventoryController.UpdateInventory(newInventory, newStorage)
 	inventory = newInventory or {}
-
-	-- Update backpack count (hotbar + storage total)
-	local storageCount = newStorage and #newStorage or 0
-	local totalCount = #inventory + storageCount
-	local countBadge = backpackButton and backpackButton:FindFirstChild("CountBadge")
-	if countBadge then
-		local countText = countBadge:FindFirstChild("Count")
-		if countText then
-			countText.Text = tostring(totalCount)
-		end
-	end
 
 	-- If selected index is now out of range or the item at that index changed, deselect and notify
 	local wasSelected = selectedIndex

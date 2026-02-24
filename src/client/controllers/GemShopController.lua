@@ -190,7 +190,7 @@ local function openDropRatePopup(caseData)
 	closeBtn.Font = FONT; closeBtn.TextSize = 18
 	closeBtn.BorderSizePixel = 0; closeBtn.AutoButtonColor = false
 	closeBtn.ZIndex = 32; closeBtn.Parent = popup
-	Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(0, 10)
+	Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(1, 0)
 	closeBtn.MouseButton1Click:Connect(closeDropRatePopup)
 
 	local scroll = Instance.new("ScrollingFrame")
@@ -845,7 +845,7 @@ function GemShopController.Init()
 	closeBtn.Font = FONT; closeBtn.TextSize = 20
 	closeBtn.BorderSizePixel = 0; closeBtn.AutoButtonColor = false
 	closeBtn.ZIndex = 5; closeBtn.Parent = modalFrame
-	Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(0, 10)
+	Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(1, 0)
 	local cStroke = Instance.new("UIStroke")
 	cStroke.Color = RED_DARK; cStroke.Thickness = 1.5; cStroke.Parent = closeBtn
 

@@ -751,6 +751,8 @@ local function showResult(data)
 	resultFrame.Visible = true
 	UIHelper.ScaleIn(resultFrame, 0.3)
 
+	spinContainer.Visible = false
+
 	-- 3D model popup
 	local modelsFolder = ReplicatedStorage:FindFirstChild("StreamerModels")
 	local modelTemplate = modelsFolder and modelsFolder:FindFirstChild(data.streamerId or "")
@@ -759,13 +761,13 @@ local function showResult(data)
 	local messageHeight = hasModel and 400 or 180
 	local receivedMessage = Instance.new("Frame")
 	receivedMessage.Name = "ReceivedMessage"
-	receivedMessage.Size = UDim2.new(0.62, 0, 0, messageHeight)
-	receivedMessage.Position = UDim2.new(0.5, 0, 0.22, 0)
+	receivedMessage.Size = UDim2.new(0.35, 0, 0, messageHeight)
+	receivedMessage.Position = UDim2.new(0.5, 0, 0.45, 0)
 	receivedMessage.AnchorPoint = Vector2.new(0.5, 0.5)
 	receivedMessage.BackgroundColor3 = Color3.fromRGB(25, 15, 50)
 	receivedMessage.BorderSizePixel = 0
 	receivedMessage.ZIndex = 20
-	receivedMessage.Parent = spinContainer
+	receivedMessage.Parent = screenGui
 
 	local rmCorner = Instance.new("UICorner")
 	rmCorner.CornerRadius = UDim.new(0, 20)
@@ -979,6 +981,8 @@ local function showResult(data)
 
 		if autoSpinEnabled then
 			resultFrame.Visible = false
+			spinContainer.Visible = true
+			if carouselFrame then carouselFrame.Visible = true end
 			SpinController.RequestSpin()
 			return
 		end
@@ -1212,8 +1216,8 @@ function SpinController.Init()
 	autoSpinButton = createPillButton(spinContainer, {
 		Name = "AutoSpinBtn",
 		Size = UDim2.new(0, 110, 0, 42),
-		Position = UDim2.new(0.5, -140, 0.94, 0),
-		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(0.04, 0, 0.94, 0),
+		AnchorPoint = Vector2.new(0, 0.5),
 		Color = Color3.fromRGB(55, 50, 80),
 		HoverColor = Color3.fromRGB(70, 65, 100),
 		Text = "AUTO",
@@ -1343,9 +1347,14 @@ function SpinController._startSpin(data)
 	spinGeneration = spinGeneration + 1
 	resultFrame.Visible = false
 
-	local existingMsg = spinContainer:FindFirstChild("ReceivedMessage")
+	local existingMsg = screenGui:FindFirstChild("ReceivedMessage")
 	if existingMsg then existingMsg:Destroy() end
 
+	spinContainer.Visible = true
+	if carouselFrame then
+		carouselFrame.Visible = true
+		carouselFrame.Size = UDim2.new(0.92, 0, 0, ITEM_HEIGHT + 30)
+	end
 	if carouselContainer then
 		carouselContainer.Position = UDim2.new(0, -99999, 0, 0)
 	end
@@ -1378,7 +1387,7 @@ function SpinController.RequestSpin()
 	if isSpinning and not animationDone then return end
 
 	if isSpinning and animationDone then
-		local existingMsg = spinContainer:FindFirstChild("ReceivedMessage")
+		local existingMsg = screenGui:FindFirstChild("ReceivedMessage")
 		if existingMsg then existingMsg:Destroy() end
 	end
 
@@ -1386,6 +1395,11 @@ function SpinController.RequestSpin()
 	animationDone = false
 	spinGeneration = spinGeneration + 1
 	resultFrame.Visible = false
+	spinContainer.Visible = true
+	if carouselFrame then
+		carouselFrame.Visible = true
+		carouselFrame.Size = UDim2.new(0.92, 0, 0, ITEM_HEIGHT + 30)
+	end
 
 	spinButton.Text = "SPINNING..."
 

@@ -137,9 +137,10 @@ local function buildItemCard(item, originalIndex, parent)
 	local rarityColor = rarityInfo and rarityInfo.color or Color3.fromRGB(170, 170, 170)
 	local displayColor = effectInfo and effectInfo.color or rarityColor
 
+	local cardHeight = effectInfo and 108 or 90
 	local card = Instance.new("Frame")
 	card.Name = "Card_" .. originalIndex
-	card.Size = UDim2.new(1, -12, 0, 90)
+	card.Size = UDim2.new(1, -12, 0, cardHeight)
 	card.BackgroundColor3 = Color3.fromRGB(40, 35, 60)
 	card.BorderSizePixel = 0
 	card.Parent = parent
@@ -400,6 +401,10 @@ function SellStandController.Open()
 	end
 end
 
+function SellStandController.IsOpen()
+	return isOpen
+end
+
 function SellStandController.Close()
 	if not isOpen then return end
 	isOpen = false
@@ -471,18 +476,6 @@ function SellStandController.Init()
 	title.Parent = header
 	addStroke(title, Color3.new(0, 0, 0), 1.5)
 
-	local subtitle = Instance.new("TextLabel")
-	subtitle.Size = UDim2.new(0.5, 0, 0, 16)
-	subtitle.Position = UDim2.new(0, 22, 0, 42)
-	subtitle.BackgroundTransparency = 1
-	subtitle.Text = "Sell streamers from your inventory"
-	subtitle.TextColor3 = Color3.fromRGB(150, 145, 170)
-	subtitle.Font = FONT_SUB
-	subtitle.TextSize = 11
-	subtitle.TextXAlignment = Enum.TextXAlignment.Left
-	subtitle.ZIndex = 3
-	subtitle.Parent = header
-
 	-- Close button
 	local closeBtn = Instance.new("TextButton")
 	closeBtn.Name = "CloseBtn"
@@ -498,7 +491,7 @@ function SellStandController.Init()
 	closeBtn.AutoButtonColor = false
 	closeBtn.ZIndex = 5
 	closeBtn.Parent = modalFrame
-	Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(0, 10)
+	Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(1, 0)
 	local cStroke = Instance.new("UIStroke")
 	cStroke.Color = RED_DARK
 	cStroke.Thickness = 1.5
@@ -544,17 +537,7 @@ function SellStandController.Init()
 	totalLabel.Parent = infoRow
 	addStroke(totalLabel, Color3.new(0, 0, 0), 1)
 
-	countLabel = Instance.new("TextLabel")
-	countLabel.Size = UDim2.new(0.4, 0, 1, 0)
-	countLabel.Position = UDim2.new(0.6, 0, 0, 0)
-	countLabel.BackgroundTransparency = 1
-	countLabel.Text = "0 streamers"
-	countLabel.TextColor3 = Color3.fromRGB(150, 145, 170)
-	countLabel.Font = FONT_SUB
-	countLabel.TextSize = 12
-	countLabel.TextXAlignment = Enum.TextXAlignment.Right
-	countLabel.ZIndex = 3
-	countLabel.Parent = infoRow
+	countLabel = nil
 
 	-- ===== SCROLL LIST =====
 	scrollFrame = Instance.new("ScrollingFrame")

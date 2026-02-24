@@ -109,14 +109,28 @@ BaseReady.OnClientEvent:Connect(function(data)
 end)
 
 -------------------------------------------------
+-- CLOSE ALL MODALS (prevents stacking)
+-------------------------------------------------
+
+local function closeAllModals(except)
+	if except ~= "Index"       and IndexController.IsOpen()          then IndexController.Close() end
+	if except ~= "Storage"     and StorageController.IsOpen()        then StorageController.Close() end
+	if except ~= "Store"       and StoreController.IsOpen()          then StoreController.Close() end
+	if except ~= "SpinStand"   and SpinStandController.IsOpen()      then SpinStandController.Close() end
+	if except ~= "Sell"        and SellStandController.IsOpen()      then SellStandController.Close() end
+	if except ~= "Upgrade"     and UpgradeStandController.IsOpen()   then UpgradeStandController.Close() end
+	if except ~= "Rebirth"     and RebirthController.IsOpen()        then RebirthController.Close() end
+	if except ~= "Settings"    and SettingsController.IsOpen()       then SettingsController.Close() end
+	if except ~= "Quests"      and QuestController.IsOpen()          then QuestController.Close() end
+	SpinController.Hide()
+end
+
+-------------------------------------------------
 -- WIRE TOP NAV TABS (BASE / SHOP) — TELEPORT
 -------------------------------------------------
 
 TopNavController.OnTabChanged(function(tabName)
-	SpinController.Hide()
-	if StoreController.IsOpen() then
-		StoreController.Close()
-	end
+	closeAllModals()
 
 	if TutorialController.IsActive() then
 		TutorialController.OnTabChanged(tabName)
@@ -143,13 +157,19 @@ end)
 -------------------------------------------------
 
 LeftSideNavController.OnClick("Index", function()
-	IndexController.Open()
+	if IndexController.IsOpen() then
+		IndexController.Close()
+	else
+		closeAllModals("Index")
+		IndexController.Open()
+	end
 end)
 
 LeftSideNavController.OnClick("Storage", function()
 	if StorageController.IsOpen() then
 		StorageController.Close()
 	else
+		closeAllModals("Storage")
 		StorageController.Open()
 	end
 end)
@@ -158,6 +178,7 @@ LeftSideNavController.OnClick("Store", function()
 	if StoreController.IsOpen() then
 		StoreController.Close()
 	else
+		closeAllModals("Store")
 		StoreController.Open()
 	end
 end)
@@ -167,13 +188,19 @@ end)
 -------------------------------------------------
 
 RightSideNavController.OnClick("Rebirth", function()
-	RebirthController.Open()
+	if RebirthController.IsOpen() then
+		RebirthController.Close()
+	else
+		closeAllModals("Rebirth")
+		RebirthController.Open()
+	end
 end)
 
 RightSideNavController.OnClick("Settings", function()
 	if SettingsController.IsOpen() then
 		SettingsController.Close()
 	else
+		closeAllModals("Settings")
 		SettingsController.Open()
 	end
 end)
@@ -182,6 +209,7 @@ RightSideNavController.OnClick("Quests", function()
 	if QuestController.IsOpen() then
 		QuestController.Close()
 	else
+		closeAllModals("Quests")
 		QuestController.Open()
 	end
 end)
@@ -292,6 +320,23 @@ SellResult.OnClientEvent:Connect(function(data)
 	else
 		print("[Client] Sell failed: " .. (data.reason or "unknown"))
 	end
+end)
+
+-------------------------------------------------
+-- CLOSE OTHER MODALS WHEN STANDS OPEN
+-------------------------------------------------
+
+RemoteEvents:WaitForChild("OpenSpinStandGui").OnClientEvent:Connect(function()
+	closeAllModals("SpinStand")
+end)
+RemoteEvents:WaitForChild("OpenSellStandGui").OnClientEvent:Connect(function()
+	closeAllModals("Sell")
+end)
+RemoteEvents:WaitForChild("OpenUpgradeStandGui").OnClientEvent:Connect(function()
+	closeAllModals("Upgrade")
+end)
+RemoteEvents:WaitForChild("OpenPotionStandGui").OnClientEvent:Connect(function()
+	closeAllModals("Potion")
 end)
 
 -------------------------------------------------

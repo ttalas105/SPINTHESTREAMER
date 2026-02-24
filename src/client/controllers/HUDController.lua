@@ -61,55 +61,55 @@ function HUDController.Init()
 
 	local hudContainer = Instance.new("Frame")
 	hudContainer.Name = "HUDContainer"
-	hudContainer.Size = UDim2.new(0, 240, 0, 100)
-	hudContainer.Position = UDim2.new(0, 150, 1, -16)
-	hudContainer.AnchorPoint = Vector2.new(0, 1)
+	hudContainer.Size = UDim2.new(0, 300, 0, 120)
+	hudContainer.Position = UDim2.new(0.5, -250, 0, 8)
+	hudContainer.AnchorPoint = Vector2.new(1, 0)
 	hudContainer.BackgroundTransparency = 1
 	hudContainer.BorderSizePixel = 0
 	hudContainer.Parent = screenGui
 
 	cashLabel = Instance.new("TextLabel")
 	cashLabel.Name = "CashLabel"
-	cashLabel.Size = UDim2.new(1, 0, 0, 30)
+	cashLabel.Size = UDim2.new(1, 0, 0, 38)
 	cashLabel.Position = UDim2.new(0, 0, 0, 0)
 	cashLabel.BackgroundTransparency = 1
 	cashLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
 	cashLabel.Font = Enum.Font.FredokaOne
-	cashLabel.TextSize = 26
+	cashLabel.TextSize = 34
 	cashLabel.Text = "$0"
 	cashLabel.TextXAlignment = Enum.TextXAlignment.Left
 	cashLabel.Parent = hudContainer
 
 	local cashStroke = Instance.new("UIStroke")
 	cashStroke.Color = Color3.fromRGB(0, 0, 0)
-	cashStroke.Thickness = 1.5
+	cashStroke.Thickness = 2
 	cashStroke.Parent = cashLabel
 
 	gemsLabel = Instance.new("TextLabel")
 	gemsLabel.Name = "GemsLabel"
-	gemsLabel.Size = UDim2.new(1, 0, 0, 24)
-	gemsLabel.Position = UDim2.new(0, 0, 0, 32)
+	gemsLabel.Size = UDim2.new(1, 0, 0, 30)
+	gemsLabel.Position = UDim2.new(0, 0, 0, 40)
 	gemsLabel.BackgroundTransparency = 1
 	gemsLabel.TextColor3 = Color3.fromRGB(100, 200, 255)
 	gemsLabel.Font = Enum.Font.FredokaOne
-	gemsLabel.TextSize = 20
+	gemsLabel.TextSize = 26
 	gemsLabel.Text = "\u{1F48E} 0 Gems"
 	gemsLabel.TextXAlignment = Enum.TextXAlignment.Left
 	gemsLabel.Parent = hudContainer
 
 	local gemsStroke = Instance.new("UIStroke")
 	gemsStroke.Color = Color3.fromRGB(0, 0, 0)
-	gemsStroke.Thickness = 1.5
+	gemsStroke.Thickness = 2
 	gemsStroke.Parent = gemsLabel
 
 	luckLabel = Instance.new("TextLabel")
 	luckLabel.Name = "LuckLabel"
-	luckLabel.Size = UDim2.new(1, 0, 0, 22)
-	luckLabel.Position = UDim2.new(0, 0, 0, 58)
+	luckLabel.Size = UDim2.new(1, 0, 0, 28)
+	luckLabel.Position = UDim2.new(0, 0, 0, 72)
 	luckLabel.BackgroundTransparency = 1
 	luckLabel.TextColor3 = Color3.fromRGB(220, 200, 255)
 	luckLabel.Font = Enum.Font.FredokaOne
-	luckLabel.TextSize = 18
+	luckLabel.TextSize = 24
 	luckLabel.Text = "Luck: 0 (+0%)"
 	luckLabel.TextXAlignment = Enum.TextXAlignment.Left
 	luckLabel.Parent = hudContainer

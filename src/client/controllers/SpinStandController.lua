@@ -413,20 +413,6 @@ function SpinStandController.Init()
 	titleStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
 	titleStroke.Parent = title
 
-	-- Subtitle
-	local subtitle = Instance.new("TextLabel")
-	subtitle.Name = "Subtitle"
-	subtitle.Size = UDim2.new(0.6, 0, 0, 18)
-	subtitle.Position = UDim2.new(0, 22, 0, 46)
-	subtitle.BackgroundTransparency = 1
-	subtitle.Text = "Higher case = rarer drops!"
-	subtitle.TextColor3 = Color3.fromRGB(160, 155, 180)
-	subtitle.Font = FONT_SUB
-	subtitle.TextSize = 13
-	subtitle.TextXAlignment = Enum.TextXAlignment.Left
-	subtitle.ZIndex = 3
-	subtitle.Parent = header
-
 	-- Close button (red X, top right)
 	local closeBtn = Instance.new("TextButton")
 	closeBtn.Name = "CloseBtn"
@@ -444,7 +430,7 @@ function SpinStandController.Init()
 	closeBtn.Parent = modalFrame
 
 	local closeCorner = Instance.new("UICorner")
-	closeCorner.CornerRadius = UDim.new(0, 10)
+	closeCorner.CornerRadius = UDim.new(1, 0)
 	closeCorner.Parent = closeBtn
 	local closeStroke = Instance.new("UIStroke")
 	closeStroke.Color = Color3.fromRGB(160, 30, 30)

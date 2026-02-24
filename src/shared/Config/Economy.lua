@@ -15,7 +15,7 @@ Economy.SpinCost10 = 0        -- free 10-pack
 
 -------------------------------------------------
 -- SPIN STAND CASES (18 total, buy at stall for luck bonus)
--- Case 1 is free (no rebirth). Case N (2-18) requires Rebirth N-1.
+-- Cases 1-3 are free (no rebirth). Case N (4-18) requires Rebirth N-3.
 -- Case costs scale aggressively — the real cash sink.
 -------------------------------------------------
 Economy.TotalCases = 18
@@ -128,7 +128,7 @@ Economy.CrateRarities = {
 -------------------------------------------------
 -- REBIRTH (19 levels)
 -- Escalating coin bonuses: 5% early, up to 20% late.
--- Rebirths 1-17 unlock cases 2-18.
+-- Rebirths 1-15 unlock cases 4-18.
 -- Rebirth resets: cash + active potions.
 -------------------------------------------------
 Economy.MaxRebirths = 19
@@ -188,10 +188,10 @@ function Economy.GetRebirthBonusPercent(rebirthLevel: number): number
 	return totalPercent
 end
 
---- Case 1 is free. Case N (2-18) requires Rebirth (N-1).
+--- Cases 1-3 are free. Case N (4-18) requires Rebirth (N-3).
 function Economy.GetCrateRebirthRequirement(crateId: number): number
-	if crateId <= 1 then return 0 end
-	return crateId - 1
+	if crateId <= 3 then return 0 end
+	return crateId - 3
 end
 
 --- Info for a specific rebirth level (1-indexed)
@@ -199,7 +199,7 @@ function Economy.GetRebirthInfo(rebirthLevel: number)
 	if rebirthLevel < 1 or rebirthLevel > Economy.MaxRebirths then return nil end
 	local cost = Economy.RebirthCosts[rebirthLevel]
 	local coinBonus = Economy.GetRebirthBonusPercent(rebirthLevel)
-	local unlocksCase = rebirthLevel + 1
+	local unlocksCase = rebirthLevel + 3
 	if unlocksCase > Economy.TotalCases then unlocksCase = nil end
 	return {
 		level = rebirthLevel,

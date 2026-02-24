@@ -235,7 +235,7 @@ local function buildUI()
 	closeBtn.AutoButtonColor = false
 	closeBtn.ZIndex = 5
 	closeBtn.Parent = modalFrame
-	Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(0, 10)
+	Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(1, 0)
 	local cStroke = Instance.new("UIStroke")
 	cStroke.Color = Color3.fromRGB(160, 30, 30)
 	cStroke.Thickness = 1.5
@@ -537,6 +537,10 @@ function RebirthController.Open()
 	overlay.Visible = true
 	modalFrame.Visible = true
 	UIHelper.ScaleIn(modalFrame, 0.3)
+end
+
+function RebirthController.IsOpen()
+	return isOpen
 end
 
 function RebirthController.Close()
