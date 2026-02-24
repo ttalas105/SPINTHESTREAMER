@@ -15,6 +15,7 @@ local Streamers = require(ReplicatedStorage.Shared.Config.Streamers)
 local Economy = require(ReplicatedStorage.Shared.Config.Economy)
 local Effects = require(ReplicatedStorage.Shared.Config.Effects)
 local UIHelper = require(script.Parent.UIHelper)
+local HUDController = require(script.Parent.HUDController)
 
 local SpinController = {}
 
@@ -1272,45 +1273,6 @@ function SpinController.Init()
 
 	skipButton.MouseButton1Click:Connect(function()
 		skipRequested = true
-	end)
-
-	-- Close button (top right)
-	local closeBtn = Instance.new("TextButton")
-	closeBtn.Name = "CloseBtn"
-	closeBtn.Size = UDim2.new(0, 40, 0, 40)
-	closeBtn.Position = UDim2.new(1, -12, 0, 12)
-	closeBtn.AnchorPoint = Vector2.new(1, 0)
-	closeBtn.BackgroundColor3 = Color3.fromRGB(240, 60, 70)
-	closeBtn.Text = "X"
-	closeBtn.TextColor3 = Color3.new(1, 1, 1)
-	closeBtn.Font = FONT
-	closeBtn.TextSize = 22
-	closeBtn.BorderSizePixel = 0
-	closeBtn.AutoButtonColor = false
-	closeBtn.ZIndex = 10
-	closeBtn.Parent = spinContainer
-	local cbCorner = Instance.new("UICorner")
-	cbCorner.CornerRadius = UDim.new(1, 0)
-	cbCorner.Parent = closeBtn
-	local cbStroke = Instance.new("UIStroke")
-	cbStroke.Color = Color3.fromRGB(180, 30, 30)
-	cbStroke.Thickness = 2
-	cbStroke.Parent = closeBtn
-	local cbGrad = Instance.new("UIGradient")
-	cbGrad.Color = ColorSequence.new({
-		ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 100, 100)),
-		ColorSequenceKeypoint.new(1, Color3.fromRGB(200, 40, 50)),
-	})
-	cbGrad.Rotation = 90
-	cbGrad.Parent = closeBtn
-	local cbTextStroke = Instance.new("UIStroke")
-	cbTextStroke.Color = Color3.fromRGB(80, 0, 0)
-	cbTextStroke.Thickness = 1.5
-	cbTextStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
-	cbTextStroke.Parent = closeBtn
-
-	closeBtn.MouseButton1Click:Connect(function()
-		SpinController.Hide()
 	end)
 
 	-- Listen for spin results

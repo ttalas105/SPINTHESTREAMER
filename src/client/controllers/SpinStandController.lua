@@ -10,6 +10,7 @@ local TweenService = game:GetService("TweenService")
 
 local Economy = require(ReplicatedStorage.Shared.Config.Economy)
 local UIHelper = require(script.Parent.UIHelper)
+local HUDController = require(script.Parent.HUDController)
 
 local SpinStandController = {}
 
@@ -276,6 +277,22 @@ local function buildCaseRow(crateId, parent)
 			buyBtn.Text = "LOCKED"
 			task.delay(1.2, function()
 				buyBtn.Text = "🔒"
+			end)
+			return
+		end
+
+		local playerCash = HUDController.Data and HUDController.Data.cash or 0
+		if playerCash < cost then
+			local origText = buyBtn.Text
+			local origColor = buyBtn.BackgroundColor3
+			local origScaled = buyBtn.TextScaled
+			buyBtn.Text = "NO CASH!"
+			buyBtn.TextScaled = true
+			buyBtn.BackgroundColor3 = Color3.fromRGB(180, 60, 60)
+			task.delay(1.5, function()
+				buyBtn.Text = origText
+				buyBtn.TextScaled = origScaled
+				buyBtn.BackgroundColor3 = origColor
 			end)
 			return
 		end

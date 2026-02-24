@@ -618,8 +618,8 @@ local function buildShopModal()
 	-- Scrollable potion list
 	local scroll = Instance.new("ScrollingFrame")
 	scroll.Name = "PotionScroll"
-	scroll.Size = UDim2.new(1, -24, 1, -78)
-	scroll.Position = UDim2.new(0.5, 0, 0, 70)
+	scroll.Size = UDim2.new(1, -24, 1, -86)
+	scroll.Position = UDim2.new(0.5, 0, 0, 78)
 	scroll.AnchorPoint = Vector2.new(0.5, 0)
 	scroll.BackgroundTransparency = 1
 	scroll.BorderSizePixel = 0
@@ -638,8 +638,10 @@ local function buildShopModal()
 	listLayout.Parent = scroll
 
 	local scrollPad = Instance.new("UIPadding")
-	scrollPad.PaddingTop = UDim.new(0, 4)
+	scrollPad.PaddingTop = UDim.new(0, 8)
 	scrollPad.PaddingBottom = UDim.new(0, 12)
+	scrollPad.PaddingLeft = UDim.new(0, 6)
+	scrollPad.PaddingRight = UDim.new(0, 6)
 	scrollPad.Parent = scroll
 
 	-------------------------------------------------
@@ -648,7 +650,7 @@ local function buildShopModal()
 	local prisData = Potions.Prismatic
 	local prisRow = Instance.new("Frame")
 	prisRow.Name = "PrismaticRow"
-	prisRow.Size = UDim2.new(1, 0, 0, 180)
+	prisRow.Size = UDim2.new(1, -24, 0, 180)
 	prisRow.BackgroundColor3 = Color3.fromRGB(40, 30, 55)
 	prisRow.BorderSizePixel = 0
 	prisRow.LayoutOrder = 0
@@ -880,6 +882,16 @@ local function buildShopModal()
 		local r = buildPotionRow("Luck", potion, scroll)
 		r.LayoutOrder = potion.tier
 	end
+
+	-- Divider between Luck and Money potions
+	local potionDivider = Instance.new("Frame")
+	potionDivider.Name = "PotionDivider"
+	potionDivider.Size = UDim2.new(0.9, 0, 0, 3)
+	potionDivider.BackgroundColor3 = Color3.fromRGB(120, 100, 170)
+	potionDivider.BorderSizePixel = 0
+	potionDivider.LayoutOrder = 9
+	potionDivider.Parent = scroll
+	Instance.new("UICorner", potionDivider).CornerRadius = UDim.new(1, 0)
 
 	-------------------------------------------------
 	-- MONEY POTIONS

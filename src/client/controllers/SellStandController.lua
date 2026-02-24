@@ -137,7 +137,7 @@ local function buildItemCard(item, originalIndex, parent)
 	local rarityColor = rarityInfo and rarityInfo.color or Color3.fromRGB(170, 170, 170)
 	local displayColor = effectInfo and effectInfo.color or rarityColor
 
-	local cardHeight = effectInfo and 108 or 90
+	local cardHeight = effectInfo and 130 or 110
 	local card = Instance.new("Frame")
 	card.Name = "Card_" .. originalIndex
 	card.Size = UDim2.new(1, -12, 0, cardHeight)
@@ -153,7 +153,7 @@ local function buildItemCard(item, originalIndex, parent)
 	cardStroke.Parent = card
 
 	-- 3D model viewport (left)
-	local vpSize = 70
+	local vpSize = 90
 	local modelsFolder = ReplicatedStorage:FindFirstChild("StreamerModels")
 	local modelTemplate = modelsFolder and modelsFolder:FindFirstChild(streamerId)
 
@@ -220,7 +220,7 @@ local function buildItemCard(item, originalIndex, parent)
 	-- Effect badge
 	if effectInfo then
 		local badge = Instance.new("Frame")
-		badge.Size = UDim2.new(0, 56, 0, 16)
+		badge.Size = UDim2.new(0, 70, 0, 20)
 		badge.Position = UDim2.new(0, textX, 0, 8)
 		badge.BackgroundColor3 = effectInfo.color
 		badge.BackgroundTransparency = 0.6
@@ -243,13 +243,13 @@ local function buildItemCard(item, originalIndex, parent)
 	if effectInfo then displayName = effectInfo.prefix .. " " .. displayName end
 	local nameY = effectInfo and 26 or 12
 	local nameLabel = Instance.new("TextLabel")
-	nameLabel.Size = UDim2.new(0, 180, 0, 22)
+	nameLabel.Size = UDim2.new(0, 240, 0, 28)
 	nameLabel.Position = UDim2.new(0, textX, 0, nameY)
 	nameLabel.BackgroundTransparency = 1
 	nameLabel.Text = displayName
 	nameLabel.TextColor3 = displayColor
 	nameLabel.Font = FONT
-	nameLabel.TextSize = 15
+	nameLabel.TextSize = 20
 	nameLabel.TextXAlignment = Enum.TextXAlignment.Left
 	nameLabel.TextTruncate = Enum.TextTruncate.AtEnd
 	nameLabel.Parent = card
@@ -262,32 +262,32 @@ local function buildItemCard(item, originalIndex, parent)
 	local oddsStr = formatOdds(effectOdds)
 
 	local rarLine = Instance.new("TextLabel")
-	rarLine.Size = UDim2.new(0, 180, 0, 14)
-	rarLine.Position = UDim2.new(0, textX, 0, nameY + 22)
+	rarLine.Size = UDim2.new(0, 240, 0, 18)
+	rarLine.Position = UDim2.new(0, textX, 0, nameY + 28)
 	rarLine.BackgroundTransparency = 1
 	rarLine.Text = info.rarity .. (oddsStr ~= "" and ("  •  " .. oddsStr) or "")
 	rarLine.TextColor3 = Color3.fromRGB(140, 135, 160)
 	rarLine.Font = FONT_SUB
-	rarLine.TextSize = 11
+	rarLine.TextSize = 14
 	rarLine.TextXAlignment = Enum.TextXAlignment.Left
 	rarLine.Parent = card
 
 	-- $/sec
 	local cashLine = Instance.new("TextLabel")
-	cashLine.Size = UDim2.new(0, 180, 0, 14)
-	cashLine.Position = UDim2.new(0, textX, 0, nameY + 36)
+	cashLine.Size = UDim2.new(0, 240, 0, 18)
+	cashLine.Position = UDim2.new(0, textX, 0, nameY + 48)
 	cashLine.BackgroundTransparency = 1
 	cashLine.Text = "$" .. fmtNum(sellPrice)
 	cashLine.TextColor3 = Color3.fromRGB(100, 255, 120)
 	cashLine.Font = FONT_SUB
-	cashLine.TextSize = 11
+	cashLine.TextSize = 14
 	cashLine.TextXAlignment = Enum.TextXAlignment.Left
 	cashLine.Parent = card
 
 	-- Sell button (right side)
 	local sellBtn = Instance.new("TextButton")
 	sellBtn.Name = "SellBtn"
-	sellBtn.Size = UDim2.new(0, 62, 0, 36)
+	sellBtn.Size = UDim2.new(0, 80, 0, 44)
 	sellBtn.Position = UDim2.new(1, -14, 0.5, 0)
 	sellBtn.AnchorPoint = Vector2.new(1, 0.5)
 	sellBtn.BackgroundColor3 = RED
@@ -307,19 +307,19 @@ local function buildItemCard(item, originalIndex, parent)
 	sellText.Text = "SELL"
 	sellText.TextColor3 = Color3.new(1, 1, 1)
 	sellText.Font = FONT
-	sellText.TextSize = 14
+	sellText.TextSize = 18
 	sellText.Parent = sellBtn
 	addStroke(sellText, Color3.new(0, 0, 0), 1)
 
 	sellBtn.MouseEnter:Connect(function()
 		TweenService:Create(sellBtn, bounceTween, {
-			Size = UDim2.new(0, 68, 0, 40),
+			Size = UDim2.new(0, 86, 0, 48),
 			BackgroundColor3 = Color3.fromRGB(255, 75, 75),
 		}):Play()
 	end)
 	sellBtn.MouseLeave:Connect(function()
 		TweenService:Create(sellBtn, bounceTween, {
-			Size = UDim2.new(0, 62, 0, 36),
+			Size = UDim2.new(0, 80, 0, 44),
 			BackgroundColor3 = RED,
 		}):Play()
 	end)
@@ -542,8 +542,8 @@ function SellStandController.Init()
 	-- ===== SCROLL LIST =====
 	scrollFrame = Instance.new("ScrollingFrame")
 	scrollFrame.Name = "ItemList"
-	scrollFrame.Size = UDim2.new(1, -20, 1, -160)
-	scrollFrame.Position = UDim2.new(0.5, 0, 0, 96)
+	scrollFrame.Size = UDim2.new(1, -20, 1, -170)
+	scrollFrame.Position = UDim2.new(0.5, 0, 0, 100)
 	scrollFrame.AnchorPoint = Vector2.new(0.5, 0)
 	scrollFrame.BackgroundTransparency = 1
 	scrollFrame.BorderSizePixel = 0
@@ -559,6 +559,10 @@ function SellStandController.Init()
 	layout.Padding = UDim.new(0, 6)
 	layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 	layout.Parent = scrollFrame
+
+	local scrollPad = Instance.new("UIPadding")
+	scrollPad.PaddingTop = UDim.new(0, 6)
+	scrollPad.Parent = scrollFrame
 
 	-- Empty state
 	emptyLabel = Instance.new("TextLabel")

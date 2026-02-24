@@ -116,7 +116,7 @@ DesignConfig.Sizes = {
 	SideButtonSpacing  = UDim.new(0, 8),
 	ModalSize          = UDim2.new(0.7, 0, 0.75, 0),
 	SpinWheelSize      = UDim2.new(0.5, 0, 0.5, 0),
-	InventorySlotSize  = UDim2.new(0, 56, 0, 56),
+	InventorySlotSize  = UDim2.new(0, 58, 0, 58),
 	InventoryBarHeight = UDim2.new(0, 70, 0, 70),
 }
 

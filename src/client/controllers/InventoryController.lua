@@ -281,25 +281,15 @@ function InventoryController.Init()
 	screenGui = UIHelper.CreateScreenGui("InventoryGui", 6)
 	screenGui.Parent = playerGui
 
-	-- Bottom bar container
-	barContainer = UIHelper.CreateRoundedFrame({
-		Name = "InventoryBar",
-		Size = UDim2.new(0, (VISIBLE_SLOTS * 56) + ((VISIBLE_SLOTS - 1) * 4) + 12, 0, 72),
-		Position = UDim2.new(0.5, 0, 1, -10),
-		AnchorPoint = Vector2.new(0.5, 1),
-		Color = DesignConfig.Colors.InventoryBg,
-		CornerRadius = UDim.new(0, 12),
-		StrokeColor = Color3.fromRGB(60, 60, 90),
-		Parent = screenGui,
-	})
-
-	-- Padding
-	local padding = Instance.new("UIPadding")
-	padding.PaddingLeft = UDim.new(0, 6)
-	padding.PaddingRight = UDim.new(0, 6)
-	padding.PaddingTop = UDim.new(0, 6)
-	padding.PaddingBottom = UDim.new(0, 6)
-	padding.Parent = barContainer
+	-- Bottom bar container (transparent)
+	barContainer = Instance.new("Frame")
+	barContainer.Name = "InventoryBar"
+	barContainer.Size = UDim2.new(0, (VISIBLE_SLOTS * 58) + ((VISIBLE_SLOTS - 1) * 8), 0, 68)
+	barContainer.Position = UDim2.new(0.5, 0, 1, -10)
+	barContainer.AnchorPoint = Vector2.new(0.5, 1)
+	barContainer.BackgroundTransparency = 1
+	barContainer.BorderSizePixel = 0
+	barContainer.Parent = screenGui
 
 	-- Slots container
 	slotsFrame = Instance.new("Frame")
@@ -313,7 +303,7 @@ function InventoryController.Init()
 	layout.FillDirection = Enum.FillDirection.Horizontal
 	layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 	layout.VerticalAlignment = Enum.VerticalAlignment.Center
-	layout.Padding = UDim.new(0, 4)
+	layout.Padding = UDim.new(0, 8)
 	layout.Parent = slotsFrame
 
 	-- Create slots
