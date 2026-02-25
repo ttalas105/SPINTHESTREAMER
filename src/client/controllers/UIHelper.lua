@@ -342,33 +342,6 @@ function UIHelper.CreateIconButton(props)
 		labelStroke.Parent = label
 	end
 
-	-- Notification badge (hidden by default, used by SetBadge)
-	local badge = Instance.new("Frame")
-	badge.Name = "Badge"
-	badge.Size = UDim2.new(0, 24, 0, 24)
-	badge.Position = UDim2.new(1, -4, 0, -4)
-	badge.AnchorPoint = Vector2.new(1, 0)
-	badge.BackgroundColor3 = Color3.fromRGB(255, 60, 60)
-	badge.BorderSizePixel = 0
-	badge.ZIndex = 10
-	badge.Visible = false
-	badge.Parent = container
-	Instance.new("UICorner", badge).CornerRadius = UDim.new(1, 0)
-	local badgeStroke = Instance.new("UIStroke")
-	badgeStroke.Color = Color3.fromRGB(180, 30, 30)
-	badgeStroke.Thickness = 1.5
-	badgeStroke.Parent = badge
-	local badgeCount = Instance.new("TextLabel")
-	badgeCount.Name = "Count"
-	badgeCount.Size = UDim2.new(1, 0, 1, 0)
-	badgeCount.BackgroundTransparency = 1
-	badgeCount.Text = "0"
-	badgeCount.TextColor3 = Color3.new(1, 1, 1)
-	badgeCount.Font = Enum.Font.FredokaOne
-	badgeCount.TextSize = 13
-	badgeCount.ZIndex = 11
-	badgeCount.Parent = badge
-
 	local clickButton = Instance.new("TextButton")
 	clickButton.Name = "ClickZone"
 	clickButton.Size = UDim2.new(1, 0, 1, 0)
