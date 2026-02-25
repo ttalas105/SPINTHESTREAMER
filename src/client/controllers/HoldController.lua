@@ -6,6 +6,7 @@
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ContentProvider = game:GetService("ContentProvider")
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 
@@ -179,6 +180,17 @@ local function cleanModel(model)
 		if animator then animator:Destroy() end
 		local animCtrl = model:FindFirstChildOfClass("AnimationController")
 		if animCtrl then animCtrl:Destroy() end
+	end
+
+	-- Preload clothing textures so they render immediately
+	local toPreload = {}
+	for _, desc in ipairs(model:GetDescendants()) do
+		if desc:IsA("Shirt") or desc:IsA("Pants") or desc:IsA("ShirtGraphic") or desc:IsA("Decal") then
+			table.insert(toPreload, desc)
+		end
+	end
+	if #toPreload > 0 then
+		pcall(function() ContentProvider:PreloadAsync(toPreload) end)
 	end
 
 	-- Anchor every part and disable all collision/interaction

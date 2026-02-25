@@ -623,6 +623,18 @@ local function cleanDisplayModel(model: Model)
 		if animator then animator:Destroy() end
 	end
 
+	-- Preload clothing textures
+	local ContentProvider = game:GetService("ContentProvider")
+	local toPreload = {}
+	for _, d in ipairs(model:GetDescendants()) do
+		if d:IsA("Shirt") or d:IsA("Pants") or d:IsA("ShirtGraphic") or d:IsA("Decal") then
+			table.insert(toPreload, d)
+		end
+	end
+	if #toPreload > 0 then
+		pcall(function() ContentProvider:PreloadAsync(toPreload) end)
+	end
+
 	for _, p in ipairs(model:GetDescendants()) do
 		if p:IsA("BasePart") then
 			p.Anchored = true
