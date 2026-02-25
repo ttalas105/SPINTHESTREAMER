@@ -66,11 +66,11 @@ local RARITY_BASE_WEIGHTS = {
 local RARITY_ORDER = { "Common", "Rare", "Epic", "Legendary", "Mythic" }
 
 local RARITY_EXPONENTS = {
-	Common    = -3,  -- DIVIDED by L^3
-	Rare      =  1,  -- multiplied by L^1
-	Epic      =  2,  -- multiplied by L^2
-	Legendary =  3,  -- multiplied by L^3
-	Mythic    =  4,  -- multiplied by L^4
+	Common    = -0.5,
+	Rare      =  0.2,
+	Epic      =  0.5,
+	Legendary =  0.8,
+	Mythic    =  1.0,
 }
 
 local function pickStreamerByOdds(luckMultiplier: number)
