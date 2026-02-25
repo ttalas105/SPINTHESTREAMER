@@ -82,6 +82,7 @@ local function handleSell(player, streamerId: string)
 	end
 
 	PlayerData.AddCash(player, price)
+	PlayerData.IncrementStat(player, "totalCashEarned", price)
 	SellResult:FireClient(player, {
 		success = true,
 		streamerId = streamerId,
@@ -122,6 +123,7 @@ local function handleSellByIndex(player, inventoryIndex: number)
 	end
 
 	PlayerData.AddCash(player, price)
+	PlayerData.IncrementStat(player, "totalCashEarned", price)
 	SellResult:FireClient(player, {
 		success = true,
 		streamerId = type(item) == "table" and item.id or item,
@@ -158,6 +160,7 @@ local function handleSellAll(player)
 	-- Clear inventory
 	data.inventory = {}
 	PlayerData.AddCash(player, math.floor(totalCash))
+	PlayerData.IncrementStat(player, "totalCashEarned", math.floor(totalCash))
 	PlayerData.Replicate(player)
 
 	SellResult:FireClient(player, {

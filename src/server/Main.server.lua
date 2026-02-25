@@ -361,7 +361,7 @@ end
 -- Ensure new remote events exist before services init
 do
 	local remotes = ReplicatedStorage:WaitForChild("RemoteEvents")
-	local newRemotes = { "DailyRewardNotify", "ClaimQuestReward", "QuestUpdate" }
+	local newRemotes = { "ClaimQuestReward", "QuestUpdate" }
 	for _, name in ipairs(newRemotes) do
 		if not remotes:FindFirstChild(name) then
 			local re = Instance.new("RemoteEvent")
@@ -371,8 +371,8 @@ do
 	end
 end
 
-local DailyRewardService = require(services.DailyRewardService)
 local QuestService = require(services.QuestService)
+local LeaderboardService = require(services.LeaderboardService)
 
 -- Initialize services (order matters: PlayerData first, then BaseService)
 PlayerData.Init()
@@ -387,7 +387,7 @@ IndexService.Init(PlayerData, QuestService)
 GemShopService.Init(PlayerData, QuestService)
 SacrificeService.Init(PlayerData, PotionService, QuestService)
 ReceiptHandler.Init(PlayerData, SpinService)
-DailyRewardService.Init(PlayerData)
+LeaderboardService.Init(PlayerData)
 PotionService.SetQuestService(QuestService)
 
 print("[Server] Spin the Streamer initialized! Map size: 400x1000 studs, 8 base slots")

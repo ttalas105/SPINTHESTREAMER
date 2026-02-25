@@ -19,7 +19,7 @@ Effects.List = {
 		color          = Color3.fromRGB(50, 255, 50),
 		glowColor      = Color3.fromRGB(30, 200, 30),
 		cashMultiplier = 2,
-		rarityMult     = 2,
+		rarityMult     = 3,
 		rollChance     = 0.15,
 	},
 	{
@@ -28,7 +28,7 @@ Effects.List = {
 		color          = Color3.fromRGB(180, 220, 255),
 		glowColor      = Color3.fromRGB(130, 180, 240),
 		cashMultiplier = 3,
-		rarityMult     = 3,
+		rarityMult     = 5,
 		rollChance     = 0.12,
 	},
 	{
@@ -37,7 +37,7 @@ Effects.List = {
 		color          = Color3.fromRGB(255, 100, 20),
 		glowColor      = Color3.fromRGB(220, 60, 10),
 		cashMultiplier = 5,
-		rarityMult     = 5,
+		rarityMult     = 10,
 		rollChance     = 0.10,
 	},
 	{
@@ -46,7 +46,7 @@ Effects.List = {
 		color          = Color3.fromRGB(255, 255, 80),
 		glowColor      = Color3.fromRGB(200, 200, 40),
 		cashMultiplier = 8,
-		rarityMult     = 8,
+		rarityMult     = 20,
 		rollChance     = 0.08,
 	},
 	{
@@ -55,7 +55,7 @@ Effects.List = {
 		color          = Color3.fromRGB(100, 60, 140),
 		glowColor      = Color3.fromRGB(60, 30, 100),
 		cashMultiplier = 12,
-		rarityMult     = 12,
+		rarityMult     = 40,
 		rollChance     = 0.06,
 	},
 	{
@@ -64,7 +64,7 @@ Effects.List = {
 		color          = Color3.fromRGB(0, 255, 255),
 		glowColor      = Color3.fromRGB(255, 0, 255),
 		cashMultiplier = 18,
-		rarityMult     = 18,
+		rarityMult     = 100,
 		rollChance     = 0.05,
 	},
 	{
@@ -72,8 +72,8 @@ Effects.List = {
 		prefix         = "Lunar",
 		color          = Color3.fromRGB(200, 220, 255),
 		glowColor      = Color3.fromRGB(160, 180, 220),
-		cashMultiplier = 25,
-		rarityMult     = 25,
+		cashMultiplier = 30,
+		rarityMult     = 200,
 		rollChance     = 0.04,
 	},
 	{
@@ -81,8 +81,8 @@ Effects.List = {
 		prefix         = "Solar",
 		color          = Color3.fromRGB(255, 220, 60),
 		glowColor      = Color3.fromRGB(255, 160, 20),
-		cashMultiplier = 35,
-		rarityMult     = 35,
+		cashMultiplier = 50,
+		rarityMult     = 500,
 		rollChance     = 0.035,
 	},
 	{
@@ -90,8 +90,8 @@ Effects.List = {
 		prefix         = "Void",
 		color          = Color3.fromRGB(140, 15, 50),
 		glowColor      = Color3.fromRGB(70, 5, 25),
-		cashMultiplier = 50,
-		rarityMult     = 50,
+		cashMultiplier = 100,
+		rarityMult     = 1000,
 		rollChance     = 0.03,
 	},
 }

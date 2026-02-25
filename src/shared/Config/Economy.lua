@@ -43,23 +43,23 @@ Economy.CrateCosts = {
 
 Economy.CrateLuckBonuses = {
 	0,       -- Case 1:  +0%
-	0.05,    -- Case 2:  +5%
-	0.10,    -- Case 3:  +10%
-	0.20,    -- Case 4:  +20%
-	0.35,    -- Case 5:  +35%
-	0.50,    -- Case 6:  +50%
-	0.75,    -- Case 7:  +75%
-	1.00,    -- Case 8:  +100%
-	1.50,    -- Case 9:  +150%
-	2.00,    -- Case 10: +200%
-	2.75,    -- Case 11: +275%
-	3.50,    -- Case 12: +350%
-	4.50,    -- Case 13: +450%
-	5.50,    -- Case 14: +550%
-	7.00,    -- Case 15: +700%
-	8.50,    -- Case 16: +850%
-	10.00,   -- Case 17: +1000%
-	12.50,   -- Case 18: +1250%
+	0.03,    -- Case 2:  +3%
+	0.06,    -- Case 3:  +6%
+	0.10,    -- Case 4:  +10%
+	0.15,    -- Case 5:  +15%
+	0.22,    -- Case 6:  +22%
+	0.30,    -- Case 7:  +30%
+	0.40,    -- Case 8:  +40%
+	0.50,    -- Case 9:  +50%
+	0.65,    -- Case 10: +65%
+	0.80,    -- Case 11: +80%
+	0.90,    -- Case 12: +90%
+	1.10,    -- Case 13: +110%
+	1.25,    -- Case 14: +125%
+	1.40,    -- Case 15: +140%
+	1.50,    -- Case 16: +150%
+	1.75,    -- Case 17: +175%
+	2.00,    -- Case 18: +200%
 }
 
 Economy.CrateImageIds = {
@@ -134,25 +134,25 @@ Economy.CrateRarities = {
 Economy.MaxRebirths = 19
 
 Economy.RebirthCosts = {
-	500000,        -- Rebirth 1:  $500K  (fast first rebirth = early dopamine)
-	2000000,       -- Rebirth 2:  $2M
-	5000000,       -- Rebirth 3:  $5M
-	12000000,      -- Rebirth 4:  $12M
-	25000000,      -- Rebirth 5:  $25M
-	50000000,      -- Rebirth 6:  $50M
-	85000000,      -- Rebirth 7:  $85M
-	140000000,     -- Rebirth 8:  $140M
-	225000000,     -- Rebirth 9:  $225M
-	350000000,     -- Rebirth 10: $350M
-	550000000,     -- Rebirth 11: $550M
-	850000000,     -- Rebirth 12: $850M
-	1300000000,    -- Rebirth 13: $1.3B
-	2000000000,    -- Rebirth 14: $2B
-	3000000000,    -- Rebirth 15: $3B
-	4500000000,    -- Rebirth 16: $4.5B
-	7000000000,    -- Rebirth 17: $7B
-	10000000000,   -- Rebirth 18: $10B
-	15000000000,   -- Rebirth 19: $15B
+	750000,        -- Rebirth 1:  $750K  (achievable in ~20-30 min)
+	2500000,       -- Rebirth 2:  $2.5M  (another ~20-30 min)
+	7000000,       -- Rebirth 3:  $7M    (first hour done)
+	18000000,      -- Rebirth 4:  $18M   (~1 hour)
+	40000000,      -- Rebirth 5:  $40M   (~1 hour)
+	80000000,      -- Rebirth 6:  $80M   (~1 hour)
+	150000000,     -- Rebirth 7:  $150M  (~1 hour)
+	275000000,     -- Rebirth 8:  $275M  (~1 hour)
+	500000000,     -- Rebirth 9:  $500M  (getting longer)
+	850000000,     -- Rebirth 10: $850M
+	1500000000,    -- Rebirth 11: $1.5B
+	2500000000,    -- Rebirth 12: $2.5B
+	4000000000,    -- Rebirth 13: $4B
+	7000000000,    -- Rebirth 14: $7B
+	12000000000,   -- Rebirth 15: $12B
+	20000000000,   -- Rebirth 16: $20B
+	35000000000,   -- Rebirth 17: $35B
+	60000000000,   -- Rebirth 18: $60B
+	100000000000,  -- Rebirth 19: $100B
 }
 
 -- Escalating rebirth bonus percentages per level
@@ -292,13 +292,13 @@ Economy.IndexGemRewards = {
 Economy.IndexEffectMultipliers = {
 	Acid      = 3,
 	Snow      = 5,
-	Lava      = 8,
-	Lightning = 12,
-	Shadow    = 16,
-	Glitchy   = 20,
-	Lunar     = 25,
-	Solar     = 30,
-	Void      = 40,
+	Lava      = 10,
+	Lightning = 20,
+	Shadow    = 40,
+	Glitchy   = 100,
+	Lunar     = 200,
+	Solar     = 500,
+	Void      = 1000,
 }
 
 --- Get gem reward for claiming an Index entry (rarity + optional effect).
