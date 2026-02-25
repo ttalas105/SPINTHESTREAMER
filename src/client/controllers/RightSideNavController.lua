@@ -31,8 +31,8 @@ local STROKE_COLOR = Color3.fromRGB(30, 25, 50)
 
 local menuItems = {
 	{ name = "Rebirth",  icon = "\u{2728}", imageId = "rbxassetid://83431543153884", color = Color3.fromRGB(255, 100, 140),  label = "Rebirth"  },
-	{ name = "Quests",   icon = "\u{1F4CB}", imageId = "", color = Color3.fromRGB(80, 200, 120),   label = "Quests"   },
-	{ name = "Settings", icon = "\u{2699}\u{FE0F}", imageId = "rbxassetid://136970465147454", color = Color3.fromRGB(100, 160, 220),  label = "Settings" },
+	{ name = "Quests",   icon = "\u{1F4CB}", imageId = "", color = Color3.fromRGB(80, 200, 120),   label = "Quests", bgColor = Color3.fromRGB(100, 210, 140) },
+	{ name = "Settings", icon = "\u{1F527}", imageId = "", color = Color3.fromRGB(100, 160, 220),  label = "Settings", bgColor = Color3.fromRGB(150, 195, 245) },
 }
 
 -------------------------------------------------
@@ -109,21 +109,13 @@ function RightSideNavController.Init()
 			),
 			Icon = item.icon,
 			ImageId = hasImage and item.imageId or nil,
-			IconFont = Enum.Font.Cartoon,
-			LabelFont = Enum.Font.Cartoon,
+			BgColor = item.bgColor,
+			IconFont = Enum.Font.FredokaOne,
+			LabelFont = Enum.Font.FredokaOne,
 			Label = item.label,
 			CornerRadius = UDim.new(0, BUBBLE_CORNER),
 			Parent = container,
 		})
-
-		if not hasImage then
-			local stroke = Instance.new("UIStroke")
-			stroke.Color = STROKE_COLOR
-			stroke.Thickness = STROKE_THICKNESS
-			stroke.Transparency = 0.15
-			stroke.Parent = iconBtn
-			UIHelper.CreateShadow(iconBtn)
-		end
 
 		buttons[item.name] = iconBtn
 		table.insert(btnFrames, iconBtn)

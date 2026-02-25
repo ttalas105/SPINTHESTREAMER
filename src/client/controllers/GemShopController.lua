@@ -602,14 +602,6 @@ local function buildCaseCard(caseData, parent, order)
 	cardStroke.Transparency = 0.2
 	cardStroke.Parent = card
 
-	-- Color accent strip at top
-	local accent = Instance.new("Frame")
-	accent.Size = UDim2.new(1, 0, 0, 5)
-	accent.BackgroundColor3 = caseData.color
-	accent.BorderSizePixel = 0; accent.ZIndex = 4
-	accent.Parent = card
-	Instance.new("UICorner", accent).CornerRadius = UDim.new(0, 18)
-
 	-- Logo image (case name) -- BIG
 	local logoImage = Instance.new("ImageLabel")
 	logoImage.Name = "Logo"
@@ -820,24 +812,26 @@ function GemShopController.Init()
 
 	local title = Instance.new("TextLabel")
 	title.Size = UDim2.new(0.6, 0, 0, 32)
-	title.Position = UDim2.new(0, 20, 0, 10)
+	title.Position = UDim2.new(0.5, 0, 0, 14)
+	title.AnchorPoint = Vector2.new(0.5, 0)
+	title.TextXAlignment = Enum.TextXAlignment.Center
 	title.BackgroundTransparency = 1
 	title.Text = "Gem Shop"
 	title.TextColor3 = Color3.new(1, 1, 1)
 	title.Font = FONT; title.TextSize = 28
-	title.TextXAlignment = Enum.TextXAlignment.Left
 	title.ZIndex = 3; title.Parent = header
 	addStroke(title, Color3.new(0, 0, 0), 1.5)
 
 	balanceLabel = Instance.new("TextLabel")
-	balanceLabel.Size = UDim2.new(0.5, 0, 0, 16)
-	balanceLabel.Position = UDim2.new(0, 22, 0, 42)
-	balanceLabel.BackgroundTransparency = 1
-	balanceLabel.Text = fmtNum(HUDController.Data.gems or 0) .. " Gems"
-	balanceLabel.TextColor3 = Color3.fromRGB(120, 200, 255)
-	balanceLabel.Font = FONT_SUB; balanceLabel.TextSize = 12
+	balanceLabel.Size = UDim2.new(0.5, 0, 0, 30)
+	balanceLabel.Position = UDim2.new(0, 20, 0, 14)
 	balanceLabel.TextXAlignment = Enum.TextXAlignment.Left
+	balanceLabel.BackgroundTransparency = 1
+	balanceLabel.Text = "\u{1F48E} " .. fmtNum(HUDController.Data.gems or 0) .. " Gems"
+	balanceLabel.TextColor3 = Color3.fromRGB(120, 210, 255)
+	balanceLabel.Font = FONT; balanceLabel.TextSize = 22
 	balanceLabel.ZIndex = 3; balanceLabel.Parent = header
+	addStroke(balanceLabel, Color3.new(0, 0, 0), 1.5)
 
 	-- Close button
 	local closeBtn = Instance.new("TextButton")
@@ -908,7 +902,7 @@ function GemShopController.Init()
 	-------------------------------------------------
 	HUDController.OnDataUpdated(function()
 		if balanceLabel then
-			balanceLabel.Text = fmtNum(HUDController.Data.gems or 0) .. " Gems"
+			balanceLabel.Text = "\u{1F48E} " .. fmtNum(HUDController.Data.gems or 0) .. " Gems"
 		end
 	end)
 

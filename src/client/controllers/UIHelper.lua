@@ -247,7 +247,7 @@ end
 function UIHelper.CreateIconButton(props)
 	local hasImage = props.ImageId and props.ImageId ~= ""
 	local DEFAULT_BTN_BG = Color3.fromRGB(120, 200, 245)
-	local btnBg = (hasImage and props.BgColor) or DEFAULT_BTN_BG
+	local btnBg = props.BgColor or (hasImage and DEFAULT_BTN_BG) or props.Color or DEFAULT_BTN_BG
 	local btnBgHover = Color3.new(
 		math.min(btnBg.R + 0.08, 1),
 		math.min(btnBg.G + 0.08, 1),
@@ -278,11 +278,16 @@ function UIHelper.CreateIconButton(props)
 		bgStroke.Transparency = 0.25
 		bgStroke.Parent = container
 	else
-		container.BackgroundColor3 = props.Color or DesignConfig.Colors.ButtonIdle
+		container.BackgroundColor3 = props.BgColor or props.Color or DesignConfig.Colors.ButtonIdle
 		local corner = Instance.new("UICorner")
-		corner.CornerRadius = props.CornerRadius or DesignConfig.Layout.ButtonCorner
+		corner.CornerRadius = UDim.new(0, 18)
 		corner.Parent = container
-		UIHelper.AddPuffyGradient(container)
+
+		local bgStroke = Instance.new("UIStroke")
+		bgStroke.Color = btnStrokeColor
+		bgStroke.Thickness = 1.5
+		bgStroke.Transparency = 0.25
+		bgStroke.Parent = container
 	end
 
 	if hasImage then
@@ -298,8 +303,9 @@ function UIHelper.CreateIconButton(props)
 	else
 		local icon = Instance.new("TextLabel")
 		icon.Name = "Icon"
-		icon.Size = UDim2.new(1, 0, 0.62, 0)
-		icon.Position = UDim2.new(0, 0, 0.02, 0)
+		icon.Size = UDim2.new(0, 100, 0, 70)
+		icon.Position = UDim2.new(0.5, 0, 0.5, -12)
+		icon.AnchorPoint = Vector2.new(0.5, 0.5)
 		icon.BackgroundTransparency = 1
 		icon.TextColor3 = props.IconColor3 or DesignConfig.Colors.White
 		icon.Font = props.IconFont or DesignConfig.Fonts.Accent
@@ -329,16 +335,18 @@ function UIHelper.CreateIconButton(props)
 		labelStroke.Transparency = 0
 		labelStroke.Parent = label
 	else
-		label.Size = UDim2.new(1, 0, 0.35, 0)
-		label.Position = UDim2.new(0, 0, 0.65, 0)
-		label.TextColor3 = DesignConfig.Colors.White
-		label.Font = props.LabelFont or DesignConfig.Fonts.Primary
-		label.TextScaled = true
+		label.Size = UDim2.new(1, 0, 0, 30)
+		label.Position = UDim2.new(0.5, 0, 1, -6)
+		label.AnchorPoint = Vector2.new(0.5, 1)
+		label.TextColor3 = Color3.new(1, 1, 1)
+		label.Font = props.LabelFont or Enum.Font.FredokaOne
+		label.TextSize = 24
+		label.TextScaled = false
 
 		local labelStroke = Instance.new("UIStroke")
-		labelStroke.Color = Color3.new(0, 0, 0)
-		labelStroke.Thickness = 1.5
-		labelStroke.Transparency = 0.3
+		labelStroke.Color = Color3.fromRGB(30, 30, 30)
+		labelStroke.Thickness = 2.5
+		labelStroke.Transparency = 0
 		labelStroke.Parent = label
 	end
 

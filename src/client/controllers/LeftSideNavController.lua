@@ -111,21 +111,12 @@ function LeftSideNavController.Init()
 			Icon = item.icon,
 			ImageId = hasImage and item.imageId or nil,
 			BgColor = item.bgColor,
-			IconFont = Enum.Font.Cartoon,
-			LabelFont = Enum.Font.Cartoon,
+			IconFont = Enum.Font.FredokaOne,
+			LabelFont = Enum.Font.FredokaOne,
 			Label = item.label,
 			CornerRadius = UDim.new(0, BUBBLE_CORNER),
 			Parent = container,
 		})
-
-		if not hasImage then
-			local stroke = Instance.new("UIStroke")
-			stroke.Color = STROKE_COLOR
-			stroke.Thickness = STROKE_THICKNESS
-			stroke.Transparency = 0.15
-			stroke.Parent = iconBtn
-			UIHelper.CreateShadow(iconBtn)
-		end
 
 		buttons[item.name] = iconBtn
 		table.insert(btnFrames, iconBtn)
