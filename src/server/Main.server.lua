@@ -390,4 +390,30 @@ ReceiptHandler.Init(PlayerData, SpinService)
 LeaderboardService.Init(PlayerData)
 PotionService.SetQuestService(QuestService)
 
+-------------------------------------------------
+-- DEBUG: Give all streamers (Studio only)
+-------------------------------------------------
+do
+	local RunService = game:GetService("RunService")
+	if RunService:IsStudio() then
+		local Streamers = require(ReplicatedStorage.Shared.Config.Streamers)
+		local remotes = ReplicatedStorage:WaitForChild("RemoteEvents")
+		local debugRemote = remotes:FindFirstChild("DebugGiveAll")
+		if not debugRemote then
+			debugRemote = Instance.new("RemoteEvent")
+			debugRemote.Name = "DebugGiveAll"
+			debugRemote.Parent = remotes
+		end
+		debugRemote.OnServerEvent:Connect(function(player)
+			print("[DEBUG] Giving all streamers to " .. player.Name)
+			for _, s in ipairs(Streamers.List) do
+				PlayerData.AddToInventory(player, s.id)
+			end
+			PlayerData.Replicate(player)
+			print("[DEBUG] Done — gave " .. #Streamers.List .. " streamers")
+		end)
+		print("[Server] Debug: DebugGiveAll remote active (Studio only)")
+	end
+end
+
 print("[Server] Spin the Streamer initialized! Map size: 400x1000 studs, 8 base slots")

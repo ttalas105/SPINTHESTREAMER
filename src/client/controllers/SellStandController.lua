@@ -18,6 +18,7 @@ local UIHelper = require(script.Parent.UIHelper)
 local HUDController = require(script.Parent.HUDController)
 
 local SellStandController = {}
+local SacrificeController = nil
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
@@ -362,8 +363,19 @@ local function buildInventoryList(force)
 
 	if emptyLabel then emptyLabel.Visible = false end
 
+	-- Lazy-load SacrificeController to exclude queued items
+	if not SacrificeController then
+		local ok, mod = pcall(function() return require(script.Parent.SacrificeController) end)
+		if ok then SacrificeController = mod end
+	end
+	local queuedSet = SacrificeController and SacrificeController.GetQueuedIndices and SacrificeController.GetQueuedIndices() or {}
+
 	local sortedIndices = {}
-	for i = 1, #inventory do sortedIndices[i] = i end
+	for i = 1, #inventory do
+		if not queuedSet[i] then
+			table.insert(sortedIndices, i)
+		end
+	end
 	table.sort(sortedIndices, function(a, b)
 		return calcSellPrice(inventory[a]) > calcSellPrice(inventory[b])
 	end)
@@ -653,6 +665,13 @@ function SellStandController.Init()
 	end)
 
 	modalFrame.Visible = false
+end
+
+function SellStandController.RefreshList()
+	if isOpen then
+		lastInventorySnapshot = ""
+		buildInventoryList(true)
+	end
 end
 
 return SellStandController

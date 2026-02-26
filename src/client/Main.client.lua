@@ -68,6 +68,37 @@ QuestController.Init()
 SlotPadController.Init(HoldController, InventoryController)
 
 -------------------------------------------------
+-- DEBUG: Give all streamers button (Studio only)
+-------------------------------------------------
+if RunService:IsStudio() then
+	task.defer(function()
+		local debugRemote = RemoteEvents:FindFirstChild("DebugGiveAll")
+		if not debugRemote then
+			debugRemote = RemoteEvents:WaitForChild("DebugGiveAll", 5)
+		end
+		if debugRemote then
+			local playerGui = Players.LocalPlayer:WaitForChild("PlayerGui")
+			local sg = Instance.new("ScreenGui")
+			sg.Name = "DebugGui"; sg.ResetOnSpawn = false; sg.DisplayOrder = 100; sg.Parent = playerGui
+			local btn = Instance.new("TextButton")
+			btn.Size = UDim2.new(0, 160, 0, 36)
+			btn.Position = UDim2.new(0, 10, 0, 10)
+			btn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+			btn.Text = "DEBUG: Give All"; btn.TextColor3 = Color3.new(1, 1, 1)
+			btn.Font = Enum.Font.FredokaOne; btn.TextSize = 16; btn.BorderSizePixel = 0
+			btn.Parent = sg
+			Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
+			btn.MouseButton1Click:Connect(function()
+				btn.Text = "Giving..."
+				debugRemote:FireServer()
+				task.wait(1)
+				btn.Text = "DEBUG: Give All"
+			end)
+		end
+	end)
+end
+
+-------------------------------------------------
 -- HIDE PLAYER HEALTH BARS + MOVEMENT SPEED
 -------------------------------------------------
 

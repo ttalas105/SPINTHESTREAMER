@@ -29,19 +29,27 @@ local SacrificeResult  = RemoteEvents:WaitForChild("SacrificeResult")
 
 local screenGui, modalFrame
 local contentFrame
+local rarityBarFrame  -- horizontal rarity buttons (visible only in "Gem Sacrifice" mode)
+local topTabBtns = {}
+local activeTopTab = "gems"
+local activeGemRarity = 1   -- index into Sacrifice.GemTrades
 local isOpen       = false
-local sidebarBtns  = {}
+
+-- Per-tab sidebars and their button lists
+local sidebars = {}     -- { onetime = frame, elemOnetime = frame, luck = frame }
+local sidebarBtnLists = { onetime = {}, elemOnetime = {}, luck = {} }
 local activeTabId  = nil
 local confirmFrame = nil
 local pickerFrame  = nil
 local gemRouletteInputActive = false
 local onOpenCallbacks = {}
 local onCloseCallbacks = {}
+local rarityBtns = {} -- { {btn, idx} } for the horizontal rarity bar
 
 local FONT   = Enum.Font.FredokaOne
 local FONT2  = Enum.Font.GothamBold
-local BG     = Color3.fromRGB(14, 12, 28)
-local ACCENT = Color3.fromRGB(180, 60, 80)
+local BG     = Color3.fromRGB(45, 35, 75)
+local ACCENT = Color3.fromRGB(255, 100, 120)
 
 -- Scale helper — UIScale on the ScreenGui now handles responsive sizing,
 -- so S = 1 (pixel values stay at their authored 1080p sizes).
@@ -104,6 +112,7 @@ local function validateOneTimeQueue(queueMap, reqList)
 	end
 end
 
+
 -------------------------------------------------
 -- HELPERS
 -------------------------------------------------
@@ -138,6 +147,59 @@ local function queueSetCount(qs)
 	return n
 end
 
+-- Queue-change callbacks (must be defined before any content builder that calls fireQueueChanged)
+local onQueueChanged = {}
+local function fireQueueChanged()
+	for _, cb in ipairs(onQueueChanged) do
+		task.spawn(cb)
+	end
+end
+
+local function clearAllQueues()
+	gemTradeQueues = {}
+	oneTimeQueues = {}
+	elementalQueues = {}
+	effectOneTimeQueues = {}
+	fireQueueChanged()
+end
+
+-------------------------------------------------
+-- AVATAR SLOT HELPER
+-------------------------------------------------
+
+local modelsFolder = ReplicatedStorage:FindFirstChild("StreamerModels")
+
+local function buildAvatarSlot(slot, streamerId)
+	local modelTemplate = modelsFolder and modelsFolder:FindFirstChild(streamerId)
+	if not modelTemplate then
+		local fallback = Instance.new("TextLabel")
+		fallback.Size = UDim2.new(1, 0, 1, 0); fallback.BackgroundTransparency = 1
+		local dn = Streamers.ById[streamerId] and Streamers.ById[streamerId].displayName or streamerId
+		fallback.Text = dn:sub(1, 2):upper(); fallback.TextColor3 = Color3.fromRGB(200, 255, 200)
+		fallback.Font = FONT; fallback.TextSize = sx(18); fallback.Parent = slot
+		return
+	end
+
+	slot.ClipsDescendants = true
+	local vp = Instance.new("ViewportFrame")
+	vp.Size = UDim2.new(1, 0, 1, 0); vp.BackgroundTransparency = 1
+	vp.BorderSizePixel = 0; vp.Parent = slot
+
+	local vpModel = modelTemplate:Clone()
+	vpModel.Parent = vp
+	local vpCam = Instance.new("Camera"); vpCam.Parent = vp; vp.CurrentCamera = vpCam
+
+	local ok, cf, size = pcall(function() return vpModel:GetBoundingBox() end)
+	if ok and cf and size then
+		local dist = math.max(size.X, size.Y, size.Z) * 1.6
+		local target = cf.Position
+		local yOff = size.Y * 0.15
+		vpCam.CFrame = CFrame.new(target + Vector3.new(0, yOff, dist), target)
+	else
+		vpCam.CFrame = CFrame.new(Vector3.new(0, 2, 4), Vector3.new(0, 1, 0))
+	end
+end
+
 -------------------------------------------------
 -- CONFIRMATION DIALOG
 -------------------------------------------------
@@ -150,49 +212,49 @@ local function showConfirmation(message, onYes)
 	dim.BorderSizePixel = 0; dim.Parent = modalFrame
 
 	local box = Instance.new("Frame")
-	box.Size = UDim2.new(0, sx(440), 0, sx(220)); box.Position = UDim2.new(0.5, 0, 0.5, 0)
-	box.AnchorPoint = Vector2.new(0.5, 0.5); box.BackgroundColor3 = Color3.fromRGB(28, 26, 50)
+	box.Size = UDim2.new(0, sx(340), 0, sx(180)); box.Position = UDim2.new(0.5, 0, 0.5, 0)
+	box.AnchorPoint = Vector2.new(0.5, 0.5); box.BackgroundColor3 = Color3.fromRGB(55, 45, 90)
 	box.BorderSizePixel = 0; box.ZIndex = 51; box.Parent = dim
-	Instance.new("UICorner", box).CornerRadius = UDim.new(0, 20)
-	local bs = Instance.new("UIStroke", box); bs.Color = ACCENT; bs.Thickness = 1.5
+	Instance.new("UICorner", box).CornerRadius = UDim.new(0, 18)
+	local bs = Instance.new("UIStroke", box); bs.Color = ACCENT; bs.Thickness = 2.5
 
 	local t = Instance.new("TextLabel")
-	t.Size = UDim2.new(1, -sx(30), 0, sx(38)); t.Position = UDim2.new(0.5, 0, 0, sx(18))
+	t.Size = UDim2.new(1, -sx(20), 0, sx(30)); t.Position = UDim2.new(0.5, 0, 0, sx(14))
 	t.AnchorPoint = Vector2.new(0.5, 0); t.BackgroundTransparency = 1
 	t.Text = "Are you sure?"; t.TextColor3 = Color3.fromRGB(255, 200, 100)
-	t.Font = FONT; t.TextSize = sx(26); t.ZIndex = 52; t.Parent = box
+	t.Font = FONT; t.TextSize = sx(22); t.ZIndex = 52; t.Parent = box
 
 	local ml = Instance.new("TextLabel")
-	ml.Size = UDim2.new(1, -sx(36), 0, sx(78)); ml.Position = UDim2.new(0.5, 0, 0, sx(56))
+	ml.Size = UDim2.new(1, -sx(24), 0, sx(50)); ml.Position = UDim2.new(0.5, 0, 0, sx(46))
 	ml.AnchorPoint = Vector2.new(0.5, 0); ml.BackgroundTransparency = 1
 	ml.Text = message; ml.TextColor3 = Color3.fromRGB(200, 200, 220)
-	ml.Font = FONT2; ml.TextSize = sx(16); ml.TextWrapped = true; ml.ZIndex = 52; ml.Parent = box
+	ml.Font = FONT2; ml.TextSize = sx(15); ml.TextWrapped = true; ml.ZIndex = 52; ml.Parent = box
 
 	local function dismiss() if dim.Parent then dim:Destroy() end; confirmFrame = nil end
 	dim.MouseButton1Click:Connect(dismiss)
 
 	local yb = Instance.new("TextButton")
-	yb.Size = UDim2.new(0, sx(180), 0, sx(52)); yb.Position = UDim2.new(0.5, -sx(98), 1, -sx(28))
+	yb.Size = UDim2.new(0, sx(140), 0, sx(42)); yb.Position = UDim2.new(0.5, -sx(6), 1, -sx(16))
 	yb.AnchorPoint = Vector2.new(1, 1); yb.BackgroundColor3 = Color3.fromRGB(60, 180, 80)
 	yb.Text = "YES, DO IT"; yb.TextColor3 = Color3.new(1, 1, 1)
-	yb.Font = FONT; yb.TextSize = sx(18); yb.BorderSizePixel = 0; yb.ZIndex = 52; yb.Parent = box
-	Instance.new("UICorner", yb).CornerRadius = UDim.new(0, sx(12))
+	yb.Font = FONT; yb.TextSize = sx(16); yb.BorderSizePixel = 0; yb.ZIndex = 52; yb.Parent = box
+	Instance.new("UICorner", yb).CornerRadius = UDim.new(0, sx(10))
 	UIHelper.AddPuffyGradient(yb)
 	yb.MouseButton1Click:Connect(function() dismiss(); if onYes then onYes() end end)
 
 	local nb = Instance.new("TextButton")
-	nb.Size = UDim2.new(0, sx(180), 0, sx(52)); nb.Position = UDim2.new(0.5, sx(98), 1, -sx(28))
+	nb.Size = UDim2.new(0, sx(140), 0, sx(42)); nb.Position = UDim2.new(0.5, sx(6), 1, -sx(16))
 	nb.AnchorPoint = Vector2.new(0, 1); nb.BackgroundColor3 = Color3.fromRGB(200, 60, 60)
 	nb.Text = "CANCEL"; nb.TextColor3 = Color3.new(1, 1, 1)
-	nb.Font = FONT; nb.TextSize = sx(18); nb.BorderSizePixel = 0; nb.ZIndex = 52; nb.Parent = box
-	Instance.new("UICorner", nb).CornerRadius = UDim.new(0, sx(12))
+	nb.Font = FONT; nb.TextSize = sx(16); nb.BorderSizePixel = 0; nb.ZIndex = 52; nb.Parent = box
+	Instance.new("UICorner", nb).CornerRadius = UDim.new(0, sx(10))
 	UIHelper.AddPuffyGradient(nb)
 	nb.MouseButton1Click:Connect(dismiss)
 
 	confirmFrame = dim
-	box.Size = UDim2.new(0, sx(220), 0, sx(110))
+	box.Size = UDim2.new(0, sx(170), 0, sx(90))
 	TweenService:Create(box, TweenInfo.new(0.2, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-		Size = UDim2.new(0, sx(440), 0, sx(220)),
+		Size = UDim2.new(0, sx(340), 0, sx(180)),
 	}):Play()
 end
 
@@ -201,17 +263,17 @@ end
 -------------------------------------------------
 
 local function showToast(text, color, dur)
-	color = color or Color3.fromRGB(60, 200, 80); dur = dur or 3
+	color = color or Color3.fromRGB(80, 220, 100); dur = dur or 3
 	local toast = Instance.new("Frame")
-	toast.Size = UDim2.new(0.55, 0, 0, sx(58)); toast.Position = UDim2.new(0.5, 0, 0, -sx(70))
+	toast.Size = UDim2.new(0.55, 0, 0, sx(62)); toast.Position = UDim2.new(0.5, 0, 0, -sx(70))
 	toast.AnchorPoint = Vector2.new(0.5, 0); toast.BackgroundColor3 = color
 	toast.BorderSizePixel = 0; toast.ZIndex = 60; toast.Parent = modalFrame
-	Instance.new("UICorner", toast).CornerRadius = UDim.new(0, sx(16))
+	Instance.new("UICorner", toast).CornerRadius = UDim.new(0, sx(18))
 	local lbl = Instance.new("TextLabel")
 	lbl.Size = UDim2.new(1, -sx(24), 1, 0); lbl.Position = UDim2.new(0.5, 0, 0.5, 0)
 	lbl.AnchorPoint = Vector2.new(0.5, 0.5); lbl.BackgroundTransparency = 1
 	lbl.Text = text; lbl.TextColor3 = Color3.new(1, 1, 1)
-	lbl.Font = FONT; lbl.TextSize = sx(18); lbl.TextWrapped = true; lbl.ZIndex = 61; lbl.Parent = toast
+	lbl.Font = FONT; lbl.TextSize = sx(20); lbl.TextWrapped = true; lbl.ZIndex = 61; lbl.Parent = toast
 	TweenService:Create(toast, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
 		Position = UDim2.new(0.5, 0, 0, sx(10)),
 	}):Play()
@@ -263,12 +325,12 @@ local function showPicker(title, filterFn, excludeSet, onSelect)
 	dim.MouseButton1Click:Connect(closePicker)
 
 	local popup = Instance.new("Frame")
-	popup.Size = UDim2.new(0, sx(520), 0, sx(420))
+	popup.Size = UDim2.new(0, sx(540), 0, sx(440))
 	popup.Position = UDim2.new(0.5, 0, 0.5, 0); popup.AnchorPoint = Vector2.new(0.5, 0.5)
-	popup.BackgroundColor3 = Color3.fromRGB(20, 18, 38); popup.BorderSizePixel = 0; popup.ZIndex = 41
+	popup.BackgroundColor3 = Color3.fromRGB(50, 40, 80); popup.BorderSizePixel = 0; popup.ZIndex = 41
 	popup.ClipsDescendants = true; popup.Parent = dim
-	Instance.new("UICorner", popup).CornerRadius = UDim.new(0, sx(20))
-	local ps = Instance.new("UIStroke", popup); ps.Color = Color3.fromRGB(255, 200, 60); ps.Thickness = 1.5
+	Instance.new("UICorner", popup).CornerRadius = UDim.new(0, sx(22))
+	local ps = Instance.new("UIStroke", popup); ps.Color = Color3.fromRGB(255, 220, 80); ps.Thickness = 2.5
 
 	local tl = Instance.new("TextLabel")
 	tl.Size = UDim2.new(1, -sx(70), 0, sx(42)); tl.Position = UDim2.new(0.5, 0, 0, sx(12))
@@ -291,17 +353,20 @@ local function showPicker(title, filterFn, excludeSet, onSelect)
 	scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y; scroll.ZIndex = 42; scroll.Parent = popup
 
 	local grid = Instance.new("UIGridLayout", scroll)
-	grid.CellSize = UDim2.new(0, sx(108), 0, sx(80)); grid.CellPadding = UDim2.new(0, sx(10), 0, sx(10))
+	grid.CellSize = UDim2.new(0, sx(100), 0, sx(120)); grid.CellPadding = UDim2.new(0, sx(8), 0, sx(8))
 	grid.SortOrder = Enum.SortOrder.LayoutOrder
+	grid.HorizontalAlignment = Enum.HorizontalAlignment.Center
 
 	local sp = Instance.new("UIPadding", scroll)
-	sp.PaddingLeft = UDim.new(0, 6); sp.PaddingTop = UDim.new(0, 4)
+	sp.PaddingLeft = UDim.new(0, 8); sp.PaddingTop = UDim.new(0, 6)
 
 	if #eligible == 0 then
 		local nl = Instance.new("TextLabel")
-		nl.Size = UDim2.new(1, 0, 0, sx(68)); nl.BackgroundTransparency = 1
+		nl.Size = UDim2.new(1, -sx(20), 0, sx(68)); nl.Position = UDim2.new(0.5, 0, 0, sx(20))
+		nl.AnchorPoint = Vector2.new(0.5, 0); nl.BackgroundTransparency = 1
 		nl.Text = "No eligible streamers!"; nl.TextColor3 = Color3.fromRGB(150, 150, 170)
-		nl.Font = FONT; nl.TextSize = sx(18); nl.ZIndex = 42; nl.Parent = scroll
+		nl.Font = FONT; nl.TextSize = sx(18); nl.TextWrapped = true
+		nl.ZIndex = 42; nl.Parent = scroll
 	end
 
 	for order, entry in ipairs(eligible) do
@@ -312,41 +377,71 @@ local function showPicker(title, filterFn, excludeSet, onSelect)
 		local isStorage = vi > STORAGE_OFFSET
 
 		local cell = Instance.new("TextButton")
-		cell.Size = UDim2.new(0, sx(108), 0, sx(80))
-		cell.BackgroundColor3 = Color3.fromRGB(30, 28, 50); cell.BorderSizePixel = 0
+		cell.Size = UDim2.new(0, sx(100), 0, sx(120))
+		cell.BackgroundColor3 = Color3.fromRGB(50, 42, 80); cell.BorderSizePixel = 0
 		cell.Text = ""; cell.LayoutOrder = order; cell.ZIndex = 42; cell.Parent = scroll
 		Instance.new("UICorner", cell).CornerRadius = UDim.new(0, sx(12))
-		local cs = Instance.new("UIStroke", cell); cs.Color = rColor; cs.Thickness = 1.5; cs.Transparency = 0.3
+		local cs = Instance.new("UIStroke", cell); cs.Color = rColor; cs.Thickness = 2; cs.Transparency = 0.2
 
-		-- Storage indicator
+		-- Avatar viewport (centered top)
+		local pvpS = sx(48)
+		local pvp = Instance.new("ViewportFrame")
+		pvp.Size = UDim2.new(0, pvpS, 0, pvpS)
+		pvp.Position = UDim2.new(0.5, 0, 0, sx(8))
+		pvp.AnchorPoint = Vector2.new(0.5, 0)
+		pvp.BackgroundColor3 = Color3.fromRGB(30, 26, 50); pvp.BackgroundTransparency = 0.3
+		pvp.BorderSizePixel = 0; pvp.ZIndex = 43; pvp.Parent = cell
+		pvp.ClipsDescendants = true
+		Instance.new("UICorner", pvp).CornerRadius = UDim.new(1, 0)
+
+		local pStreamerId = type(item) == "table" and item.id or item
+		local pTmpl = modelsFolder and modelsFolder:FindFirstChild(pStreamerId)
+		if pTmpl then
+			local pm = pTmpl:Clone(); pm.Parent = pvp
+			local pCam = Instance.new("Camera"); pCam.Parent = pvp; pvp.CurrentCamera = pCam
+			local pOk, pCf, pSz = pcall(function() return pm:GetBoundingBox() end)
+			if pOk and pCf and pSz then
+				local pDist = math.max(pSz.X, pSz.Y, pSz.Z) * 1.6
+				pCam.CFrame = CFrame.new(pCf.Position + Vector3.new(0, pSz.Y * 0.15, pDist), pCf.Position)
+			else
+				pCam.CFrame = CFrame.new(Vector3.new(0, 2, 4), Vector3.new(0, 1, 0))
+			end
+		end
+
+		-- Storage badge (top-right corner)
 		if isStorage then
 			local si = Instance.new("TextLabel")
-			si.Size = UDim2.new(0, sx(18), 0, sx(12)); si.Position = UDim2.new(1, -sx(4), 0, sx(2))
-			si.AnchorPoint = Vector2.new(1, 0); si.BackgroundTransparency = 1
-			si.Text = "S"; si.TextColor3 = Color3.fromRGB(255, 165, 50)
-			si.Font = Enum.Font.GothamBold; si.TextSize = sx(10); si.ZIndex = 43; si.Parent = cell
+			si.Size = UDim2.new(0, sx(16), 0, sx(16)); si.Position = UDim2.new(1, -sx(6), 0, sx(4))
+			si.AnchorPoint = Vector2.new(1, 0); si.BackgroundColor3 = Color3.fromRGB(200, 120, 30)
+			si.Text = "S"; si.TextColor3 = Color3.new(1, 1, 1)
+			si.Font = Enum.Font.GothamBold; si.TextSize = sx(9); si.ZIndex = 44; si.Parent = cell
+			Instance.new("UICorner", si).CornerRadius = UDim.new(1, 0)
 		end
 
+		-- Name (centered, below avatar)
+		local nameY = sx(8) + pvpS + sx(4)
 		local nl2 = Instance.new("TextLabel")
-		nl2.Size = UDim2.new(1, -sx(8), 0, sx(26)); nl2.Position = UDim2.new(0.5, 0, 0, sx(10))
+		nl2.Size = UDim2.new(1, -sx(8), 0, sx(18)); nl2.Position = UDim2.new(0.5, 0, 0, nameY)
 		nl2.AnchorPoint = Vector2.new(0.5, 0); nl2.BackgroundTransparency = 1
 		nl2.Text = id; nl2.TextColor3 = rColor
-		nl2.Font = FONT; nl2.TextSize = sx(14); nl2.TextTruncate = Enum.TextTruncate.AtEnd
+		nl2.Font = FONT; nl2.TextSize = sx(12); nl2.TextTruncate = Enum.TextTruncate.AtEnd
 		nl2.ZIndex = 43; nl2.Parent = cell
 
+		-- Effect (if any, below name)
 		if eff then
 			local el = Instance.new("TextLabel")
-			el.Size = UDim2.new(1, -sx(8), 0, sx(18)); el.Position = UDim2.new(0.5, 0, 0, sx(34))
+			el.Size = UDim2.new(1, -sx(8), 0, sx(14)); el.Position = UDim2.new(0.5, 0, 0, nameY + sx(16))
 			el.AnchorPoint = Vector2.new(0.5, 0); el.BackgroundTransparency = 1
 			el.Text = eff; el.TextColor3 = (Effects.ByName[eff] and Effects.ByName[eff].color) or Color3.fromRGB(180, 180, 180)
-			el.Font = FONT2; el.TextSize = sx(12); el.ZIndex = 43; el.Parent = cell
+			el.Font = FONT2; el.TextSize = sx(10); el.ZIndex = 43; el.Parent = cell
 		end
 
+		-- Rarity (bottom center)
 		local rl = Instance.new("TextLabel")
-		rl.Size = UDim2.new(1, 0, 0, sx(18)); rl.Position = UDim2.new(0.5, 0, 1, -sx(22))
+		rl.Size = UDim2.new(1, 0, 0, sx(16)); rl.Position = UDim2.new(0.5, 0, 1, -sx(18))
 		rl.AnchorPoint = Vector2.new(0.5, 0); rl.BackgroundTransparency = 1
 		rl.Text = info and info.rarity or "?"; rl.TextColor3 = rColor
-		rl.Font = FONT2; rl.TextSize = sx(12); rl.ZIndex = 43; rl.Parent = cell
+		rl.Font = FONT2; rl.TextSize = sx(11); rl.ZIndex = 43; rl.Parent = cell
 
 		local capturedVI = vi
 		cell.MouseButton1Click:Connect(function()
@@ -621,10 +716,14 @@ local function buildStreamerGrid(parent, matchFn, queueSet, onChanged, accentCol
 	end
 
 	if #items == 0 then
+		local emptyFrame = Instance.new("Frame")
+		emptyFrame.Size = UDim2.new(1, 0, 0, sx(90)); emptyFrame.BackgroundTransparency = 1; emptyFrame.Parent = parent
+
 		local nl = Instance.new("TextLabel")
-		nl.Size = UDim2.new(1, 0, 0, sx(56)); nl.BackgroundTransparency = 1
-		nl.Text = "No eligible streamers in your inventory or storage"; nl.TextColor3 = Color3.fromRGB(120, 120, 140)
-		nl.Font = FONT; nl.TextSize = sx(16); nl.TextWrapped = true; nl.Parent = parent
+		nl.Size = UDim2.new(1, 0, 0, sx(30)); nl.Position = UDim2.new(0.5, 0, 0, sx(8))
+		nl.AnchorPoint = Vector2.new(0.5, 0); nl.BackgroundTransparency = 1
+		nl.Text = "No eligible streamers yet!"; nl.TextColor3 = Color3.fromRGB(180, 160, 210)
+		nl.Font = FONT; nl.TextSize = sx(18); nl.TextWrapped = true; nl.Parent = emptyFrame
 		return
 	end
 
@@ -635,7 +734,7 @@ local function buildStreamerGrid(parent, matchFn, queueSet, onChanged, accentCol
 	gridFrame.BackgroundTransparency = 1; gridFrame.Parent = parent
 
 	local grid = Instance.new("UIGridLayout", gridFrame)
-	grid.CellSize = UDim2.new(0, sx(100), 0, sx(78))
+	grid.CellSize = UDim2.new(0, sx(130), 0, sx(110))
 	grid.CellPadding = UDim2.new(0, sx(8), 0, sx(8))
 	grid.SortOrder = Enum.SortOrder.LayoutOrder
 
@@ -648,15 +747,39 @@ local function buildStreamerGrid(parent, matchFn, queueSet, onChanged, accentCol
 		local isStorage = entry.source == "storage"
 
 		local cell = Instance.new("TextButton")
-		cell.Size = UDim2.new(0, sx(100), 0, sx(78))
-		cell.BackgroundColor3 = selected and Color3.fromRGB(30, 100, 45) or Color3.fromRGB(28, 26, 48)
+		cell.Size = UDim2.new(0, sx(130), 0, sx(110))
+		cell.BackgroundColor3 = selected and Color3.fromRGB(40, 120, 60) or Color3.fromRGB(50, 42, 80)
 		cell.BorderSizePixel = 0; cell.Text = ""; cell.LayoutOrder = order
 		cell.Parent = gridFrame
-		Instance.new("UICorner", cell).CornerRadius = UDim.new(0, sx(12))
+		Instance.new("UICorner", cell).CornerRadius = UDim.new(0, sx(14))
 		local cs = Instance.new("UIStroke", cell)
-		cs.Color = selected and Color3.fromRGB(60, 220, 80) or rColor
+		cs.Color = selected and Color3.fromRGB(80, 240, 100) or rColor
 		cs.Thickness = selected and 2.5 or 1.5
-		cs.Transparency = selected and 0 or 0.4
+		cs.Transparency = selected and 0 or 0.3
+
+		-- Avatar viewport (top-left)
+		local vpS = sx(44)
+		local vp = Instance.new("ViewportFrame")
+		vp.Size = UDim2.new(0, vpS, 0, vpS)
+		vp.Position = UDim2.new(0, sx(6), 0, sx(6))
+		vp.BackgroundColor3 = Color3.fromRGB(30, 26, 50); vp.BackgroundTransparency = 0.3
+		vp.BorderSizePixel = 0; vp.Parent = cell
+		vp.ClipsDescendants = true
+		Instance.new("UICorner", vp).CornerRadius = UDim.new(1, 0)
+
+		local streamerId = type(item) == "table" and item.id or item
+		local tmpl = modelsFolder and modelsFolder:FindFirstChild(streamerId)
+		if tmpl then
+			local m = tmpl:Clone(); m.Parent = vp
+			local cam = Instance.new("Camera"); cam.Parent = vp; vp.CurrentCamera = cam
+			local okk, cf2, sz2 = pcall(function() return m:GetBoundingBox() end)
+			if okk and cf2 and sz2 then
+				local d = math.max(sz2.X, sz2.Y, sz2.Z) * 1.6
+				cam.CFrame = CFrame.new(cf2.Position + Vector3.new(0, sz2.Y * 0.15, d), cf2.Position)
+			else
+				cam.CFrame = CFrame.new(Vector3.new(0, 2, 4), Vector3.new(0, 1, 0))
+			end
+		end
 
 		-- Storage indicator
 		if isStorage then
@@ -667,10 +790,13 @@ local function buildStreamerGrid(parent, matchFn, queueSet, onChanged, accentCol
 			si.Font = Enum.Font.GothamBold; si.TextSize = sx(10); si.Parent = cell
 		end
 
+		local textX = vpS + sx(10)
+		local textW = sx(130) - textX - sx(4)
+
 		-- Name
 		local nl2 = Instance.new("TextLabel")
-		nl2.Size = UDim2.new(1, -sx(8), 0, sx(24)); nl2.Position = UDim2.new(0.5, 0, 0, sx(6))
-		nl2.AnchorPoint = Vector2.new(0.5, 0); nl2.BackgroundTransparency = 1
+		nl2.Size = UDim2.new(0, textW, 0, sx(22)); nl2.Position = UDim2.new(0, textX, 0, sx(6))
+		nl2.BackgroundTransparency = 1; nl2.TextXAlignment = Enum.TextXAlignment.Left
 		nl2.Text = id; nl2.TextColor3 = selected and Color3.fromRGB(200, 255, 200) or rColor
 		nl2.Font = FONT; nl2.TextSize = sx(13); nl2.TextTruncate = Enum.TextTruncate.AtEnd
 		nl2.Parent = cell
@@ -678,47 +804,30 @@ local function buildStreamerGrid(parent, matchFn, queueSet, onChanged, accentCol
 		-- Effect
 		if eff then
 			local el = Instance.new("TextLabel")
-			el.Size = UDim2.new(1, -sx(8), 0, sx(16)); el.Position = UDim2.new(0.5, 0, 0, sx(28))
-			el.AnchorPoint = Vector2.new(0.5, 0); el.BackgroundTransparency = 1
+			el.Size = UDim2.new(0, textW, 0, sx(16)); el.Position = UDim2.new(0, textX, 0, sx(26))
+			el.BackgroundTransparency = 1; el.TextXAlignment = Enum.TextXAlignment.Left
 			el.Text = eff
-			el.TextColor3 = (Effects.ByName[eff] and Effects.ByName[eff].color) or Color3.fromRGB(150, 150, 150)
+			el.TextColor3 = (Effects.ByName[eff] and Effects.ByName[eff].color) or Color3.fromRGB(180, 180, 180)
 			el.Font = FONT2; el.TextSize = sx(11); el.Parent = cell
 		end
 
-		-- Checkmark or rarity
+		-- Checkmark or rarity (bottom)
 		local bl = Instance.new("TextLabel")
 		bl.Size = UDim2.new(1, 0, 0, sx(20)); bl.Position = UDim2.new(0.5, 0, 1, -sx(22))
 		bl.AnchorPoint = Vector2.new(0.5, 0); bl.BackgroundTransparency = 1
-		bl.Text = selected and "QUEUED" or (info and info.rarity or "")
-		bl.TextColor3 = selected and Color3.fromRGB(100, 255, 120) or Color3.fromRGB(100, 100, 120)
-		bl.Font = FONT; bl.TextSize = sx(11); bl.Parent = cell
+		bl.Text = selected and "\u{2705} QUEUED" or (info and info.rarity or "")
+		bl.TextColor3 = selected and Color3.fromRGB(100, 255, 120) or Color3.fromRGB(140, 130, 170)
+		bl.Font = FONT; bl.TextSize = sx(12); bl.Parent = cell
 
 		local capVI = vi
-		local capCell = cell
-		local capCS = cs
-		local capNL = nl2
-		local capBL = bl
-		local capRColor = rColor
 		cell.MouseButton1Click:Connect(function()
 			if queueSet[capVI] then
 				queueSet[capVI] = nil
 			else
 				queueSet[capVI] = true
 			end
-			-- Instant visual update on the cell (no full rebuild)
-			local sel = queueSet[capVI] == true
-			capCell.BackgroundColor3 = sel and Color3.fromRGB(30, 100, 45) or Color3.fromRGB(28, 26, 48)
-			capCS.Color = sel and Color3.fromRGB(60, 220, 80) or capRColor
-			capCS.Thickness = sel and 2.5 or 1.5
-			capCS.Transparency = sel and 0 or 0.4
-			capNL.TextColor3 = sel and Color3.fromRGB(200, 255, 200) or capRColor
-			capBL.Text = sel and "QUEUED" or (info and info.rarity or "")
-			capBL.TextColor3 = sel and Color3.fromRGB(100, 255, 120) or Color3.fromRGB(100, 100, 120)
 			fireQueueChanged()
-			-- Defer the heavy content rebuild so the click feels instant
-			task.defer(function()
-				if onChanged then onChanged() end
-			end)
+			if onChanged then onChanged() end
 		end)
 	end
 end
@@ -745,7 +854,6 @@ local function buildGemTradeContent(tradeIndex)
 	if not gemTradeQueues[tradeIndex] then gemTradeQueues[tradeIndex] = {} end
 	local queue = gemTradeQueues[tradeIndex]
 
-	-- Validate queue
 	validateQueueSet(queue, function(item)
 		local _, _, info = getItemInfo(item)
 		return info and info.rarity == trade.rarity
@@ -756,101 +864,88 @@ local function buildGemTradeContent(tradeIndex)
 	local rc = DesignConfig.RarityColors[trade.rarity] or Color3.new(1, 1, 1)
 	local canSacrifice = selected >= need
 
-	-- Header
-	local header = Instance.new("Frame")
-	header.Size = UDim2.new(1, -sx(12), 0, sx(130))
-	header.BackgroundColor3 = Color3.fromRGB(22, 22, 40); header.BorderSizePixel = 0
-	header.Parent = contentFrame
-	Instance.new("UICorner", header).CornerRadius = UDim.new(0, sx(20))
-	Instance.new("UIStroke", header).Color = rc
+	-- Visual queue: horizontal row of circular slots
+	local slotRowH = math.min(need, 10) > 5 and sx(160) or sx(80)
+	local slotsPerRow = math.min(need, 10)
+	local slotSize = sx(60)
+	local slotGap = sx(8)
+	local totalRows = math.ceil(need / slotsPerRow)
+	slotRowH = totalRows * (slotSize + slotGap) + sx(12)
 
-	local tl = Instance.new("TextLabel")
-	tl.Size = UDim2.new(1, -sx(28), 0, sx(42)); tl.Position = UDim2.new(0.5, 0, 0, sx(12))
-	tl.AnchorPoint = Vector2.new(0.5, 0); tl.BackgroundTransparency = 1
-	tl.Text = trade.rarity .. " Gem Sacrifice  —  " .. formatNumber(trade.gems) .. " Gems"
-	tl.TextColor3 = rc; tl.Font = FONT; tl.TextSize = sx(26); tl.Parent = header
-	local ts = Instance.new("UIStroke", tl)
-	ts.Color = Color3.new(0, 0, 0); ts.Thickness = 2; ts.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+	local slotContainer = Instance.new("Frame")
+	slotContainer.Size = UDim2.new(1, -sx(12), 0, slotRowH)
+	slotContainer.BackgroundColor3 = Color3.fromRGB(35, 30, 60); slotContainer.BorderSizePixel = 0
+	slotContainer.Parent = contentFrame
+	Instance.new("UICorner", slotContainer).CornerRadius = UDim.new(0, sx(16))
+	local scStroke = Instance.new("UIStroke", slotContainer); scStroke.Color = rc; scStroke.Thickness = 2; scStroke.Transparency = 0.3
 
-	local sl = Instance.new("TextLabel")
-	sl.Size = UDim2.new(1, -sx(28), 0, sx(28)); sl.Position = UDim2.new(0.5, 0, 0, sx(54))
-	sl.AnchorPoint = Vector2.new(0.5, 0); sl.BackgroundTransparency = 1
-	sl.Text = "Tap streamers below to queue them. They'll stay here until you sacrifice or remove them."
-	sl.TextColor3 = Color3.fromRGB(160, 170, 200); sl.Font = FONT2; sl.TextSize = sx(15)
-	sl.TextWrapped = true; sl.Parent = header
+	local slotGrid = Instance.new("Frame")
+	slotGrid.Size = UDim2.new(1, 0, 1, 0); slotGrid.BackgroundTransparency = 1; slotGrid.Parent = slotContainer
 
-	-- Progress bar
-	local pct = math.min(1, selected / need)
-	local progBg = Instance.new("Frame")
-	progBg.Size = UDim2.new(1, -sx(44), 0, sx(26)); progBg.Position = UDim2.new(0.5, 0, 0, sx(88))
-	progBg.AnchorPoint = Vector2.new(0.5, 0)
-	progBg.BackgroundColor3 = Color3.fromRGB(30, 30, 50); progBg.BorderSizePixel = 0; progBg.Parent = header
-	Instance.new("UICorner", progBg).CornerRadius = UDim.new(0, 6)
-	local fill = Instance.new("Frame")
-	fill.Size = UDim2.new(pct, 0, 1, 0)
-	fill.BackgroundColor3 = canSacrifice and Color3.fromRGB(60, 200, 80) or rc
-	fill.BorderSizePixel = 0; fill.Parent = progBg
-	Instance.new("UICorner", fill).CornerRadius = UDim.new(0, 6)
-	local pLbl = Instance.new("TextLabel")
-	pLbl.Size = UDim2.new(1, 0, 1, 0); pLbl.BackgroundTransparency = 1
-	pLbl.Text = selected .. " / " .. need .. " queued"
-	pLbl.TextColor3 = Color3.new(1, 1, 1); pLbl.Font = FONT; pLbl.TextSize = sx(14); pLbl.ZIndex = 2
-	pLbl.Parent = progBg
+	local sgLayout = Instance.new("UIGridLayout", slotGrid)
+	sgLayout.CellSize = UDim2.new(0, slotSize, 0, slotSize)
+	sgLayout.CellPadding = UDim2.new(0, slotGap, 0, slotGap)
+	sgLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	sgLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	local sgPad = Instance.new("UIPadding", slotGrid)
+	sgPad.PaddingTop = UDim.new(0, sx(8)); sgPad.PaddingBottom = UDim.new(0, sx(4))
 
-	-- Button row
-	local btnRow = Instance.new("Frame")
-	btnRow.Size = UDim2.new(1, -sx(12), 0, sx(56)); btnRow.BackgroundTransparency = 1; btnRow.Parent = contentFrame
-	local bl = Instance.new("UIListLayout", btnRow)
-	bl.FillDirection = Enum.FillDirection.Horizontal
-	bl.HorizontalAlignment = Enum.HorizontalAlignment.Center
-	bl.VerticalAlignment = Enum.VerticalAlignment.Center; bl.Padding = UDim.new(0, 10)
+	-- Build the filled indices list in order
+	local filledList = {}
+	for vi in pairs(queue) do table.insert(filledList, vi) end
+	table.sort(filledList)
 
-	-- Auto Fill
-	local afBtn = Instance.new("TextButton")
-	afBtn.Size = UDim2.new(0, sx(135), 0, sx(46)); afBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 90)
-	afBtn.Text = "Auto Fill"; afBtn.TextColor3 = Color3.new(1, 1, 1)
-	afBtn.Font = FONT; afBtn.TextSize = sx(16); afBtn.BorderSizePixel = 0; afBtn.Parent = btnRow
-	Instance.new("UICorner", afBtn).CornerRadius = UDim.new(0, 10)
-	afBtn.MouseButton1Click:Connect(function()
-		local inv = HUDController.Data.inventory or {}
-		local queued = allQueuedIndices()
-		local added = queueSetCount(queue)
-		for i, item in ipairs(inv) do
-			if added >= need then break end
-			if not queue[i] and not queued[i] then
-				local _, _, info = getItemInfo(item)
-				if info and info.rarity == trade.rarity then
-					queue[i] = true; added = added + 1
-				end
-			end
+	for i = 1, need do
+		local vi = filledList[i]
+		local isFilled = vi ~= nil
+		local slot = Instance.new("Frame")
+		slot.Size = UDim2.new(0, slotSize, 0, slotSize)
+		slot.BackgroundColor3 = isFilled and Color3.fromRGB(40, 120, 60) or Color3.fromRGB(50, 42, 80)
+		slot.BorderSizePixel = 0; slot.LayoutOrder = i; slot.Parent = slotGrid
+		Instance.new("UICorner", slot).CornerRadius = UDim.new(1, 0)
+		local slotStroke = Instance.new("UIStroke", slot)
+		slotStroke.Color = isFilled and Color3.fromRGB(80, 240, 100) or rc
+		slotStroke.Thickness = isFilled and 2.5 or 1.5
+		slotStroke.Transparency = isFilled and 0 or 0.5
+
+		if isFilled then
+			local item = resolveVirtualItem(vi)
+			local id = type(item) == "table" and item.id or (item or "?")
+			buildAvatarSlot(slot, id)
 		end
-		buildContent(activeTabId)
-	end)
+	end
 
-	-- Clear All
-	local clBtn = Instance.new("TextButton")
-	clBtn.Size = UDim2.new(0, sx(135), 0, sx(46)); clBtn.BackgroundColor3 = Color3.fromRGB(90, 50, 50)
-	clBtn.Text = "Clear All"; clBtn.TextColor3 = Color3.new(1, 1, 1)
-	clBtn.Font = FONT; clBtn.TextSize = sx(16); clBtn.BorderSizePixel = 0; clBtn.Parent = btnRow
-	Instance.new("UICorner", clBtn).CornerRadius = UDim.new(0, 10)
-	clBtn.MouseButton1Click:Connect(function()
-		gemTradeQueues[tradeIndex] = {}
-		fireQueueChanged()
-		buildContent(activeTabId)
-	end)
+	-- Counter text
+	local counterLbl = Instance.new("TextLabel")
+	counterLbl.Size = UDim2.new(1, -sx(12), 0, sx(28))
+	counterLbl.BackgroundTransparency = 1
+	counterLbl.Text = selected .. " / " .. need .. " queued  —  " .. formatNumber(trade.gems) .. " Gems"
+	counterLbl.TextColor3 = canSacrifice and Color3.fromRGB(100, 255, 120) or rc
+	counterLbl.Font = FONT; counterLbl.TextSize = sx(20); counterLbl.Parent = contentFrame
+	local cntStroke = Instance.new("UIStroke", counterLbl)
+	cntStroke.Color = Color3.fromRGB(15, 10, 30); cntStroke.Thickness = 1.5
+	cntStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
 
-	-- Sacrifice
-	local sacBtn = Instance.new("TextButton")
-	sacBtn.Size = UDim2.new(0, sx(230), 0, sx(52))
-	sacBtn.BackgroundColor3 = canSacrifice and Color3.fromRGB(60, 200, 80) or Color3.fromRGB(50, 50, 70)
-	sacBtn.Text = canSacrifice and "SACRIFICE" or "NEED MORE"
-	sacBtn.TextColor3 = Color3.new(1, 1, 1); sacBtn.Font = FONT; sacBtn.TextSize = sx(19)
-	sacBtn.BorderSizePixel = 0; sacBtn.Parent = btnRow
-	Instance.new("UICorner", sacBtn).CornerRadius = UDim.new(0, sx(14))
-	Instance.new("UIStroke", sacBtn).Color = canSacrifice and Color3.fromRGB(40, 140, 55) or Color3.fromRGB(40, 40, 55)
-	UIHelper.AddPuffyGradient(sacBtn)
+	-- Action row: primary "Auto Fill & Sacrifice" + secondary "Clear" link
+	local actionRow = Instance.new("Frame")
+	actionRow.Size = UDim2.new(1, -sx(12), 0, sx(64)); actionRow.BackgroundTransparency = 1; actionRow.Parent = contentFrame
+	local arl = Instance.new("UIListLayout", actionRow)
+	arl.FillDirection = Enum.FillDirection.Horizontal
+	arl.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	arl.VerticalAlignment = Enum.VerticalAlignment.Center; arl.Padding = UDim.new(0, sx(16))
+
+	local mainBtn = Instance.new("TextButton")
+	mainBtn.Size = UDim2.new(0, sx(320), 0, sx(56))
+	mainBtn.BorderSizePixel = 0; mainBtn.Parent = actionRow
+	Instance.new("UICorner", mainBtn).CornerRadius = UDim.new(0, sx(16))
+
 	if canSacrifice then
-		sacBtn.MouseButton1Click:Connect(function()
+		mainBtn.BackgroundColor3 = rc
+		mainBtn.Text = "SACRIFICE " .. formatNumber(trade.gems) .. " Gems"
+		mainBtn.TextColor3 = Color3.new(1, 1, 1); mainBtn.Font = FONT; mainBtn.TextSize = sx(20)
+		local mbStroke = Instance.new("UIStroke", mainBtn); mbStroke.Color = Color3.fromRGB(0, 0, 0); mbStroke.Thickness = 2; mbStroke.Transparency = 0.5
+		UIHelper.AddPuffyGradient(mainBtn)
+		mainBtn.MouseButton1Click:Connect(function()
 			showConfirmation(
 				("Sacrifice %d %s streamers for %s Gems?"):format(need, trade.rarity, formatNumber(trade.gems)),
 				function()
@@ -859,6 +954,63 @@ local function buildGemTradeContent(tradeIndex)
 					fireQueueChanged()
 				end
 			)
+		end)
+	else
+		mainBtn.BackgroundColor3 = rc
+		mainBtn.Text = "Auto Fill & Sacrifice"
+		mainBtn.TextColor3 = Color3.new(1, 1, 1); mainBtn.Font = FONT; mainBtn.TextSize = sx(20)
+		local mbStroke = Instance.new("UIStroke", mainBtn); mbStroke.Color = Color3.fromRGB(0, 0, 0); mbStroke.Thickness = 2; mbStroke.Transparency = 0.5
+		UIHelper.AddPuffyGradient(mainBtn)
+		mainBtn.MouseButton1Click:Connect(function()
+			local inv = HUDController.Data.inventory or {}
+			local sto = HUDController.Data.storage or {}
+			local queued = allQueuedIndices()
+			local added = queueSetCount(queue)
+			for i, item in ipairs(inv) do
+				if added >= need then break end
+				if not queue[i] and not queued[i] then
+					local _, _, info = getItemInfo(item)
+					if info and info.rarity == trade.rarity then
+						queue[i] = true; added = added + 1
+					end
+				end
+			end
+			for i, item in ipairs(sto) do
+				if added >= need then break end
+				local vi = STORAGE_OFFSET + i
+				if not queue[vi] and not queued[vi] then
+					local _, _, info = getItemInfo(item)
+					if info and info.rarity == trade.rarity then
+						queue[vi] = true; added = added + 1
+					end
+				end
+			end
+			fireQueueChanged()
+			if queueSetCount(queue) >= need then
+				showConfirmation(
+					("Sacrifice %d %s streamers for %s Gems?"):format(need, trade.rarity, formatNumber(trade.gems)),
+					function()
+						SacrificeRequest:FireServer("GemTrade", tradeIndex)
+						gemTradeQueues[tradeIndex] = {}
+						fireQueueChanged()
+					end
+				)
+			end
+			buildContent(activeTabId)
+		end)
+	end
+
+	-- Clear link (secondary)
+	if selected > 0 then
+		local clrLink = Instance.new("TextButton")
+		clrLink.Size = UDim2.new(0, sx(80), 0, sx(30))
+		clrLink.BackgroundTransparency = 1; clrLink.Text = "Clear All"
+		clrLink.TextColor3 = Color3.fromRGB(200, 160, 180); clrLink.Font = FONT; clrLink.TextSize = sx(15)
+		clrLink.BorderSizePixel = 0; clrLink.Parent = actionRow
+		clrLink.MouseButton1Click:Connect(function()
+			gemTradeQueues[tradeIndex] = {}
+			fireQueueChanged()
+			buildContent(activeTabId)
 		end)
 	end
 
@@ -891,26 +1043,29 @@ local function buildOneTimeContent(oneTimeId)
 	local queue = oneTimeQueues[oneTimeId]
 	validateOneTimeQueue(queue, cfg.req)
 
-	-- Header
+	local accentColor = done and Color3.fromRGB(80, 220, 100) or Color3.fromRGB(255, 200, 60)
+
 	local header = Instance.new("Frame")
-	header.Size = UDim2.new(1, -sx(12), 0, sx(120))
-	header.BackgroundColor3 = Color3.fromRGB(22, 22, 40); header.BorderSizePixel = 0; header.Parent = contentFrame
-	Instance.new("UICorner", header).CornerRadius = UDim.new(0, sx(20))
-	Instance.new("UIStroke", header).Color = done and Color3.fromRGB(60, 200, 80) or Color3.fromRGB(255, 200, 60)
+	header.Size = UDim2.new(1, -sx(12), 0, sx(90))
+	header.BackgroundColor3 = Color3.fromRGB(55, 45, 90); header.BorderSizePixel = 0; header.Parent = contentFrame
+	Instance.new("UICorner", header).CornerRadius = UDim.new(0, sx(18))
+	Instance.new("UIStroke", header).Color = accentColor; Instance.new("UIStroke", header).Thickness = 2
 
 	local tl = Instance.new("TextLabel")
-	tl.Size = UDim2.new(1, -sx(32), 0, sx(42)); tl.Position = UDim2.new(0.5, 0, 0, sx(14))
+	tl.Size = UDim2.new(1, -sx(24), 0, sx(32)); tl.Position = UDim2.new(0.5, 0, 0, sx(10))
 	tl.AnchorPoint = Vector2.new(0.5, 0); tl.BackgroundTransparency = 1
-	tl.Text = cfg.name .. "  —  " .. formatNumber(cfg.gems) .. " Gems"
-	tl.TextColor3 = done and Color3.fromRGB(80, 200, 80) or Color3.fromRGB(255, 220, 100)
-	tl.Font = FONT; tl.TextSize = sx(28); tl.Parent = header
-	Instance.new("UIStroke", tl).Color = Color3.new(0, 0, 0)
+	tl.Text = cfg.name .. " — " .. formatNumber(cfg.gems) .. " Gems"
+	tl.TextColor3 = accentColor
+	tl.Font = FONT; tl.TextSize = sx(24); tl.Parent = header
+	local otTStroke = Instance.new("UIStroke", tl)
+	otTStroke.Color = Color3.new(0, 0, 0); otTStroke.Thickness = 2
+	otTStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
 
 	local sub = Instance.new("TextLabel")
-	sub.Size = UDim2.new(1, -sx(32), 0, sx(36)); sub.Position = UDim2.new(0.5, 0, 0, sx(58))
+	sub.Size = UDim2.new(1, -sx(24), 0, sx(36)); sub.Position = UDim2.new(0.5, 0, 0, sx(44))
 	sub.AnchorPoint = Vector2.new(0.5, 0); sub.BackgroundTransparency = 1
-	sub.Text = done and "You've already completed this sacrifice!" or "Tap each slot to pick a streamer. They stay here even if you close the menu."
-	sub.TextColor3 = Color3.fromRGB(160, 170, 200); sub.Font = FONT; sub.TextSize = sx(16)
+	sub.Text = done and "You've already completed this!" or "Tap each slot to pick a streamer"
+	sub.TextColor3 = Color3.fromRGB(200, 190, 230); sub.Font = FONT; sub.TextSize = sx(14)
 	sub.TextWrapped = true; sub.Parent = header
 
 	if done then return end
@@ -918,31 +1073,33 @@ local function buildOneTimeContent(oneTimeId)
 	local usedSet = {}
 	for _, idx in pairs(queue) do if idx then usedSet[idx] = true end end
 
-	-- Count total slots to decide layout
 	local totalSlots = 0
 	for _, r in ipairs(cfg.req) do totalSlots = totalSlots + (r.count or 1) end
 
 	local allFilled = true
+	local slotSize = sx(60)
+	local slotGap = sx(8)
+	local slotsPerRow = math.min(totalSlots, 10)
+	local totalRows = math.ceil(totalSlots / slotsPerRow)
+	local slotRowH = totalRows * (slotSize + slotGap) + sx(12)
+
+	local slotContainer = Instance.new("Frame")
+	slotContainer.Size = UDim2.new(1, -sx(12), 0, slotRowH)
+	slotContainer.BackgroundColor3 = Color3.fromRGB(35, 30, 60); slotContainer.BorderSizePixel = 0
+	slotContainer.Parent = contentFrame
+	Instance.new("UICorner", slotContainer).CornerRadius = UDim.new(0, sx(16))
+	local scStroke = Instance.new("UIStroke", slotContainer)
+	scStroke.Color = Color3.fromRGB(255, 200, 60); scStroke.Thickness = 2; scStroke.Transparency = 0.3
+
 	local slotGrid = Instance.new("Frame")
-	slotGrid.BackgroundTransparency = 1; slotGrid.Parent = contentFrame
-	if totalSlots <= 5 then
-		slotGrid.Size = UDim2.new(1, -sx(12), 0, sx(130))
-		local sl2 = Instance.new("UIListLayout", slotGrid)
-		sl2.FillDirection = Enum.FillDirection.Horizontal; sl2.Padding = UDim.new(0, sx(14))
-		sl2.HorizontalAlignment = Enum.HorizontalAlignment.Center
-		sl2.VerticalAlignment = Enum.VerticalAlignment.Center
-	else
-		local cols = 5
-		local rows = math.ceil(totalSlots / cols)
-		local cellH = sx(118); local gap = sx(12)
-		slotGrid.Size = UDim2.new(1, -sx(12), 0, rows * cellH + (rows - 1) * gap)
-		local gl = Instance.new("UIGridLayout", slotGrid)
-		gl.CellSize = UDim2.new(0, sx(118), 0, sx(110))
-		gl.CellPadding = UDim2.new(0, sx(12), 0, sx(12))
-		gl.FillDirection = Enum.FillDirection.Horizontal
-		gl.HorizontalAlignment = Enum.HorizontalAlignment.Center
-		gl.SortOrder = Enum.SortOrder.LayoutOrder
-	end
+	slotGrid.Size = UDim2.new(1, 0, 1, 0); slotGrid.BackgroundTransparency = 1; slotGrid.Parent = slotContainer
+	local sgLayout = Instance.new("UIGridLayout", slotGrid)
+	sgLayout.CellSize = UDim2.new(0, slotSize, 0, slotSize)
+	sgLayout.CellPadding = UDim2.new(0, slotGap, 0, slotGap)
+	sgLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	sgLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	local sgPad = Instance.new("UIPadding", slotGrid)
+	sgPad.PaddingTop = UDim.new(0, sx(8)); sgPad.PaddingBottom = UDim.new(0, sx(4))
 
 	local slotOrder = 0
 	for si, r in ipairs(cfg.req) do
@@ -952,52 +1109,21 @@ local function buildOneTimeContent(oneTimeId)
 			local filled = queue[key] ~= nil
 			if not filled then allFilled = false end
 
-			-- Build label: show effect + display name or rarity
-			local reqLabel
-			local displayId = r.streamerId and Streamers.ById[r.streamerId] and Streamers.ById[r.streamerId].displayName or r.streamerId
-			if r.effect and r.streamerId then
-				reqLabel = r.effect .. " " .. (displayId or "?")
-			elseif r.streamerId then
-				reqLabel = displayId or "?"
-			elseif r.rarity then
-				reqLabel = r.rarity
-			else
-				reqLabel = "?"
-			end
-
 			slotOrder = slotOrder + 1
 			local slot = Instance.new("TextButton")
-			slot.Size = UDim2.new(0, sx(118), 0, sx(110))
-			slot.BackgroundColor3 = filled and Color3.fromRGB(30, 100, 45) or Color3.fromRGB(28, 26, 48)
+			slot.Size = UDim2.new(0, slotSize, 0, slotSize)
+			slot.BackgroundColor3 = filled and Color3.fromRGB(40, 120, 60) or Color3.fromRGB(50, 42, 80)
 			slot.BorderSizePixel = 0; slot.Text = ""; slot.LayoutOrder = slotOrder; slot.Parent = slotGrid
-			Instance.new("UICorner", slot).CornerRadius = UDim.new(0, sx(16))
+			Instance.new("UICorner", slot).CornerRadius = UDim.new(1, 0)
 			local ss = Instance.new("UIStroke", slot)
-			ss.Color = filled and Color3.fromRGB(60, 220, 80) or Color3.fromRGB(60, 58, 90); ss.Thickness = 2.5
-
-			-- Required label (top of slot)
-			local rl = Instance.new("TextLabel")
-			rl.Size = UDim2.new(1, -sx(10), 0, sx(34)); rl.Position = UDim2.new(0.5, 0, 0, sx(6))
-			rl.AnchorPoint = Vector2.new(0.5, 0); rl.BackgroundTransparency = 1
-			rl.Text = reqLabel; rl.TextColor3 = Color3.new(1, 1, 1)
-			rl.Font = FONT; rl.TextSize = sx(13); rl.TextWrapped = true; rl.Parent = slot
+			ss.Color = filled and Color3.fromRGB(80, 240, 100) or Color3.fromRGB(80, 70, 120)
+			ss.Thickness = filled and 2.5 or 1.5
+			ss.Transparency = filled and 0 or 0.5
 
 			if filled then
 				local resolvedItem = resolveVirtualItem(queue[key])
-				local name = type(resolvedItem) == "table" and resolvedItem.id or resolvedItem or "?"
-				local eff = type(resolvedItem) == "table" and resolvedItem.effect or nil
-				local nl = Instance.new("TextLabel")
-				nl.Size = UDim2.new(1, -sx(10), 0, sx(24)); nl.Position = UDim2.new(0.5, 0, 0, sx(42))
-				nl.AnchorPoint = Vector2.new(0.5, 0); nl.BackgroundTransparency = 1
-				nl.Text = name .. (eff and (" (" .. eff .. ")") or "")
-				nl.TextColor3 = Color3.fromRGB(180, 255, 180)
-				nl.Font = FONT2; nl.TextSize = sx(13); nl.TextTruncate = Enum.TextTruncate.AtEnd; nl.Parent = slot
-
-				local rl2 = Instance.new("TextLabel")
-				rl2.Size = UDim2.new(1, 0, 0, sx(26)); rl2.Position = UDim2.new(0.5, 0, 1, -sx(30))
-				rl2.AnchorPoint = Vector2.new(0.5, 0); rl2.BackgroundTransparency = 1
-				rl2.Text = "Tap to remove"; rl2.TextColor3 = Color3.fromRGB(255, 130, 130)
-				rl2.Font = FONT2; rl2.TextSize = sx(13); rl2.Parent = slot
-
+				local sid = type(resolvedItem) == "table" and resolvedItem.id or resolvedItem or "?"
+				buildAvatarSlot(slot, sid)
 				local capKey, capId = key, oneTimeId
 				slot.MouseButton1Click:Connect(function()
 					oneTimeQueues[capId][capKey] = nil
@@ -1005,17 +1131,16 @@ local function buildOneTimeContent(oneTimeId)
 					buildContent(activeTabId)
 				end)
 			else
+				local reqLabel
+				local displayId = r.streamerId and Streamers.ById[r.streamerId] and Streamers.ById[r.streamerId].displayName or r.streamerId
+				if r.effect and r.streamerId then reqLabel = r.effect .. " " .. (displayId or "?")
+				elseif r.streamerId then reqLabel = displayId or "?"
+				elseif r.rarity then reqLabel = r.rarity
+				else reqLabel = "?" end
 				local pl = Instance.new("TextLabel")
-				pl.Size = UDim2.new(1, 0, 0, sx(40)); pl.Position = UDim2.new(0.5, 0, 0.5, -sx(2))
-				pl.AnchorPoint = Vector2.new(0.5, 0.5); pl.BackgroundTransparency = 1
-				pl.Text = "+"; pl.TextColor3 = Color3.fromRGB(90, 90, 120)
-				pl.Font = FONT; pl.TextSize = sx(36); pl.Parent = slot
-
-				local hl = Instance.new("TextLabel")
-				hl.Size = UDim2.new(1, 0, 0, sx(22)); hl.Position = UDim2.new(0.5, 0, 1, -sx(26))
-				hl.AnchorPoint = Vector2.new(0.5, 0); hl.BackgroundTransparency = 1
-				hl.Text = "Tap to pick"; hl.TextColor3 = Color3.fromRGB(90, 90, 120)
-				hl.Font = FONT2; hl.TextSize = sx(12); hl.Parent = slot
+				pl.Size = UDim2.new(1, -sx(4), 1, -sx(4)); pl.BackgroundTransparency = 1
+				pl.Text = reqLabel; pl.TextColor3 = Color3.fromRGB(120, 110, 160)
+				pl.Font = FONT; pl.TextSize = sx(10); pl.TextWrapped = true; pl.Parent = slot
 
 				local capKey, capId, capR = key, oneTimeId, r
 				slot.MouseButton1Click:Connect(function()
@@ -1057,20 +1182,24 @@ local function buildOneTimeContent(oneTimeId)
 		end
 	end
 
-	-- Sacrifice button
-	local sacBtn = Instance.new("TextButton")
-	sacBtn.Size = UDim2.new(0, sx(340), 0, sx(58))
-	sacBtn.BackgroundColor3 = allFilled and Color3.fromRGB(60, 200, 80) or Color3.fromRGB(50, 50, 70)
-	sacBtn.Text = allFilled and ("SACRIFICE FOR " .. formatNumber(cfg.gems) .. " GEMS") or "Fill all slots to sacrifice"
-	sacBtn.TextColor3 = allFilled and Color3.new(1, 1, 1) or Color3.fromRGB(110, 110, 130)
-	sacBtn.Font = FONT; sacBtn.TextSize = sx(20); sacBtn.BorderSizePixel = 0; sacBtn.Parent = contentFrame
-	Instance.new("UICorner", sacBtn).CornerRadius = UDim.new(0, sx(16))
-	Instance.new("UIStroke", sacBtn).Color = allFilled and Color3.fromRGB(40, 140, 55) or Color3.fromRGB(40, 40, 55)
-	UIHelper.AddPuffyGradient(sacBtn)
+	-- Action row: combined button + clear link (matching gem style)
+	local actionRow = Instance.new("Frame")
+	actionRow.Size = UDim2.new(1, -sx(12), 0, sx(50)); actionRow.BackgroundTransparency = 1; actionRow.Parent = contentFrame
+
+	local mainBtn = Instance.new("TextButton")
+	mainBtn.Size = UDim2.new(0, sx(320), 0, sx(46)); mainBtn.Position = UDim2.new(0.5, 0, 0.5, 0)
+	mainBtn.AnchorPoint = Vector2.new(0.5, 0.5); mainBtn.BorderSizePixel = 0; mainBtn.Parent = actionRow
+	Instance.new("UICorner", mainBtn).CornerRadius = UDim.new(0, sx(14))
+	mainBtn.BackgroundColor3 = allFilled and Color3.fromRGB(80, 220, 100) or Color3.fromRGB(60, 55, 80)
+	mainBtn.Text = allFilled and ("SACRIFICE FOR " .. formatNumber(cfg.gems) .. " GEMS") or "Fill all slots to sacrifice"
+	mainBtn.TextColor3 = allFilled and Color3.new(1, 1, 1) or Color3.fromRGB(140, 130, 170)
+	mainBtn.Font = FONT; mainBtn.TextSize = sx(18)
+	Instance.new("UIStroke", mainBtn).Color = allFilled and Color3.fromRGB(50, 160, 65) or Color3.fromRGB(50, 45, 65)
+	UIHelper.AddPuffyGradient(mainBtn)
 
 	if allFilled then
 		local capId = oneTimeId
-		sacBtn.MouseButton1Click:Connect(function()
+		mainBtn.MouseButton1Click:Connect(function()
 			showConfirmation("Sacrifice these streamers for " .. formatNumber(cfg.gems) .. " Gems?", function()
 				SacrificeRequest:FireServer("OneTime", capId)
 				oneTimeQueues[capId] = {}
@@ -1078,6 +1207,18 @@ local function buildOneTimeContent(oneTimeId)
 			end)
 		end)
 	end
+
+	local clrLink = Instance.new("TextButton")
+	clrLink.Size = UDim2.new(0, sx(80), 0, sx(24)); clrLink.Position = UDim2.new(1, -sx(6), 0.5, 0)
+	clrLink.AnchorPoint = Vector2.new(1, 0.5); clrLink.BackgroundTransparency = 1
+	clrLink.Text = "Clear"; clrLink.TextColor3 = Color3.fromRGB(200, 100, 100)
+	clrLink.Font = FONT2; clrLink.TextSize = sx(14); clrLink.Parent = actionRow
+	local capId2 = oneTimeId
+	clrLink.MouseButton1Click:Connect(function()
+		oneTimeQueues[capId2] = {}
+		fireQueueChanged()
+		buildContent(activeTabId)
+	end)
 end
 
 -- =========== LUCK CONTENT ===========
@@ -1085,46 +1226,63 @@ local function buildLuckContent(luckType)
 	clearContent()
 
 	local warnFrame = Instance.new("Frame")
-	warnFrame.Size = UDim2.new(1, -10, 0, 50)
-	warnFrame.BackgroundColor3 = Color3.fromRGB(80, 28, 28); warnFrame.BorderSizePixel = 0
+	warnFrame.Size = UDim2.new(1, -sx(12), 0, sx(44))
+	warnFrame.BackgroundColor3 = Color3.fromRGB(80, 35, 35); warnFrame.BorderSizePixel = 0
 	warnFrame.Parent = contentFrame
-	Instance.new("UICorner", warnFrame).CornerRadius = UDim.new(0, 12)
-	Instance.new("UIStroke", warnFrame).Color = Color3.fromRGB(200, 70, 50)
+	Instance.new("UICorner", warnFrame).CornerRadius = UDim.new(0, sx(12))
+	Instance.new("UIStroke", warnFrame).Color = Color3.fromRGB(200, 80, 60)
 	local wl = Instance.new("TextLabel")
-	wl.Size = UDim2.new(1, -20, 1, -8); wl.Position = UDim2.new(0.5, 0, 0.5, 0)
+	wl.Size = UDim2.new(1, -sx(20), 1, -sx(6)); wl.Position = UDim2.new(0.5, 0, 0.5, 0)
 	wl.AnchorPoint = Vector2.new(0.5, 0.5); wl.BackgroundTransparency = 1
-	wl.Text = Sacrifice.LuckWarning; wl.TextColor3 = Color3.fromRGB(255, 200, 160)
-	wl.Font = FONT; wl.TextSize = 13; wl.TextWrapped = true; wl.Parent = warnFrame
+	wl.Text = Sacrifice.LuckWarning; wl.TextColor3 = Color3.fromRGB(255, 210, 170)
+	wl.Font = FONT; wl.TextSize = sx(13); wl.TextWrapped = true; wl.Parent = warnFrame
 
 	if luckType == "FiftyFifty" then
 		local cfg = Sacrifice.FiftyFifty
 		local cs = (HUDController.Data.sacrificeChargeState or {}).FiftyFifty or { count = 0, nextAt = nil }
 		local nextIn = cs.nextAt and (cs.nextAt - os.clock()) or 0
 		local rp = {}; for _, r in ipairs(cfg.req) do table.insert(rp, r.count .. " " .. r.rarity) end
+		local accentColor = Color3.fromRGB(255, 220, 80)
 
 		local header = Instance.new("Frame")
-		header.Size = UDim2.new(1, -10, 0, 130)
-		header.BackgroundColor3 = Color3.fromRGB(22, 22, 40); header.BorderSizePixel = 0; header.Parent = contentFrame
-		Instance.new("UICorner", header).CornerRadius = UDim.new(0, 18)
-		Instance.new("UIStroke", header).Color = Color3.fromRGB(255, 200, 60)
+		header.Size = UDim2.new(1, -sx(12), 0, sx(90))
+		header.BackgroundColor3 = Color3.fromRGB(55, 45, 90); header.BorderSizePixel = 0; header.Parent = contentFrame
+		Instance.new("UICorner", header).CornerRadius = UDim.new(0, sx(18))
+		Instance.new("UIStroke", header).Color = accentColor; Instance.new("UIStroke", header).Thickness = 2
+
 		local t = Instance.new("TextLabel")
-		t.Size = UDim2.new(1, -24, 0, 34); t.Position = UDim2.new(0.5, 0, 0, 12)
+		t.Size = UDim2.new(1, -sx(24), 0, sx(32)); t.Position = UDim2.new(0.5, 0, 0, sx(10))
 		t.AnchorPoint = Vector2.new(0.5, 0); t.BackgroundTransparency = 1
-		t.Text = cfg.name; t.TextColor3 = Color3.fromRGB(255, 220, 80)
-		t.Font = FONT; t.TextSize = 28; t.Parent = header
+		t.Text = cfg.name; t.TextColor3 = accentColor
+		t.Font = FONT; t.TextSize = sx(24); t.Parent = header
+		local ts = Instance.new("UIStroke", t)
+		ts.Color = Color3.new(0, 0, 0); ts.Thickness = 2; ts.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+
 		local d = Instance.new("TextLabel")
-		d.Size = UDim2.new(1, -24, 0, 70); d.Position = UDim2.new(0.5, 0, 0, 50)
+		d.Size = UDim2.new(1, -sx(24), 0, sx(40)); d.Position = UDim2.new(0.5, 0, 0, sx(44))
 		d.AnchorPoint = Vector2.new(0.5, 0); d.BackgroundTransparency = 1
-		d.Text = cfg.desc .. "\n\nCost: " .. table.concat(rp, ", ") .. "\nCharges: " .. cs.count .. "/" .. cfg.maxCharges .. (cs.count < cfg.maxCharges and nextIn > 0 and ("  •  Next: " .. formatTime(nextIn)) or "")
-		d.TextColor3 = Color3.fromRGB(160, 170, 200); d.Font = FONT; d.TextSize = 14; d.TextWrapped = true; d.Parent = header
+		d.Text = cfg.desc .. "  •  Cost: " .. table.concat(rp, ", ")
+		d.TextColor3 = Color3.fromRGB(200, 190, 230); d.Font = FONT; d.TextSize = sx(14); d.TextWrapped = true; d.Parent = header
+
+		local chargeRow = Instance.new("Frame")
+		chargeRow.Size = UDim2.new(1, -sx(12), 0, sx(36)); chargeRow.BackgroundTransparency = 1; chargeRow.Parent = contentFrame
+		local cl = Instance.new("TextLabel")
+		cl.Size = UDim2.new(1, 0, 1, 0); cl.BackgroundTransparency = 1
+		cl.Text = "Charges: " .. cs.count .. " / " .. cfg.maxCharges .. (cs.count < cfg.maxCharges and nextIn > 0 and ("  •  Next: " .. formatTime(nextIn)) or "")
+		cl.TextColor3 = accentColor; cl.Font = FONT; cl.TextSize = sx(16); cl.Parent = chargeRow
+
+		local actionRow = Instance.new("Frame")
+		actionRow.Size = UDim2.new(1, -sx(12), 0, sx(50)); actionRow.BackgroundTransparency = 1; actionRow.Parent = contentFrame
 
 		local sb = Instance.new("TextButton")
-		sb.Size = UDim2.new(0, 200, 0, 48)
-		sb.BackgroundColor3 = cs.count > 0 and Color3.fromRGB(220, 180, 40) or Color3.fromRGB(50, 50, 70)
+		sb.Size = UDim2.new(0, sx(320), 0, sx(46)); sb.Position = UDim2.new(0.5, 0, 0.5, 0)
+		sb.AnchorPoint = Vector2.new(0.5, 0.5); sb.BorderSizePixel = 0; sb.Parent = actionRow
+		Instance.new("UICorner", sb).CornerRadius = UDim.new(0, sx(14))
+		sb.BackgroundColor3 = cs.count > 0 and accentColor or Color3.fromRGB(60, 55, 80)
 		sb.Text = cs.count > 0 and "SACRIFICE" or "NO CHARGES"
-		sb.TextColor3 = Color3.new(1, 1, 1); sb.Font = FONT; sb.TextSize = 18
-		sb.BorderSizePixel = 0; sb.Parent = contentFrame
-		Instance.new("UICorner", sb).CornerRadius = UDim.new(0, 12)
+		sb.TextColor3 = cs.count > 0 and Color3.fromRGB(30, 20, 10) or Color3.fromRGB(140, 130, 170)
+		sb.Font = FONT; sb.TextSize = sx(18)
+		Instance.new("UIStroke", sb).Color = cs.count > 0 and Color3.fromRGB(200, 170, 30) or Color3.fromRGB(50, 45, 65)
 		UIHelper.AddPuffyGradient(sb)
 		if cs.count > 0 then
 			sb.MouseButton1Click:Connect(function()
@@ -1139,30 +1297,47 @@ local function buildLuckContent(luckType)
 		local cs = (HUDController.Data.sacrificeChargeState or {}).FeelingLucky or { count = 0, nextAt = nil }
 		local nextIn = cs.nextAt and (cs.nextAt - os.clock()) or 0
 		local rp = {}; for _, r in ipairs(cfg.req) do table.insert(rp, r.count .. " " .. r.rarity) end
+		local accentColor = Color3.fromRGB(100, 200, 255)
 
 		local header = Instance.new("Frame")
-		header.Size = UDim2.new(1, -10, 0, 130)
-		header.BackgroundColor3 = Color3.fromRGB(22, 22, 40); header.BorderSizePixel = 0; header.Parent = contentFrame
-		Instance.new("UICorner", header).CornerRadius = UDim.new(0, 18)
-		Instance.new("UIStroke", header).Color = Color3.fromRGB(100, 200, 255)
+		header.Size = UDim2.new(1, -sx(12), 0, sx(90))
+		header.BackgroundColor3 = Color3.fromRGB(55, 45, 90); header.BorderSizePixel = 0; header.Parent = contentFrame
+		Instance.new("UICorner", header).CornerRadius = UDim.new(0, sx(18))
+		Instance.new("UIStroke", header).Color = accentColor; Instance.new("UIStroke", header).Thickness = 2
+
 		local t = Instance.new("TextLabel")
-		t.Size = UDim2.new(1, -24, 0, 34); t.Position = UDim2.new(0.5, 0, 0, 12)
+		t.Size = UDim2.new(1, -sx(24), 0, sx(32)); t.Position = UDim2.new(0.5, 0, 0, sx(10))
 		t.AnchorPoint = Vector2.new(0.5, 0); t.BackgroundTransparency = 1
-		t.Text = cfg.name; t.TextColor3 = Color3.fromRGB(130, 220, 255)
-		t.Font = FONT; t.TextSize = 28; t.Parent = header
+		t.Text = cfg.name; t.TextColor3 = accentColor
+		t.Font = FONT; t.TextSize = sx(24); t.Parent = header
+		local ts = Instance.new("UIStroke", t)
+		ts.Color = Color3.new(0, 0, 0); ts.Thickness = 2; ts.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+
 		local d = Instance.new("TextLabel")
-		d.Size = UDim2.new(1, -24, 0, 70); d.Position = UDim2.new(0.5, 0, 0, 50)
+		d.Size = UDim2.new(1, -sx(24), 0, sx(40)); d.Position = UDim2.new(0.5, 0, 0, sx(44))
 		d.AnchorPoint = Vector2.new(0.5, 0); d.BackgroundTransparency = 1
-		d.Text = cfg.desc .. "\n\nCost: " .. table.concat(rp, ", ") .. "\nCharges: " .. cs.count .. "/" .. cfg.maxCharges .. (cs.count < cfg.maxCharges and nextIn > 0 and ("  •  Recharge: " .. formatTime(nextIn)) or "")
-		d.TextColor3 = Color3.fromRGB(160, 170, 200); d.Font = FONT; d.TextSize = 14; d.TextWrapped = true; d.Parent = header
+		d.Text = cfg.desc .. "  •  Cost: " .. table.concat(rp, ", ")
+		d.TextColor3 = Color3.fromRGB(200, 190, 230); d.Font = FONT; d.TextSize = sx(14); d.TextWrapped = true; d.Parent = header
+
+		local chargeRow = Instance.new("Frame")
+		chargeRow.Size = UDim2.new(1, -sx(12), 0, sx(36)); chargeRow.BackgroundTransparency = 1; chargeRow.Parent = contentFrame
+		local cl = Instance.new("TextLabel")
+		cl.Size = UDim2.new(1, 0, 1, 0); cl.BackgroundTransparency = 1
+		cl.Text = "Charges: " .. cs.count .. " / " .. cfg.maxCharges .. (cs.count < cfg.maxCharges and nextIn > 0 and ("  •  Recharge: " .. formatTime(nextIn)) or "")
+		cl.TextColor3 = accentColor; cl.Font = FONT; cl.TextSize = sx(16); cl.Parent = chargeRow
+
+		local actionRow = Instance.new("Frame")
+		actionRow.Size = UDim2.new(1, -sx(12), 0, sx(50)); actionRow.BackgroundTransparency = 1; actionRow.Parent = contentFrame
 
 		local sb = Instance.new("TextButton")
-		sb.Size = UDim2.new(0, 200, 0, 48)
-		sb.BackgroundColor3 = cs.count > 0 and Color3.fromRGB(70, 170, 220) or Color3.fromRGB(50, 50, 70)
+		sb.Size = UDim2.new(0, sx(320), 0, sx(46)); sb.Position = UDim2.new(0.5, 0, 0.5, 0)
+		sb.AnchorPoint = Vector2.new(0.5, 0.5); sb.BorderSizePixel = 0; sb.Parent = actionRow
+		Instance.new("UICorner", sb).CornerRadius = UDim.new(0, sx(14))
+		sb.BackgroundColor3 = cs.count > 0 and accentColor or Color3.fromRGB(60, 55, 80)
 		sb.Text = cs.count > 0 and "SACRIFICE" or "NO CHARGES"
-		sb.TextColor3 = Color3.new(1, 1, 1); sb.Font = FONT; sb.TextSize = 18
-		sb.BorderSizePixel = 0; sb.Parent = contentFrame
-		Instance.new("UICorner", sb).CornerRadius = UDim.new(0, 12)
+		sb.TextColor3 = cs.count > 0 and Color3.fromRGB(10, 30, 50) or Color3.fromRGB(140, 130, 170)
+		sb.Font = FONT; sb.TextSize = sx(18)
+		Instance.new("UIStroke", sb).Color = cs.count > 0 and Color3.fromRGB(60, 150, 200) or Color3.fromRGB(50, 45, 65)
 		UIHelper.AddPuffyGradient(sb)
 		if cs.count > 0 then
 			sb.MouseButton1Click:Connect(function()
@@ -1174,56 +1349,56 @@ local function buildLuckContent(luckType)
 
 	elseif luckType == "DontDoIt" then
 		local cfg = Sacrifice.DontDoIt
-		local header = Instance.new("Frame")
-		header.Size = UDim2.new(1, -10, 0, 140)
-		header.BackgroundColor3 = Color3.fromRGB(22, 22, 40); header.BorderSizePixel = 0; header.Parent = contentFrame
-		Instance.new("UICorner", header).CornerRadius = UDim.new(0, 18)
-		Instance.new("UIStroke", header).Color = Color3.fromRGB(220, 60, 60)
-		local t = Instance.new("TextLabel")
-		t.Size = UDim2.new(1, -24, 0, 34); t.Position = UDim2.new(0.5, 0, 0, 12)
-		t.AnchorPoint = Vector2.new(0.5, 0); t.BackgroundTransparency = 1
-		t.Text = cfg.name; t.TextColor3 = Color3.fromRGB(255, 100, 100)
-		t.Font = FONT; t.TextSize = 28; t.Parent = header
-		local d = Instance.new("TextLabel")
-		d.Size = UDim2.new(1, -24, 0, 80); d.Position = UDim2.new(0.5, 0, 0, 46)
-		d.AnchorPoint = Vector2.new(0.5, 0); d.BackgroundTransparency = 1
-		d.Text = cfg.desc .. "\n\nUpgrade Chances:\nCommon->Rare: 50%  |  Rare->Epic: 30%\nEpic->Legendary: 10%  |  Legendary->Mythic: 4%"
-		d.TextColor3 = Color3.fromRGB(160, 170, 200); d.Font = FONT; d.TextSize = 14; d.TextWrapped = true; d.Parent = header
+		local accentColor = Color3.fromRGB(255, 110, 110)
 
-		-- Streamer picker: show all streamers so player can choose
-		local pickLabel = Instance.new("TextLabel")
-		pickLabel.Size = UDim2.new(1, -10, 0, sx(26))
-		pickLabel.BackgroundTransparency = 1
-		pickLabel.Text = "Tap a streamer to sacrifice it:"
-		pickLabel.TextColor3 = Color3.fromRGB(180, 180, 200)
-		pickLabel.Font = FONT; pickLabel.TextSize = sx(15)
-		pickLabel.Parent = contentFrame
+		local header = Instance.new("Frame")
+		header.Size = UDim2.new(1, -sx(12), 0, sx(90))
+		header.BackgroundColor3 = Color3.fromRGB(55, 45, 90); header.BorderSizePixel = 0; header.Parent = contentFrame
+		Instance.new("UICorner", header).CornerRadius = UDim.new(0, sx(18))
+		Instance.new("UIStroke", header).Color = accentColor; Instance.new("UIStroke", header).Thickness = 2
+
+		local t = Instance.new("TextLabel")
+		t.Size = UDim2.new(1, -sx(24), 0, sx(32)); t.Position = UDim2.new(0.5, 0, 0, sx(10))
+		t.AnchorPoint = Vector2.new(0.5, 0); t.BackgroundTransparency = 1
+		t.Text = cfg.name; t.TextColor3 = accentColor
+		t.Font = FONT; t.TextSize = sx(24); t.Parent = header
+		local ts = Instance.new("UIStroke", t)
+		ts.Color = Color3.new(0, 0, 0); ts.Thickness = 2; ts.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+
+		local d = Instance.new("TextLabel")
+		d.Size = UDim2.new(1, -sx(24), 0, sx(40)); d.Position = UDim2.new(0.5, 0, 0, sx(44))
+		d.AnchorPoint = Vector2.new(0.5, 0); d.BackgroundTransparency = 1
+		d.Text = cfg.desc .. "\nCommon>Rare 50% | Rare>Epic 30% | Epic>Leg 10% | Leg>Mythic 4%"
+		d.TextColor3 = Color3.fromRGB(200, 190, 230); d.Font = FONT; d.TextSize = sx(13); d.TextWrapped = true; d.Parent = header
 
 		local allItems = getCombinedItems()
+		local excludeSet = allQueuedIndices()
+		local filtered = {}
+		for _, entry in ipairs(allItems) do
+			if not excludeSet[entry.vi] then table.insert(filtered, entry) end
+		end
 
-		if #allItems == 0 then
+		if #filtered == 0 then
 			local noItems = Instance.new("TextLabel")
-			noItems.Size = UDim2.new(1, 0, 0, sx(60))
-			noItems.BackgroundTransparency = 1
-			noItems.Text = "No eligible streamers in your inventory or storage"
-			noItems.TextColor3 = Color3.fromRGB(120, 120, 140)
-			noItems.Font = FONT; noItems.TextSize = sx(16)
-			noItems.Parent = contentFrame
+			noItems.Size = UDim2.new(1, -sx(20), 0, sx(60)); noItems.BackgroundTransparency = 1
+			noItems.Text = "No eligible streamers!"
+			noItems.TextColor3 = Color3.fromRGB(180, 160, 210)
+			noItems.Font = FONT; noItems.TextSize = sx(18); noItems.Parent = contentFrame
 		else
 			local pickScroll = Instance.new("ScrollingFrame")
-			pickScroll.Size = UDim2.new(1, -10, 0, sx(280))
+			pickScroll.Size = UDim2.new(1, -sx(12), 0, sx(320))
 			pickScroll.BackgroundTransparency = 1; pickScroll.BorderSizePixel = 0
 			pickScroll.ScrollBarThickness = sx(5); pickScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
 			pickScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y; pickScroll.Parent = contentFrame
 
 			local grid = Instance.new("UIGridLayout", pickScroll)
-			grid.CellSize = UDim2.new(0, sx(108), 0, sx(80))
+			grid.CellSize = UDim2.new(0, sx(130), 0, sx(110))
 			grid.CellPadding = UDim2.new(0, sx(8), 0, sx(8))
 			grid.SortOrder = Enum.SortOrder.LayoutOrder
+			grid.HorizontalAlignment = Enum.HorizontalAlignment.Center
+			Instance.new("UIPadding", pickScroll).PaddingTop = UDim.new(0, sx(4))
 
-			Instance.new("UIPadding", pickScroll).PaddingLeft = UDim.new(0, 4)
-
-			for order, entry in ipairs(allItems) do
+			for order, entry in ipairs(filtered) do
 				local item = entry.item
 				local vi = entry.vi
 				local id, eff, info = getItemInfo(item)
@@ -1236,44 +1411,47 @@ local function buildLuckContent(luckType)
 					local isStorage = vi > STORAGE_OFFSET
 
 					local cell = Instance.new("TextButton")
-					cell.Size = UDim2.new(0, sx(108), 0, sx(80))
-					cell.BackgroundColor3 = Color3.fromRGB(30, 28, 50); cell.BorderSizePixel = 0
+					cell.Size = UDim2.new(0, sx(130), 0, sx(110))
+					cell.BackgroundColor3 = Color3.fromRGB(40, 34, 70); cell.BorderSizePixel = 0
 					cell.Text = ""; cell.LayoutOrder = order; cell.Parent = pickScroll
-					Instance.new("UICorner", cell).CornerRadius = UDim.new(0, sx(12))
-					local cs = Instance.new("UIStroke", cell)
-					cs.Color = displayColor; cs.Thickness = 1.5; cs.Transparency = 0.3; cs.Parent = cell
+					Instance.new("UICorner", cell).CornerRadius = UDim.new(0, sx(14))
+					local cStroke = Instance.new("UIStroke", cell)
+					cStroke.Color = displayColor; cStroke.Thickness = 2; cStroke.Transparency = 0.2
+
+					local avSize = sx(44)
+					local avFrame = Instance.new("Frame")
+					avFrame.Size = UDim2.new(0, avSize, 0, avSize)
+					avFrame.Position = UDim2.new(0, sx(6), 0, sx(6))
+					avFrame.BackgroundColor3 = Color3.fromRGB(30, 25, 55); avFrame.BorderSizePixel = 0; avFrame.Parent = cell
+					Instance.new("UICorner", avFrame).CornerRadius = UDim.new(1, 0)
+					buildAvatarSlot(avFrame, id)
 
 					local nl = Instance.new("TextLabel")
-					nl.Size = UDim2.new(1, -8, 0, sx(18)); nl.Position = UDim2.new(0.5, 0, 0, sx(6))
-					nl.AnchorPoint = Vector2.new(0.5, 0); nl.BackgroundTransparency = 1
-					nl.Text = displayName; nl.TextColor3 = displayColor
-					nl.Font = FONT; nl.TextSize = sx(11); nl.TextTruncate = Enum.TextTruncate.AtEnd
-					nl.Parent = cell
+					nl.Size = UDim2.new(1, -sx(56), 0, sx(20)); nl.Position = UDim2.new(0, sx(54), 0, sx(8))
+					nl.BackgroundTransparency = 1; nl.Text = displayName; nl.TextColor3 = displayColor
+					nl.Font = FONT; nl.TextSize = sx(13); nl.TextTruncate = Enum.TextTruncate.AtEnd
+					nl.TextXAlignment = Enum.TextXAlignment.Left; nl.Parent = cell
 
 					local rl = Instance.new("TextLabel")
-					rl.Size = UDim2.new(1, -8, 0, sx(14)); rl.Position = UDim2.new(0.5, 0, 0, sx(26))
-					rl.AnchorPoint = Vector2.new(0.5, 0); rl.BackgroundTransparency = 1
-					rl.Text = info.rarity; rl.TextColor3 = rColor
-					rl.Font = FONT2; rl.TextSize = sx(10); rl.Parent = cell
+					rl.Size = UDim2.new(1, -sx(56), 0, sx(16)); rl.Position = UDim2.new(0, sx(54), 0, sx(28))
+					rl.BackgroundTransparency = 1; rl.Text = info.rarity; rl.TextColor3 = rColor
+					rl.Font = FONT2; rl.TextSize = sx(12)
+					rl.TextXAlignment = Enum.TextXAlignment.Left; rl.Parent = cell
 
 					if isStorage then
 						local sl = Instance.new("TextLabel")
-						sl.Size = UDim2.new(0, sx(14), 0, sx(14)); sl.Position = UDim2.new(1, -sx(4), 1, -sx(4))
-						sl.AnchorPoint = Vector2.new(1, 1); sl.BackgroundColor3 = Color3.fromRGB(60, 130, 200)
+						sl.Size = UDim2.new(0, sx(14), 0, sx(14)); sl.Position = UDim2.new(1, -sx(6), 0, sx(6))
+						sl.AnchorPoint = Vector2.new(1, 0); sl.BackgroundColor3 = Color3.fromRGB(60, 130, 200)
 						sl.Text = "S"; sl.TextColor3 = Color3.new(1, 1, 1)
 						sl.Font = FONT; sl.TextSize = sx(9); sl.Parent = cell
-						Instance.new("UICorner", sl).CornerRadius = UDim.new(0, 3)
+						Instance.new("UICorner", sl).CornerRadius = UDim.new(0, sx(3))
 					end
 
-					local sacIcon = Instance.new("TextLabel")
-					sacIcon.Size = UDim2.new(1, 0, 0, sx(22))
-					sacIcon.Position = UDim2.new(0.5, 0, 1, -sx(6))
-					sacIcon.AnchorPoint = Vector2.new(0.5, 1)
-					sacIcon.BackgroundTransparency = 1
-					sacIcon.Text = "SACRIFICE"
-					sacIcon.TextColor3 = Color3.fromRGB(255, 100, 100)
-					sacIcon.Font = FONT; sacIcon.TextSize = sx(10)
-					sacIcon.Parent = cell
+					local bl = Instance.new("TextLabel")
+					bl.Size = UDim2.new(1, -sx(8), 0, sx(22)); bl.Position = UDim2.new(0.5, 0, 1, -sx(4))
+					bl.AnchorPoint = Vector2.new(0.5, 1); bl.BackgroundTransparency = 1
+					bl.Text = "Tap to sacrifice"; bl.TextColor3 = accentColor
+					bl.Font = FONT2; bl.TextSize = sx(11); bl.Parent = cell
 
 					cell.MouseButton1Click:Connect(function()
 						showConfirmation("Sacrifice " .. displayName .. " (" .. info.rarity .. ")?\nChance to upgrade to next rarity!", function()
@@ -1296,24 +1474,24 @@ local function buildElementalContent(effectName)
 	local effectColor = effectInfo and effectInfo.color or Color3.fromRGB(170, 170, 170)
 
 	local header = Instance.new("Frame")
-	header.Size = UDim2.new(1, -10, 0, 90)
-	header.BackgroundColor3 = Color3.fromRGB(22, 22, 40); header.BorderSizePixel = 0; header.Parent = contentFrame
-	Instance.new("UICorner", header).CornerRadius = UDim.new(0, 18)
-	Instance.new("UIStroke", header).Color = effectColor
+	header.Size = UDim2.new(1, -sx(12), 0, sx(90))
+	header.BackgroundColor3 = Color3.fromRGB(55, 45, 90); header.BorderSizePixel = 0; header.Parent = contentFrame
+	Instance.new("UICorner", header).CornerRadius = UDim.new(0, sx(18))
+	local elStroke = Instance.new("UIStroke", header); elStroke.Color = effectColor; elStroke.Thickness = 2
 
 	local tl = Instance.new("TextLabel")
-	tl.Size = UDim2.new(1, -24, 0, 34); tl.Position = UDim2.new(0.5, 0, 0, 12)
+	tl.Size = UDim2.new(1, -sx(24), 0, sx(32)); tl.Position = UDim2.new(0.5, 0, 0, sx(10))
 	tl.AnchorPoint = Vector2.new(0.5, 0); tl.BackgroundTransparency = 1
-	tl.Text = displayName .. " Elemental Sacrifice"
-	tl.TextColor3 = effectColor; tl.Font = FONT; tl.TextSize = 24; tl.Parent = header
+	tl.Text = displayName .. " Elemental"
+	tl.TextColor3 = effectColor; tl.Font = FONT; tl.TextSize = sx(24); tl.Parent = header
 	local ts = Instance.new("UIStroke", tl)
 	ts.Color = Color3.new(0, 0, 0); ts.Thickness = 2; ts.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
 
 	local sub = Instance.new("TextLabel")
-	sub.Size = UDim2.new(1, -24, 0, 24); sub.Position = UDim2.new(0.5, 0, 0, 50)
+	sub.Size = UDim2.new(1, -sx(24), 0, sx(36)); sub.Position = UDim2.new(0.5, 0, 0, sx(44))
 	sub.AnchorPoint = Vector2.new(0.5, 0); sub.BackgroundTransparency = 1
-	sub.Text = "Tap streamers to queue them. Combine into one " .. displayName .. " streamer!"
-	sub.TextColor3 = Color3.fromRGB(160, 170, 200); sub.Font = FONT; sub.TextSize = 13
+	sub.Text = "Tap streamers to queue. Combine into one " .. displayName .. " streamer!"
+	sub.TextColor3 = Color3.fromRGB(200, 190, 230); sub.Font = FONT; sub.TextSize = sx(14)
 	sub.TextWrapped = true; sub.Parent = header
 
 	for ri, rarity in ipairs(rarities) do
@@ -1332,94 +1510,139 @@ local function buildElementalContent(effectName)
 
 		local selected = queueSetCount(queue)
 		local canSacrifice = selected >= need
-		local pct = math.min(1, selected / need)
 
-		-- Section label for this rarity
-		local secLabel = Instance.new("TextLabel")
-		secLabel.Size = UDim2.new(1, 0, 0, 30); secLabel.BackgroundTransparency = 1
-		secLabel.Text = rarity .. "  —  " .. selected .. "/" .. need .. " queued"
-		secLabel.TextColor3 = rarColor; secLabel.Font = FONT; secLabel.TextSize = 18
-		secLabel.TextXAlignment = Enum.TextXAlignment.Left; secLabel.LayoutOrder = ri * 100
-		secLabel.Parent = contentFrame
-
-		-- Progress + buttons row
-		local row = Instance.new("Frame")
-		row.Size = UDim2.new(1, 0, 0, 36); row.BackgroundTransparency = 1
-		row.LayoutOrder = ri * 100 + 1; row.Parent = contentFrame
-
-		local progBg = Instance.new("Frame")
-		progBg.Size = UDim2.new(0.45, 0, 0, 20); progBg.Position = UDim2.new(0, 0, 0.5, 0)
-		progBg.AnchorPoint = Vector2.new(0, 0.5)
-		progBg.BackgroundColor3 = Color3.fromRGB(30, 30, 50); progBg.BorderSizePixel = 0; progBg.Parent = row
-		Instance.new("UICorner", progBg).CornerRadius = UDim.new(0, 6)
-		local fillBar = Instance.new("Frame")
-		fillBar.Size = UDim2.new(pct, 0, 1, 0)
-		fillBar.BackgroundColor3 = canSacrifice and Color3.fromRGB(60, 200, 80) or rarColor
-		fillBar.BorderSizePixel = 0; fillBar.Parent = progBg
-		Instance.new("UICorner", fillBar).CornerRadius = UDim.new(0, 6)
-		local pLbl = Instance.new("TextLabel")
-		pLbl.Size = UDim2.new(1, 0, 1, 0); pLbl.BackgroundTransparency = 1
-		pLbl.Text = selected .. "/" .. need; pLbl.TextColor3 = Color3.new(1, 1, 1)
-		pLbl.Font = FONT; pLbl.TextSize = 10; pLbl.ZIndex = 2; pLbl.Parent = progBg
-
-		-- Auto fill for this rarity
-		local afb = Instance.new("TextButton")
-		afb.Size = UDim2.new(0, 80, 0, 28); afb.Position = UDim2.new(0.48, 0, 0.5, 0)
-		afb.AnchorPoint = Vector2.new(0, 0.5); afb.BackgroundColor3 = Color3.fromRGB(50, 50, 80)
-		afb.Text = "Auto Fill"; afb.TextColor3 = Color3.new(1, 1, 1)
-		afb.Font = FONT; afb.TextSize = 11; afb.BorderSizePixel = 0; afb.Parent = row
-		Instance.new("UICorner", afb).CornerRadius = UDim.new(0, 8)
 		local capQKey = qKey
 		local capRarity = rarity
 		local capEffect = effectName
-		afb.MouseButton1Click:Connect(function()
-			local allItems = getCombinedItems()
-			local queued = allQueuedIndices()
-			local q = elementalQueues[capQKey]
-			local added = queueSetCount(q)
-			for _, entry in ipairs(allItems) do
-				if added >= need then break end
-				if not q[entry.vi] and not queued[entry.vi] then
-					local id, eff, info = getItemInfo(entry.item)
-					if info and info.rarity == capRarity and (capEffect == nil and eff == nil or eff == capEffect) then
-						q[entry.vi] = true; added = added + 1
-					end
-				end
+
+		-- Visual queue: circular slots
+		local slotSize = sx(50)
+		local slotGap = sx(6)
+		local slotsPerRow = math.min(need, 10)
+		local totalRows = math.ceil(need / slotsPerRow)
+		local slotRowH = totalRows * (slotSize + slotGap) + sx(10)
+
+		local slotContainer = Instance.new("Frame")
+		slotContainer.Size = UDim2.new(1, -sx(12), 0, slotRowH + sx(34))
+		slotContainer.BackgroundColor3 = Color3.fromRGB(35, 30, 60); slotContainer.BorderSizePixel = 0
+		slotContainer.LayoutOrder = ri * 100; slotContainer.Parent = contentFrame
+		Instance.new("UICorner", slotContainer).CornerRadius = UDim.new(0, sx(14))
+		local scStk = Instance.new("UIStroke", slotContainer); scStk.Color = rarColor; scStk.Thickness = 2; scStk.Transparency = 0.3
+
+		-- Rarity label inside the slot container
+		local rarLbl = Instance.new("TextLabel")
+		rarLbl.Size = UDim2.new(1, -sx(16), 0, sx(26)); rarLbl.Position = UDim2.new(0.5, 0, 0, sx(4))
+		rarLbl.AnchorPoint = Vector2.new(0.5, 0); rarLbl.BackgroundTransparency = 1
+		rarLbl.Text = rarity .. "  —  " .. selected .. "/" .. need
+		rarLbl.TextColor3 = canSacrifice and Color3.fromRGB(100, 255, 120) or rarColor
+		rarLbl.Font = FONT; rarLbl.TextSize = sx(16); rarLbl.Parent = slotContainer
+		local rlStk = Instance.new("UIStroke", rarLbl)
+		rlStk.Color = Color3.fromRGB(15, 10, 30); rlStk.Thickness = 1
+		rlStk.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+
+		local slotGrid = Instance.new("Frame")
+		slotGrid.Size = UDim2.new(1, 0, 1, -sx(30)); slotGrid.Position = UDim2.new(0, 0, 0, sx(30))
+		slotGrid.BackgroundTransparency = 1; slotGrid.Parent = slotContainer
+
+		local sgLayout = Instance.new("UIGridLayout", slotGrid)
+		sgLayout.CellSize = UDim2.new(0, slotSize, 0, slotSize)
+		sgLayout.CellPadding = UDim2.new(0, slotGap, 0, slotGap)
+		sgLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+		sgLayout.SortOrder = Enum.SortOrder.LayoutOrder
+		local sgPad = Instance.new("UIPadding", slotGrid)
+		sgPad.PaddingTop = UDim.new(0, sx(4)); sgPad.PaddingBottom = UDim.new(0, sx(4))
+
+		local filledList = {}
+		for vi in pairs(queue) do table.insert(filledList, vi) end
+		table.sort(filledList)
+
+		for i = 1, need do
+			local vi = filledList[i]
+			local isFilled = vi ~= nil
+			local slot = Instance.new("Frame")
+			slot.Size = UDim2.new(0, slotSize, 0, slotSize)
+			slot.BackgroundColor3 = isFilled and Color3.fromRGB(40, 120, 60) or Color3.fromRGB(50, 42, 80)
+			slot.BorderSizePixel = 0; slot.LayoutOrder = i; slot.Parent = slotGrid
+			Instance.new("UICorner", slot).CornerRadius = UDim.new(1, 0)
+			local slotStk = Instance.new("UIStroke", slot)
+			slotStk.Color = isFilled and Color3.fromRGB(80, 240, 100) or rarColor
+			slotStk.Thickness = isFilled and 2 or 1.5
+			slotStk.Transparency = isFilled and 0 or 0.5
+
+			if isFilled then
+				local item = resolveVirtualItem(vi)
+				local id = type(item) == "table" and item.id or (item or "?")
+				buildAvatarSlot(slot, id)
 			end
-			fireQueueChanged()
-			buildContent(activeTabId)
-		end)
+		end
 
-		-- Clear
-		local clb = Instance.new("TextButton")
-		clb.Size = UDim2.new(0, 60, 0, 28); clb.Position = UDim2.new(0.48, 88, 0.5, 0)
-		clb.AnchorPoint = Vector2.new(0, 0.5); clb.BackgroundColor3 = Color3.fromRGB(80, 40, 40)
-		clb.Text = "Clear"; clb.TextColor3 = Color3.new(1, 1, 1)
-		clb.Font = FONT; clb.TextSize = 11; clb.BorderSizePixel = 0; clb.Parent = row
-		Instance.new("UICorner", clb).CornerRadius = UDim.new(0, 8)
-		clb.MouseButton1Click:Connect(function()
-			elementalQueues[capQKey] = {}
-			fireQueueChanged()
-			buildContent(activeTabId)
-		end)
+		-- Action row: combined button + clear link
+		local actionRow = Instance.new("Frame")
+		actionRow.Size = UDim2.new(1, -sx(12), 0, sx(50)); actionRow.BackgroundTransparency = 1
+		actionRow.LayoutOrder = ri * 100 + 1; actionRow.Parent = contentFrame
+		local arl = Instance.new("UIListLayout", actionRow)
+		arl.FillDirection = Enum.FillDirection.Horizontal
+		arl.HorizontalAlignment = Enum.HorizontalAlignment.Center
+		arl.VerticalAlignment = Enum.VerticalAlignment.Center; arl.Padding = UDim.new(0, sx(14))
 
-		-- Convert button
-		local cvb = Instance.new("TextButton")
-		cvb.Size = UDim2.new(0, 100, 0, 32); cvb.Position = UDim2.new(1, 0, 0.5, 0)
-		cvb.AnchorPoint = Vector2.new(1, 0.5)
-		cvb.BackgroundColor3 = canSacrifice and Color3.fromRGB(120, 80, 200) or Color3.fromRGB(50, 50, 70)
-		cvb.Text = canSacrifice and "CONVERT" or "NEED MORE"
-		cvb.TextColor3 = Color3.new(1, 1, 1); cvb.Font = FONT; cvb.TextSize = 13
-		cvb.BorderSizePixel = 0; cvb.Parent = row
-		Instance.new("UICorner", cvb).CornerRadius = UDim.new(0, 10)
-		UIHelper.AddPuffyGradient(cvb)
+		local mainBtn = Instance.new("TextButton")
+		mainBtn.Size = UDim2.new(0, sx(280), 0, sx(44))
+		mainBtn.BorderSizePixel = 0; mainBtn.Parent = actionRow
+		Instance.new("UICorner", mainBtn).CornerRadius = UDim.new(0, sx(14))
+
 		if canSacrifice then
-			cvb.MouseButton1Click:Connect(function()
+			mainBtn.BackgroundColor3 = rarColor
+			mainBtn.Text = "CONVERT " .. rarity
+			mainBtn.TextColor3 = Color3.new(1, 1, 1); mainBtn.Font = FONT; mainBtn.TextSize = sx(18)
+			UIHelper.AddPuffyGradient(mainBtn)
+			mainBtn.MouseButton1Click:Connect(function()
 				showConfirmation(("Combine %d %s %s into 1?"):format(need, displayName, capRarity), function()
 					SacrificeRequest:FireServer("Elemental", capEffect, capRarity)
 					elementalQueues[capQKey] = {}
 					fireQueueChanged()
 				end)
+			end)
+		else
+			mainBtn.BackgroundColor3 = rarColor
+			mainBtn.Text = "Auto Fill & Convert"
+			mainBtn.TextColor3 = Color3.new(1, 1, 1); mainBtn.Font = FONT; mainBtn.TextSize = sx(18)
+			UIHelper.AddPuffyGradient(mainBtn)
+			mainBtn.MouseButton1Click:Connect(function()
+				local allItems = getCombinedItems()
+				local queued = allQueuedIndices()
+				local q = elementalQueues[capQKey]
+				local added = queueSetCount(q)
+				for _, entry in ipairs(allItems) do
+					if added >= need then break end
+					if not q[entry.vi] and not queued[entry.vi] then
+						local id, eff, info = getItemInfo(entry.item)
+						if info and info.rarity == capRarity and (capEffect == nil and eff == nil or eff == capEffect) then
+							q[entry.vi] = true; added = added + 1
+						end
+					end
+				end
+				fireQueueChanged()
+				if queueSetCount(q) >= need then
+					showConfirmation(("Combine %d %s %s into 1?"):format(need, displayName, capRarity), function()
+						SacrificeRequest:FireServer("Elemental", capEffect, capRarity)
+						elementalQueues[capQKey] = {}
+						fireQueueChanged()
+					end)
+				end
+				buildContent(activeTabId)
+			end)
+		end
+
+		if selected > 0 then
+			local clrLink = Instance.new("TextButton")
+			clrLink.Size = UDim2.new(0, sx(70), 0, sx(28))
+			clrLink.BackgroundTransparency = 1; clrLink.Text = "Clear"
+			clrLink.TextColor3 = Color3.fromRGB(200, 160, 180); clrLink.Font = FONT; clrLink.TextSize = sx(14)
+			clrLink.BorderSizePixel = 0; clrLink.Parent = actionRow
+			clrLink.MouseButton1Click:Connect(function()
+				elementalQueues[capQKey] = {}
+				fireQueueChanged()
+				buildContent(activeTabId)
 			end)
 		end
 
@@ -1437,11 +1660,10 @@ local function buildElementalContent(effectName)
 			buildContent(activeTabId)
 		end, rarColor)
 
-		-- Divider
 		if ri < #rarities then
 			local div = Instance.new("Frame")
-			div.Size = UDim2.new(0.8, 0, 0, 1)
-			div.BackgroundColor3 = Color3.fromRGB(50, 48, 70); div.BorderSizePixel = 0
+			div.Size = UDim2.new(0.85, 0, 0, sx(1))
+			div.BackgroundColor3 = Color3.fromRGB(60, 55, 85); div.BorderSizePixel = 0
 			div.LayoutOrder = ri * 100 + 3; div.Parent = contentFrame
 		end
 	end
@@ -1480,116 +1702,155 @@ buildEffectOneTimeContent = function(oneTimeId, cfg, done)
 	for vi in pairs(toRemove) do queue[vi] = nil end
 
 	local queued = queueSetCount(queue)
+	local accentColor = done and Color3.fromRGB(80, 220, 100) or effectColor
 
-	-- Header
 	local header = Instance.new("Frame")
-	header.Size = UDim2.new(1, -10, 0, 100)
-	header.BackgroundColor3 = Color3.fromRGB(22, 22, 40); header.BorderSizePixel = 0; header.Parent = contentFrame
-	Instance.new("UICorner", header).CornerRadius = UDim.new(0, 18)
-	Instance.new("UIStroke", header).Color = done and Color3.fromRGB(60, 200, 80) or effectColor
+	header.Size = UDim2.new(1, -sx(12), 0, sx(90))
+	header.BackgroundColor3 = Color3.fromRGB(55, 45, 90); header.BorderSizePixel = 0; header.Parent = contentFrame
+	Instance.new("UICorner", header).CornerRadius = UDim.new(0, sx(18))
+	Instance.new("UIStroke", header).Color = accentColor; Instance.new("UIStroke", header).Thickness = 2
 
 	local tl = Instance.new("TextLabel")
-	tl.Size = UDim2.new(1, -28, 0, 36); tl.Position = UDim2.new(0.5, 0, 0, 12)
+	tl.Size = UDim2.new(1, -sx(24), 0, sx(32)); tl.Position = UDim2.new(0.5, 0, 0, sx(10))
 	tl.AnchorPoint = Vector2.new(0.5, 0); tl.BackgroundTransparency = 1
-	tl.Text = cfg.name .. "  —  " .. formatNumber(cfg.gems) .. " Gems"
-	tl.TextColor3 = done and Color3.fromRGB(80, 200, 80) or effectColor
-	tl.Font = FONT; tl.TextSize = 26; tl.Parent = header
-	Instance.new("UIStroke", tl).Color = Color3.new(0, 0, 0)
+	tl.Text = cfg.name .. " — " .. formatNumber(cfg.gems) .. " Gems"
+	tl.TextColor3 = accentColor
+	tl.Font = FONT; tl.TextSize = sx(24); tl.Parent = header
+	local eoTStroke = Instance.new("UIStroke", tl)
+	eoTStroke.Color = Color3.new(0, 0, 0); eoTStroke.Thickness = 2
+	eoTStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
 
 	local sub = Instance.new("TextLabel")
-	sub.Size = UDim2.new(1, -28, 0, 32); sub.Position = UDim2.new(0.5, 0, 0, 52)
+	sub.Size = UDim2.new(1, -sx(24), 0, sx(36)); sub.Position = UDim2.new(0.5, 0, 0, sx(44))
 	sub.AnchorPoint = Vector2.new(0.5, 0); sub.BackgroundTransparency = 1
-	sub.Text = done and "You've already completed this sacrifice!" or ("Sacrifice " .. need .. " " .. effectName .. " cards (any rarity) for " .. formatNumber(cfg.gems) .. " Gems!")
-	sub.TextColor3 = Color3.fromRGB(160, 170, 200); sub.Font = FONT; sub.TextSize = 14
+	sub.Text = done and "Already completed!" or ("Sacrifice " .. need .. " " .. effectName .. " cards")
+	sub.TextColor3 = Color3.fromRGB(200, 190, 230); sub.Font = FONT; sub.TextSize = sx(14)
 	sub.TextWrapped = true; sub.Parent = header
 
 	if done then return end
 
-	-- Progress bar
-	local barFrame = Instance.new("Frame")
-	barFrame.Size = UDim2.new(1, -10, 0, 38)
-	barFrame.BackgroundTransparency = 1; barFrame.Parent = contentFrame
+	-- Visual queue: circular slots (matching gem style)
+	local slotSize = sx(50)
+	local slotGap = sx(6)
+	local slotsPerRow = math.min(need, 10)
+	local totalRows = math.ceil(need / slotsPerRow)
+	local slotRowH = totalRows * (slotSize + slotGap) + sx(12)
 
-	local barBG = Instance.new("Frame")
-	barBG.Size = UDim2.new(1, -60, 0, 22); barBG.Position = UDim2.new(0, 0, 0.5, 0)
-	barBG.AnchorPoint = Vector2.new(0, 0.5)
-	barBG.BackgroundColor3 = Color3.fromRGB(30, 30, 50); barBG.BorderSizePixel = 0; barBG.Parent = barFrame
-	Instance.new("UICorner", barBG).CornerRadius = UDim.new(0, 8)
+	local slotContainer = Instance.new("Frame")
+	slotContainer.Size = UDim2.new(1, -sx(12), 0, slotRowH + sx(34))
+	slotContainer.BackgroundColor3 = Color3.fromRGB(35, 30, 60); slotContainer.BorderSizePixel = 0
+	slotContainer.Parent = contentFrame
+	Instance.new("UICorner", slotContainer).CornerRadius = UDim.new(0, sx(14))
+	local scStk = Instance.new("UIStroke", slotContainer); scStk.Color = effectColor; scStk.Thickness = 2; scStk.Transparency = 0.3
 
-	local barFill = Instance.new("Frame")
-	barFill.Size = UDim2.new(math.clamp(queued / need, 0, 1), 0, 1, 0)
-	barFill.BackgroundColor3 = effectColor; barFill.BorderSizePixel = 0; barFill.Parent = barBG
-	Instance.new("UICorner", barFill).CornerRadius = UDim.new(0, 8)
+	local cntLabel = Instance.new("TextLabel")
+	cntLabel.Size = UDim2.new(1, -sx(16), 0, sx(26)); cntLabel.Position = UDim2.new(0.5, 0, 0, sx(4))
+	cntLabel.AnchorPoint = Vector2.new(0.5, 0); cntLabel.BackgroundTransparency = 1
+	cntLabel.Text = queued .. " / " .. need .. " queued"
+	cntLabel.TextColor3 = queued >= need and Color3.fromRGB(100, 255, 120) or effectColor
+	cntLabel.Font = FONT; cntLabel.TextSize = sx(16); cntLabel.Parent = slotContainer
 
-	local barLabel = Instance.new("TextLabel")
-	barLabel.Size = UDim2.new(0, 50, 0, 22); barLabel.Position = UDim2.new(1, 4, 0.5, 0)
-	barLabel.AnchorPoint = Vector2.new(0, 0.5); barLabel.BackgroundTransparency = 1
-	barLabel.Text = queued .. "/" .. need; barLabel.TextColor3 = effectColor
-	barLabel.Font = FONT; barLabel.TextSize = 16; barLabel.Parent = barBG
+	local slotGrid = Instance.new("Frame")
+	slotGrid.Size = UDim2.new(1, 0, 1, -sx(30)); slotGrid.Position = UDim2.new(0, 0, 0, sx(30))
+	slotGrid.BackgroundTransparency = 1; slotGrid.Parent = slotContainer
+	local sgLayout = Instance.new("UIGridLayout", slotGrid)
+	sgLayout.CellSize = UDim2.new(0, slotSize, 0, slotSize)
+	sgLayout.CellPadding = UDim2.new(0, slotGap, 0, slotGap)
+	sgLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	sgLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	local sgPad = Instance.new("UIPadding", slotGrid)
+	sgPad.PaddingTop = UDim.new(0, sx(4)); sgPad.PaddingBottom = UDim.new(0, sx(4))
 
-	-- Buttons row: Auto Fill | Clear | Sacrifice
-	local btnRow = Instance.new("Frame")
-	btnRow.Size = UDim2.new(1, -10, 0, 42)
-	btnRow.BackgroundTransparency = 1; btnRow.Parent = contentFrame
-	local brl = Instance.new("UIListLayout", btnRow)
-	brl.FillDirection = Enum.FillDirection.Horizontal; brl.Padding = UDim.new(0, 10)
-	brl.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	local filledList = {}
+	for vi in pairs(queue) do table.insert(filledList, vi) end
+	table.sort(filledList)
 
-	local capOneTimeId = oneTimeId
+	for i = 1, need do
+		local vi = filledList[i]
+		local isFilled = vi ~= nil
+		local slot = Instance.new("Frame")
+		slot.Size = UDim2.new(0, slotSize, 0, slotSize)
+		slot.BackgroundColor3 = isFilled and Color3.fromRGB(40, 120, 60) or Color3.fromRGB(50, 42, 80)
+		slot.BorderSizePixel = 0; slot.LayoutOrder = i; slot.Parent = slotGrid
+		Instance.new("UICorner", slot).CornerRadius = UDim.new(1, 0)
+		local slotStk = Instance.new("UIStroke", slot)
+		slotStk.Color = isFilled and Color3.fromRGB(80, 240, 100) or effectColor
+		slotStk.Thickness = isFilled and 2 or 1.5
+		slotStk.Transparency = isFilled and 0 or 0.5
 
-	-- Auto Fill
-	local afBtn = Instance.new("TextButton")
-	afBtn.Size = UDim2.new(0, 130, 0, 36); afBtn.BackgroundColor3 = Color3.fromRGB(40, 100, 180)
-	afBtn.Text = "AUTO FILL"; afBtn.TextColor3 = Color3.new(1, 1, 1)
-	afBtn.Font = FONT; afBtn.TextSize = 14; afBtn.BorderSizePixel = 0; afBtn.Parent = btnRow
-	Instance.new("UICorner", afBtn).CornerRadius = UDim.new(0, 10)
-	afBtn.MouseButton1Click:Connect(function()
-		local excluded = allQueuedIndices()
-		local allItems = getCombinedItems()
-		for _, entry in ipairs(allItems) do
-			if queueSetCount(effectOneTimeQueues[capOneTimeId] or {}) >= need then break end
-			if not excluded[entry.vi] then
-				local eff = type(entry.item) == "table" and entry.item.effect or nil
-				if eff == effectName then
-					if not effectOneTimeQueues[capOneTimeId] then effectOneTimeQueues[capOneTimeId] = {} end
-					effectOneTimeQueues[capOneTimeId][entry.vi] = true
-					excluded[entry.vi] = true
-				end
-			end
+		if isFilled then
+			local item = resolveVirtualItem(vi)
+			local id = type(item) == "table" and item.id or (item or "?")
+			buildAvatarSlot(slot, id)
 		end
-		fireQueueChanged()
-		buildContent(activeTabId)
-	end)
+	end
 
-	-- Clear
-	local clrBtn = Instance.new("TextButton")
-	clrBtn.Size = UDim2.new(0, 100, 0, 36); clrBtn.BackgroundColor3 = Color3.fromRGB(100, 50, 50)
-	clrBtn.Text = "CLEAR"; clrBtn.TextColor3 = Color3.new(1, 1, 1)
-	clrBtn.Font = FONT; clrBtn.TextSize = 14; clrBtn.BorderSizePixel = 0; clrBtn.Parent = btnRow
-	Instance.new("UICorner", clrBtn).CornerRadius = UDim.new(0, 10)
-	clrBtn.MouseButton1Click:Connect(function()
-		effectOneTimeQueues[capOneTimeId] = {}
-		fireQueueChanged()
-		buildContent(activeTabId)
-	end)
-
-	-- Sacrifice
+	-- Action row: combined button + clear link (matching gem style)
+	local capOneTimeId = oneTimeId
 	local canSac = queued >= need
-	local sacBtn = Instance.new("TextButton")
-	sacBtn.Size = UDim2.new(0, 200, 0, 36)
-	sacBtn.BackgroundColor3 = canSac and Color3.fromRGB(60, 200, 80) or Color3.fromRGB(50, 50, 70)
-	sacBtn.Text = canSac and ("SACRIFICE FOR " .. formatNumber(cfg.gems) .. " GEMS") or ("NEED " .. (need - queued) .. " MORE")
-	sacBtn.TextColor3 = canSac and Color3.new(1, 1, 1) or Color3.fromRGB(110, 110, 130)
-	sacBtn.Font = FONT; sacBtn.TextSize = 14; sacBtn.BorderSizePixel = 0; sacBtn.Parent = btnRow
-	Instance.new("UICorner", sacBtn).CornerRadius = UDim.new(0, 10)
-	UIHelper.AddPuffyGradient(sacBtn)
+	local actionRow = Instance.new("Frame")
+	actionRow.Size = UDim2.new(1, -sx(12), 0, sx(50)); actionRow.BackgroundTransparency = 1; actionRow.Parent = contentFrame
+
+	local mainBtn = Instance.new("TextButton")
+	mainBtn.Size = UDim2.new(0, sx(320), 0, sx(46)); mainBtn.Position = UDim2.new(0.5, 0, 0.5, 0)
+	mainBtn.AnchorPoint = Vector2.new(0.5, 0.5); mainBtn.BorderSizePixel = 0; mainBtn.Parent = actionRow
+	Instance.new("UICorner", mainBtn).CornerRadius = UDim.new(0, sx(14))
+
 	if canSac then
-		sacBtn.MouseButton1Click:Connect(function()
+		mainBtn.BackgroundColor3 = Color3.fromRGB(80, 220, 100)
+		mainBtn.Text = "SACRIFICE FOR " .. formatNumber(cfg.gems) .. " GEMS"
+		mainBtn.TextColor3 = Color3.new(1, 1, 1); mainBtn.Font = FONT; mainBtn.TextSize = sx(18)
+		Instance.new("UIStroke", mainBtn).Color = Color3.fromRGB(50, 160, 65)
+		UIHelper.AddPuffyGradient(mainBtn)
+		mainBtn.MouseButton1Click:Connect(function()
 			showConfirmation("Sacrifice " .. need .. " " .. effectName .. " cards for " .. formatNumber(cfg.gems) .. " Gems?", function()
 				SacrificeRequest:FireServer("OneTime", capOneTimeId)
 				effectOneTimeQueues[capOneTimeId] = {}
 				fireQueueChanged()
 			end)
+		end)
+	else
+		mainBtn.BackgroundColor3 = effectColor
+		mainBtn.Text = "Auto Fill & Sacrifice"
+		mainBtn.TextColor3 = Color3.new(1, 1, 1); mainBtn.Font = FONT; mainBtn.TextSize = sx(18)
+		Instance.new("UIStroke", mainBtn).Color = effectColor
+		UIHelper.AddPuffyGradient(mainBtn)
+		mainBtn.MouseButton1Click:Connect(function()
+			local excluded = allQueuedIndices()
+			local allItems = getCombinedItems()
+			for _, entry in ipairs(allItems) do
+				if queueSetCount(effectOneTimeQueues[capOneTimeId] or {}) >= need then break end
+				if not excluded[entry.vi] then
+					local eff = type(entry.item) == "table" and entry.item.effect or nil
+					if eff == effectName then
+						if not effectOneTimeQueues[capOneTimeId] then effectOneTimeQueues[capOneTimeId] = {} end
+						effectOneTimeQueues[capOneTimeId][entry.vi] = true
+						excluded[entry.vi] = true
+					end
+				end
+			end
+			fireQueueChanged()
+			if queueSetCount(effectOneTimeQueues[capOneTimeId] or {}) >= need then
+				showConfirmation("Sacrifice " .. need .. " " .. effectName .. " cards for " .. formatNumber(cfg.gems) .. " Gems?", function()
+					SacrificeRequest:FireServer("OneTime", capOneTimeId)
+					effectOneTimeQueues[capOneTimeId] = {}
+					fireQueueChanged()
+				end)
+			end
+			buildContent(activeTabId)
+		end)
+	end
+
+	if queued > 0 then
+		local clrLink = Instance.new("TextButton")
+		clrLink.Size = UDim2.new(0, sx(80), 0, sx(24)); clrLink.Position = UDim2.new(1, -sx(6), 0.5, 0)
+		clrLink.AnchorPoint = Vector2.new(1, 0.5); clrLink.BackgroundTransparency = 1
+		clrLink.Text = "Clear"; clrLink.TextColor3 = Color3.fromRGB(200, 100, 100)
+		clrLink.Font = FONT2; clrLink.TextSize = sx(14); clrLink.Parent = actionRow
+		clrLink.MouseButton1Click:Connect(function()
+			effectOneTimeQueues[capOneTimeId] = {}
+			fireQueueChanged()
+			buildContent(activeTabId)
 		end)
 	end
 
@@ -1616,48 +1877,40 @@ local function buildGemRouletteContent()
 	gemRouletteInputActive = true
 	local cfg = Sacrifice.GemRoulette
 
-	-- Big warning (same style as the other luck sacrifices)
-	local warnFrame = Instance.new("Frame")
-	warnFrame.Size = UDim2.new(1, -sx(12), 0, sx(58))
-	warnFrame.BackgroundColor3 = Color3.fromRGB(80, 28, 28); warnFrame.BorderSizePixel = 0
-	warnFrame.Parent = contentFrame
-	Instance.new("UICorner", warnFrame).CornerRadius = UDim.new(0, sx(14))
-	Instance.new("UIStroke", warnFrame).Color = Color3.fromRGB(200, 70, 50)
-	local wl = Instance.new("TextLabel")
-	wl.Size = UDim2.new(1, -sx(24), 1, -sx(10)); wl.Position = UDim2.new(0.5, 0, 0.5, 0)
-	wl.AnchorPoint = Vector2.new(0.5, 0.5); wl.BackgroundTransparency = 1
-	wl.Text = Sacrifice.LuckWarning; wl.TextColor3 = Color3.fromRGB(255, 200, 160)
-	wl.Font = FONT; wl.TextSize = sx(15); wl.TextWrapped = true; wl.Parent = warnFrame
+	local accentColor = Color3.fromRGB(255, 200, 60)
 
-	-- Header
+	local warnFrame = Instance.new("Frame")
+	warnFrame.Size = UDim2.new(1, -sx(12), 0, sx(44))
+	warnFrame.BackgroundColor3 = Color3.fromRGB(80, 35, 35); warnFrame.BorderSizePixel = 0
+	warnFrame.Parent = contentFrame
+	Instance.new("UICorner", warnFrame).CornerRadius = UDim.new(0, sx(12))
+	Instance.new("UIStroke", warnFrame).Color = Color3.fromRGB(200, 80, 60)
+	local wl = Instance.new("TextLabel")
+	wl.Size = UDim2.new(1, -sx(20), 1, -sx(6)); wl.Position = UDim2.new(0.5, 0, 0.5, 0)
+	wl.AnchorPoint = Vector2.new(0.5, 0.5); wl.BackgroundTransparency = 1
+	wl.Text = Sacrifice.LuckWarning; wl.TextColor3 = Color3.fromRGB(255, 210, 170)
+	wl.Font = FONT; wl.TextSize = sx(13); wl.TextWrapped = true; wl.Parent = warnFrame
+
 	local header = Instance.new("Frame")
-	header.Size = UDim2.new(1, -sx(12), 0, sx(150))
-	header.BackgroundColor3 = Color3.fromRGB(22, 22, 40)
-	header.BorderSizePixel = 0; header.Parent = contentFrame
-	Instance.new("UICorner", header).CornerRadius = UDim.new(0, 18)
-	local hs = Instance.new("UIStroke", header)
-	hs.Color = Color3.fromRGB(255, 180, 50); hs.Thickness = 2.5
+	header.Size = UDim2.new(1, -sx(12), 0, sx(90))
+	header.BackgroundColor3 = Color3.fromRGB(55, 45, 90); header.BorderSizePixel = 0; header.Parent = contentFrame
+	Instance.new("UICorner", header).CornerRadius = UDim.new(0, sx(18))
+	Instance.new("UIStroke", header).Color = accentColor; Instance.new("UIStroke", header).Thickness = 2
 
 	local title = Instance.new("TextLabel")
-	title.Size = UDim2.new(1, -24, 0, 38)
-	title.Position = UDim2.new(0.5, 0, 0, 10); title.AnchorPoint = Vector2.new(0.5, 0)
-	title.BackgroundTransparency = 1
-	title.Text = "\u{1F3B0} GEM ROULETTE \u{1F3B0}"
-	title.TextColor3 = Color3.fromRGB(255, 200, 60)
-	title.Font = FONT; title.TextSize = 26; title.Parent = header
+	title.Size = UDim2.new(1, -sx(24), 0, sx(32)); title.Position = UDim2.new(0.5, 0, 0, sx(10))
+	title.AnchorPoint = Vector2.new(0.5, 0); title.BackgroundTransparency = 1
+	title.Text = "Gem Roulette"; title.TextColor3 = accentColor
+	title.Font = FONT; title.TextSize = sx(24); title.Parent = header
 	local tStk = Instance.new("UIStroke", title)
-	tStk.Color = Color3.fromRGB(0, 0, 0); tStk.Thickness = 2
-	tStk.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+	tStk.Color = Color3.new(0, 0, 0); tStk.Thickness = 2; tStk.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
 
 	local desc = Instance.new("TextLabel")
-	desc.Size = UDim2.new(1, -24, 0, 22)
-	desc.Position = UDim2.new(0.5, 0, 0, 50); desc.AnchorPoint = Vector2.new(0.5, 0)
-	desc.BackgroundTransparency = 1
-	desc.Text = cfg.desc
-	desc.TextColor3 = Color3.fromRGB(200, 180, 200)
-	desc.Font = FONT; desc.TextSize = 14; desc.TextWrapped = true; desc.Parent = header
+	desc.Size = UDim2.new(1, -sx(24), 0, sx(40)); desc.Position = UDim2.new(0.5, 0, 0, sx(44))
+	desc.AnchorPoint = Vector2.new(0.5, 0); desc.BackgroundTransparency = 1
+	desc.Text = cfg.desc; desc.TextColor3 = Color3.fromRGB(200, 190, 230)
+	desc.Font = FONT; desc.TextSize = sx(14); desc.TextWrapped = true; desc.Parent = header
 
-	-- Charge info
 	local sacState = HUDController.Data.sacrificeState or {}
 	local chargeData = sacState["GemRoulette"]
 	local rechargeSec = cfg.rechargeMinutes * 60
@@ -1669,71 +1922,46 @@ local function buildGemRouletteContent()
 		charges = math.min(cfg.maxCharges, (chargeData.charges or 0) + recharged)
 	end
 
-	local chargeLabel = Instance.new("TextLabel")
-	chargeLabel.Size = UDim2.new(1, -24, 0, 20)
-	chargeLabel.Position = UDim2.new(0.5, 0, 0, 74); chargeLabel.AnchorPoint = Vector2.new(0.5, 0)
-	chargeLabel.BackgroundTransparency = 1
-	chargeLabel.Text = "Charges: " .. charges .. " / " .. cfg.maxCharges .. "  (1 every " .. cfg.rechargeMinutes .. " min)"
-	chargeLabel.TextColor3 = charges > 0 and Color3.fromRGB(100, 255, 120) or Color3.fromRGB(255, 100, 100)
-	chargeLabel.Font = FONT; chargeLabel.TextSize = sx(15); chargeLabel.Parent = header
-
-	-- Gem balance
+	local infoRow = Instance.new("Frame")
+	infoRow.Size = UDim2.new(1, -sx(12), 0, sx(36)); infoRow.BackgroundTransparency = 1; infoRow.Parent = contentFrame
 	local gems = HUDController.Data.gems or 0
-	local balLabel = Instance.new("TextLabel")
-	balLabel.Size = UDim2.new(1, -sx(28), 0, sx(24))
-	balLabel.Position = UDim2.new(0.5, 0, 0, sx(116)); balLabel.AnchorPoint = Vector2.new(0.5, 0)
-	balLabel.BackgroundTransparency = 1
-	balLabel.Text = "\u{1F48E} Your Gems: " .. formatNumber(gems)
-	balLabel.TextColor3 = Color3.fromRGB(150, 210, 255)
-	balLabel.Font = FONT; balLabel.TextSize = sx(18); balLabel.Parent = header
+	local il = Instance.new("TextLabel")
+	il.Size = UDim2.new(1, 0, 1, 0); il.BackgroundTransparency = 1
+	il.Text = "Charges: " .. charges .. "/" .. cfg.maxCharges .. "  •  Your Gems: " .. formatNumber(gems)
+	il.TextColor3 = accentColor; il.Font = FONT; il.TextSize = sx(15); il.Parent = infoRow
 
-	-- Wager input area
 	local inputRow = Instance.new("Frame")
-	inputRow.Size = UDim2.new(1, -sx(12), 0, sx(58))
+	inputRow.Size = UDim2.new(1, -sx(12), 0, sx(54))
 	inputRow.BackgroundTransparency = 1; inputRow.Parent = contentFrame
-	local irl = Instance.new("UIListLayout", inputRow)
-	irl.FillDirection = Enum.FillDirection.Horizontal; irl.Padding = UDim.new(0, sx(12))
-	irl.HorizontalAlignment = Enum.HorizontalAlignment.Center
-	irl.VerticalAlignment = Enum.VerticalAlignment.Center
-
-	local inputLabel = Instance.new("TextLabel")
-	inputLabel.Size = UDim2.new(0, sx(115), 0, sx(50))
-	inputLabel.BackgroundTransparency = 1
-	inputLabel.Text = "Wager:"
-	inputLabel.TextColor3 = Color3.fromRGB(200, 200, 220)
-	inputLabel.Font = FONT; inputLabel.TextSize = sx(22); inputLabel.Parent = inputRow
 
 	local inputBox = Instance.new("TextBox")
 	inputBox.Name = "GemWagerInput"
-	inputBox.Size = UDim2.new(0, sx(250), 0, sx(50))
+	inputBox.Size = UDim2.new(0, sx(320), 0, sx(46))
+	inputBox.Position = UDim2.new(0.5, 0, 0.5, 0); inputBox.AnchorPoint = Vector2.new(0.5, 0.5)
 	inputBox.BackgroundColor3 = Color3.fromRGB(30, 28, 50)
 	inputBox.Text = ""; inputBox.PlaceholderText = "Enter gem amount..."
 	inputBox.PlaceholderColor3 = Color3.fromRGB(100, 100, 130)
-	inputBox.TextColor3 = Color3.fromRGB(255, 220, 80)
-	inputBox.Font = FONT; inputBox.TextSize = sx(22)
-	inputBox.ClearTextOnFocus = true
-	inputBox.TextEditable = true
-	inputBox.BorderSizePixel = 0
-	inputBox.ZIndex = 5
-	inputBox.Parent = inputRow
+	inputBox.TextColor3 = accentColor
+	inputBox.Font = FONT; inputBox.TextSize = sx(20)
+	inputBox.ClearTextOnFocus = true; inputBox.TextEditable = true
+	inputBox.BorderSizePixel = 0; inputBox.ZIndex = 5; inputBox.Parent = inputRow
 	Instance.new("UICorner", inputBox).CornerRadius = UDim.new(0, sx(14))
-	local ibStk = Instance.new("UIStroke", inputBox)
-	ibStk.Color = Color3.fromRGB(255, 180, 50); ibStk.Thickness = 2
+	Instance.new("UIStroke", inputBox).Color = Color3.fromRGB(255, 180, 50)
 	local ibPad = Instance.new("UIPadding", inputBox)
 	ibPad.PaddingLeft = UDim.new(0, sx(12)); ibPad.PaddingRight = UDim.new(0, sx(12))
 
-	-- SPIN button
+	local actionRow = Instance.new("Frame")
+	actionRow.Size = UDim2.new(1, -sx(12), 0, sx(50)); actionRow.BackgroundTransparency = 1; actionRow.Parent = contentFrame
 	local canSpin = charges > 0
 	local spinBtn = Instance.new("TextButton")
-	spinBtn.Size = UDim2.new(0, sx(340), 0, sx(64))
-	spinBtn.BackgroundColor3 = canSpin and Color3.fromRGB(255, 180, 50) or Color3.fromRGB(50, 50, 70)
-	spinBtn.Text = canSpin and "\u{1F3B0} SPIN THE ROULETTE" or "NO CHARGES"
-	spinBtn.TextColor3 = canSpin and Color3.fromRGB(20, 10, 0) or Color3.fromRGB(110, 110, 130)
-	spinBtn.Font = FONT; spinBtn.TextSize = sx(22); spinBtn.BorderSizePixel = 0; spinBtn.Parent = contentFrame
-	Instance.new("UICorner", spinBtn).CornerRadius = UDim.new(0, sx(16))
-	local sbStk = Instance.new("UIStroke", spinBtn)
-	sbStk.Color = canSpin and Color3.fromRGB(200, 140, 30) or Color3.fromRGB(40, 40, 55)
-	sbStk.Thickness = 2.5
+	spinBtn.Size = UDim2.new(0, sx(320), 0, sx(46)); spinBtn.Position = UDim2.new(0.5, 0, 0.5, 0)
+	spinBtn.AnchorPoint = Vector2.new(0.5, 0.5); spinBtn.BorderSizePixel = 0; spinBtn.Parent = actionRow
+	Instance.new("UICorner", spinBtn).CornerRadius = UDim.new(0, sx(14))
+	spinBtn.BackgroundColor3 = canSpin and accentColor or Color3.fromRGB(60, 55, 80)
+	spinBtn.Text = canSpin and "SPIN THE ROULETTE" or "NO CHARGES"
+	spinBtn.TextColor3 = canSpin and Color3.fromRGB(20, 10, 0) or Color3.fromRGB(140, 130, 170)
+	spinBtn.Font = FONT; spinBtn.TextSize = sx(18)
+	Instance.new("UIStroke", spinBtn).Color = canSpin and Color3.fromRGB(200, 140, 30) or Color3.fromRGB(50, 45, 65)
 	UIHelper.AddPuffyGradient(spinBtn)
 
 	if canSpin then
@@ -1760,13 +1988,78 @@ end
 -- SIDEBAR + TAB DISPATCH
 -------------------------------------------------
 
+local function highlightRarityBtn(idx)
+	activeGemRarity = idx
+	for _, rb in ipairs(rarityBtns) do
+		local isActive = rb.idx == idx
+		local trade = Sacrifice.GemTrades[rb.idx]
+		local rc = trade and DesignConfig.RarityColors[trade.rarity] or Color3.new(1, 1, 1)
+		rb.btn.BackgroundColor3 = isActive and rc or Color3.fromRGB(40, 35, 65)
+		local lbl = rb.btn:FindFirstChild("RarLbl")
+		if lbl then lbl.TextColor3 = isActive and Color3.new(1, 1, 1) or rc end
+		local glbl = rb.btn:FindFirstChild("GemLbl")
+		if glbl then glbl.TextColor3 = isActive and Color3.fromRGB(240, 240, 255) or Color3.fromRGB(140, 130, 170) end
+	end
+end
+
 local function highlightSidebar(tabId)
 	activeTabId = tabId
-	for _, info in ipairs(sidebarBtns) do
-		local isActive = info.id == tabId
-		info.btn.BackgroundColor3 = isActive and Color3.fromRGB(50, 50, 80) or Color3.fromRGB(22, 22, 38)
-		local lbl = info.btn:FindFirstChild("TabLabel")
-		if lbl then lbl.TextSize = isActive and sx(17) or sx(14) end
+	for _, list in pairs(sidebarBtnLists) do
+		for _, info in ipairs(list) do
+			local isActive = info.id == tabId
+			info.btn.BackgroundColor3 = isActive and Color3.fromRGB(70, 55, 110) or Color3.fromRGB(40, 35, 65)
+			local lbl = info.btn:FindFirstChild("TabLabel")
+			if lbl then lbl.TextSize = isActive and sx(18) or sx(16) end
+		end
+	end
+end
+
+local TAB_COLORS = {
+	gems        = Color3.fromRGB(255, 100, 120),
+	onetime     = Color3.fromRGB(180, 130, 255),
+	elemOnetime = Color3.fromRGB(80, 220, 200),
+	luck        = Color3.fromRGB(255, 200, 60),
+}
+
+local function switchTopTab(tab)
+	activeTopTab = tab
+
+	for key, btn in pairs(topTabBtns) do
+		local isActive = key == tab
+		btn.BackgroundColor3 = isActive and (TAB_COLORS[key] or Color3.new(1,1,1)) or Color3.fromRGB(50, 42, 80)
+		btn.TextColor3 = isActive and Color3.new(1, 1, 1) or Color3.fromRGB(180, 160, 210)
+	end
+
+	-- Show/hide sidebars
+	for key, frame in pairs(sidebars) do
+		frame.Visible = (key == tab)
+	end
+	if rarityBarFrame then rarityBarFrame.Visible = (tab == "gems") end
+
+	if contentFrame then
+		if tab == "gems" then
+			contentFrame.Size = UDim2.new(1, -sx(22), 1, -sx(148))
+			contentFrame.Position = UDim2.new(0, sx(10), 0, sx(142))
+		else
+			local sf = sidebars[tab]
+			local sideW = sf and sf.Size.X.Offset or sx(220)
+			contentFrame.Size = UDim2.new(1, -sideW - sx(22), 1, -sx(100))
+			contentFrame.Position = UDim2.new(0, sideW + sx(14), 0, sx(92))
+		end
+	end
+
+	closePicker(); gemRouletteInputActive = false
+
+	if tab == "gems" then
+		local idx = activeGemRarity or 1
+		highlightRarityBtn(idx)
+		activeTabId = "GemTrade_" .. idx
+		buildGemTradeContent(idx)
+	else
+		local btnList = sidebarBtnLists[tab]
+		if btnList and btnList[1] then
+			buildContent(btnList[1].id)
+		end
 	end
 end
 
@@ -1782,9 +2075,6 @@ buildContent = function(tabId)
 		buildLuckContent(tabId)
 	elseif tabId == "GemRoulette" then
 		buildGemRouletteContent()
-	elseif tabId:sub(1, 4) == "Elem" then
-		local en = tabId:sub(6); if en == "" then en = nil end
-		buildElementalContent(en)
 	end
 end
 
@@ -1797,7 +2087,7 @@ function SacrificeController.Open()
 	isOpen = true
 	if modalFrame then
 		modalFrame.Visible = true
-		if sidebarBtns[1] then buildContent(sidebarBtns[1].id) end
+		switchTopTab("gems")
 		UIHelper.ScaleIn(modalFrame, 0.2)
 	end
 	for _, cb in ipairs(onOpenCallbacks) do task.spawn(cb) end
@@ -1828,146 +2118,211 @@ function SacrificeController.Init()
 
 	modalFrame = Instance.new("Frame")
 	modalFrame.Name = "SacrificeModal"
-	modalFrame.Size = UDim2.new(0, sx(880), 0, sx(640))
+	modalFrame.Size = UDim2.new(0, sx(960), 0, sx(680))
 	modalFrame.Position = UDim2.new(0.5, 0, 0.5, 0); modalFrame.AnchorPoint = Vector2.new(0.5, 0.5)
 	modalFrame.BackgroundColor3 = BG; modalFrame.BorderSizePixel = 0
 	modalFrame.Visible = false; modalFrame.ClipsDescendants = true; modalFrame.Parent = screenGui
-	Instance.new("UICorner", modalFrame).CornerRadius = UDim.new(0, sx(24))
-	Instance.new("UIStroke", modalFrame).Color = ACCENT
+	Instance.new("UICorner", modalFrame).CornerRadius = UDim.new(0, sx(28))
+	local mStroke = Instance.new("UIStroke", modalFrame)
+	mStroke.Color = ACCENT; mStroke.Thickness = 2.5; mStroke.Transparency = 0.1
 	UIHelper.CreateShadow(modalFrame)
-	UIHelper.MakeResponsiveModal(modalFrame, 880, 640)
+	UIHelper.MakeResponsiveModal(modalFrame, 960, 680)
 
-	local topBar = Instance.new("Frame")
-	topBar.Size = UDim2.new(1, 0, 0, sx(10)); topBar.BackgroundColor3 = Color3.new(1, 1, 1)
-	topBar.BorderSizePixel = 0; topBar.ZIndex = 5; topBar.Parent = modalFrame
-	local g = Instance.new("UIGradient", topBar)
-	g.Color = ColorSequence.new({
-		ColorSequenceKeypoint.new(0, Color3.fromRGB(180, 60, 80)),
-		ColorSequenceKeypoint.new(0.5, Color3.fromRGB(255, 130, 130)),
-		ColorSequenceKeypoint.new(1, Color3.fromRGB(180, 60, 80)),
+	local bgGrad = Instance.new("UIGradient", modalFrame)
+	bgGrad.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(210, 200, 230)),
 	})
+	bgGrad.Rotation = 90
 
+	-- Title row (compact — just the title + close)
 	local titleLbl = Instance.new("TextLabel")
-	titleLbl.Size = UDim2.new(1, -sx(100), 0, sx(48)); titleLbl.Position = UDim2.new(0.5, 0, 0, sx(10))
-	titleLbl.AnchorPoint = Vector2.new(0.5, 0); titleLbl.BackgroundTransparency = 1
-	titleLbl.Text = "STREAMER SACRIFICE"; titleLbl.TextColor3 = Color3.fromRGB(255, 160, 160)
-	titleLbl.Font = FONT; titleLbl.TextSize = sx(32); titleLbl.Parent = modalFrame
+	titleLbl.Size = UDim2.new(0.5, 0, 0, sx(38)); titleLbl.Position = UDim2.new(0, sx(18), 0, sx(10))
+	titleLbl.BackgroundTransparency = 1
+	titleLbl.Text = "SACRIFICE"; titleLbl.TextColor3 = Color3.fromRGB(240, 220, 255)
+	titleLbl.Font = FONT; titleLbl.TextSize = sx(30); titleLbl.TextXAlignment = Enum.TextXAlignment.Left
+	titleLbl.Parent = modalFrame
 	local tts = Instance.new("UIStroke", titleLbl)
-	tts.Color = Color3.fromRGB(60, 0, 20); tts.Thickness = 2.5; tts.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
-
-	local subLbl = Instance.new("TextLabel")
-	subLbl.Size = UDim2.new(1, -sx(20), 0, sx(24)); subLbl.Position = UDim2.new(0.5, 0, 0, sx(58))
-	subLbl.AnchorPoint = Vector2.new(0.5, 0); subLbl.BackgroundTransparency = 1
-	subLbl.Text = "Pick streamers to sacrifice — queues save even if you close!"
-	subLbl.TextColor3 = Color3.fromRGB(160, 140, 160); subLbl.Font = FONT; subLbl.TextSize = sx(14)
-	subLbl.Parent = modalFrame
+	tts.Color = Color3.fromRGB(30, 20, 50); tts.Thickness = 2; tts.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
 
 	local closeBtn = Instance.new("TextButton")
-	closeBtn.Size = UDim2.new(0, sx(52), 0, sx(52)); closeBtn.Position = UDim2.new(1, -sx(16), 0, sx(10))
-	closeBtn.AnchorPoint = Vector2.new(1, 0); closeBtn.BackgroundColor3 = Color3.fromRGB(220, 60, 60)
+	closeBtn.Size = UDim2.new(0, sx(46), 0, sx(46)); closeBtn.Position = UDim2.new(1, -sx(14), 0, sx(10))
+	closeBtn.AnchorPoint = Vector2.new(1, 0); closeBtn.BackgroundColor3 = Color3.fromRGB(255, 90, 90)
 	closeBtn.Text = "X"; closeBtn.TextColor3 = Color3.new(1, 1, 1)
-	closeBtn.Font = FONT; closeBtn.TextSize = sx(26); closeBtn.BorderSizePixel = 0; closeBtn.ZIndex = 10
+	closeBtn.Font = FONT; closeBtn.TextSize = sx(24); closeBtn.BorderSizePixel = 0; closeBtn.ZIndex = 10
 	closeBtn.Parent = modalFrame
 	Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(1, 0)
+	local ccStroke = Instance.new("UIStroke", closeBtn)
+	ccStroke.Color = Color3.fromRGB(180, 50, 50); ccStroke.Thickness = 2
 	closeBtn.MouseButton1Click:Connect(function() SacrificeController.Close() end)
 
-	-- Sidebar
-	local sidebarWidth = sx(270)
-	local topOffset = sx(88)
-	local sidebar = Instance.new("ScrollingFrame")
-	sidebar.Name = "Sidebar"; sidebar.Size = UDim2.new(0, sidebarWidth, 1, -topOffset)
-	sidebar.Position = UDim2.new(0, 0, 0, topOffset)
-	sidebar.BackgroundColor3 = Color3.fromRGB(16, 14, 30); sidebar.BackgroundTransparency = 0.3
-	sidebar.BorderSizePixel = 0; sidebar.ScrollBarThickness = sx(4); sidebar.ScrollBarImageColor3 = ACCENT
-	sidebar.CanvasSize = UDim2.new(0, 0, 0, 0); sidebar.AutomaticCanvasSize = Enum.AutomaticSize.Y
-	sidebar.Parent = modalFrame
+	-- Top tab bar: 5 tabs
+	local topTabBar = Instance.new("Frame")
+	topTabBar.Size = UDim2.new(1, -sx(20), 0, sx(36)); topTabBar.Position = UDim2.new(0.5, 0, 0, sx(54))
+	topTabBar.AnchorPoint = Vector2.new(0.5, 0); topTabBar.BackgroundTransparency = 1
+	topTabBar.BorderSizePixel = 0; topTabBar.Parent = modalFrame
+	local ttLayout = Instance.new("UIListLayout", topTabBar)
+	ttLayout.FillDirection = Enum.FillDirection.Horizontal; ttLayout.Padding = UDim.new(0, sx(6))
+	ttLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 
-	Instance.new("UIListLayout", sidebar).SortOrder = Enum.SortOrder.LayoutOrder
-	sidebar:FindFirstChildOfClass("UIListLayout").Padding = UDim.new(0, sx(6))
-	local sp = Instance.new("UIPadding", sidebar)
-	sp.PaddingTop = UDim.new(0, sx(8)); sp.PaddingLeft = UDim.new(0, sx(8))
-	sp.PaddingRight = UDim.new(0, sx(8)); sp.PaddingBottom = UDim.new(0, sx(12))
-
-	local tabOrder = 0
-	local function addSection(text)
-		tabOrder = tabOrder + 1
-		local l = Instance.new("TextLabel"); l.Size = UDim2.new(1, 0, 0, sx(28))
-		l.BackgroundTransparency = 1; l.Text = text
-		l.TextColor3 = Color3.fromRGB(100, 100, 130); l.Font = FONT; l.TextSize = sx(12)
-		l.LayoutOrder = tabOrder; l.Parent = sidebar
+	local tabDefs = {
+		{ key = "gems",        label = "Gems",           order = 1 },
+		{ key = "onetime",     label = "One Time",       order = 2 },
+		{ key = "elemOnetime", label = "Elem One Time",  order = 3 },
+		{ key = "luck",        label = "Test Your Luck", order = 4 },
+	}
+	for _, def in ipairs(tabDefs) do
+		local tab = Instance.new("TextButton")
+		tab.Size = UDim2.new(0, sx(148), 0, sx(36))
+		tab.BackgroundColor3 = Color3.fromRGB(50, 42, 80)
+		tab.Text = def.label; tab.TextColor3 = Color3.fromRGB(180, 160, 210)
+		tab.Font = FONT; tab.TextSize = sx(14); tab.BorderSizePixel = 0
+		tab.LayoutOrder = def.order; tab.Parent = topTabBar
+		Instance.new("UICorner", tab).CornerRadius = UDim.new(0, sx(10))
+		local capKey = def.key
+		tab.MouseButton1Click:Connect(function() switchTopTab(capKey) end)
+		topTabBtns[def.key] = tab
 	end
-	local function addTab(id, name, color)
-		tabOrder = tabOrder + 1
+
+	-- Horizontal rarity bar (visible in "Gem Sacrifice" mode)
+	rarityBarFrame = Instance.new("Frame")
+	rarityBarFrame.Size = UDim2.new(1, -sx(24), 0, sx(42)); rarityBarFrame.Position = UDim2.new(0.5, 0, 0, sx(94))
+	rarityBarFrame.AnchorPoint = Vector2.new(0.5, 0); rarityBarFrame.BackgroundTransparency = 1
+	rarityBarFrame.BorderSizePixel = 0; rarityBarFrame.Parent = modalFrame
+	local rbLayout = Instance.new("UIListLayout", rarityBarFrame)
+	rbLayout.FillDirection = Enum.FillDirection.Horizontal; rbLayout.Padding = UDim.new(0, sx(8))
+	rbLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center; rbLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+
+	rarityBtns = {}
+	for i, trade in ipairs(Sacrifice.GemTrades) do
+		local rc = DesignConfig.RarityColors[trade.rarity] or Color3.new(1, 1, 1)
+		local rbtn = Instance.new("TextButton")
+		rbtn.Size = UDim2.new(0, sx(170), 0, sx(40)); rbtn.BackgroundColor3 = Color3.fromRGB(40, 35, 65)
+		rbtn.BorderSizePixel = 0; rbtn.Text = ""; rbtn.Parent = rarityBarFrame
+		Instance.new("UICorner", rbtn).CornerRadius = UDim.new(0, sx(12))
+		local rbStroke = Instance.new("UIStroke", rbtn); rbStroke.Color = rc; rbStroke.Thickness = 1.5; rbStroke.Transparency = 0.4
+
+		local rlbl = Instance.new("TextLabel")
+		rlbl.Name = "RarLbl"; rlbl.Size = UDim2.new(0.55, 0, 1, 0); rlbl.Position = UDim2.new(0, sx(10), 0, 0)
+		rlbl.BackgroundTransparency = 1; rlbl.Text = trade.rarity
+		rlbl.TextColor3 = rc; rlbl.Font = FONT; rlbl.TextSize = sx(15)
+		rlbl.TextXAlignment = Enum.TextXAlignment.Left; rlbl.Parent = rbtn
+
+		local glbl = Instance.new("TextLabel")
+		glbl.Name = "GemLbl"; glbl.Size = UDim2.new(0.4, 0, 1, 0); glbl.Position = UDim2.new(1, -sx(10), 0, 0)
+		glbl.AnchorPoint = Vector2.new(1, 0); glbl.BackgroundTransparency = 1
+		glbl.Text = formatNumber(trade.gems); glbl.TextColor3 = Color3.fromRGB(140, 130, 170)
+		glbl.Font = FONT; glbl.TextSize = sx(14); glbl.TextXAlignment = Enum.TextXAlignment.Right; glbl.Parent = rbtn
+
+		local capIdx = i
+		rbtn.MouseButton1Click:Connect(function()
+			highlightRarityBtn(capIdx)
+			activeTabId = "GemTrade_" .. capIdx
+			buildGemTradeContent(capIdx)
+		end)
+		table.insert(rarityBtns, { btn = rbtn, idx = i })
+	end
+
+	-- Helper: create a sidebar frame
+	local sidebarWidth = sx(220)
+	local function makeSidebar(name)
+		local sf = Instance.new("ScrollingFrame")
+		sf.Name = name; sf.Size = UDim2.new(0, sidebarWidth, 1, -sx(96))
+		sf.Position = UDim2.new(0, sx(6), 0, sx(92))
+		sf.BackgroundColor3 = Color3.fromRGB(35, 28, 60); sf.BackgroundTransparency = 0.35
+		sf.BorderSizePixel = 0; sf.ScrollBarThickness = sx(5); sf.ScrollBarImageColor3 = ACCENT
+		sf.CanvasSize = UDim2.new(0, 0, 0, 0); sf.AutomaticCanvasSize = Enum.AutomaticSize.Y
+		sf.Visible = false; sf.Parent = modalFrame
+		Instance.new("UICorner", sf).CornerRadius = UDim.new(0, sx(16))
+		local ll = Instance.new("UIListLayout", sf); ll.SortOrder = Enum.SortOrder.LayoutOrder; ll.Padding = UDim.new(0, sx(5))
+		local pd = Instance.new("UIPadding", sf)
+		pd.PaddingTop = UDim.new(0, sx(10)); pd.PaddingLeft = UDim.new(0, sx(8))
+		pd.PaddingRight = UDim.new(0, sx(8)); pd.PaddingBottom = UDim.new(0, sx(14))
+		return sf
+	end
+
+	-- Helper: add a tab button to a sidebar
+	local function addTabTo(sidebarKey, sf, id, name, color, order)
 		local btn = Instance.new("TextButton")
-		btn.Size = UDim2.new(1, 0, 0, sx(44)); btn.BackgroundColor3 = Color3.fromRGB(22, 22, 38)
-		btn.BorderSizePixel = 0; btn.LayoutOrder = tabOrder; btn.Text = ""; btn.Parent = sidebar
-		Instance.new("UICorner", btn).CornerRadius = UDim.new(0, sx(10))
+		btn.Size = UDim2.new(1, 0, 0, sx(40)); btn.BackgroundColor3 = Color3.fromRGB(40, 35, 65)
+		btn.BorderSizePixel = 0; btn.LayoutOrder = order; btn.Text = ""; btn.Parent = sf
+		Instance.new("UICorner", btn).CornerRadius = UDim.new(0, sx(12))
 		local strip = Instance.new("Frame")
-		strip.Size = UDim2.new(0, sx(6), 0.65, 0); strip.Position = UDim2.new(0, sx(5), 0.175, 0)
+		strip.Size = UDim2.new(0, sx(5), 0.6, 0); strip.Position = UDim2.new(0, sx(5), 0.2, 0)
 		strip.BackgroundColor3 = color; strip.BorderSizePixel = 0; strip.Parent = btn
-		Instance.new("UICorner", strip).CornerRadius = UDim.new(0, 2)
+		Instance.new("UICorner", strip).CornerRadius = UDim.new(0, 3)
 		local lbl = Instance.new("TextLabel")
-		lbl.Name = "TabLabel"; lbl.Size = UDim2.new(1, -sx(18), 1, 0); lbl.Position = UDim2.new(0, sx(16), 0, 0)
+		lbl.Name = "TabLabel"; lbl.Size = UDim2.new(1, -sx(20), 1, 0); lbl.Position = UDim2.new(0, sx(16), 0, 0)
 		lbl.BackgroundTransparency = 1; lbl.Text = name; lbl.TextColor3 = color
 		lbl.Font = FONT; lbl.TextSize = sx(14); lbl.TextXAlignment = Enum.TextXAlignment.Left
 		lbl.TextTruncate = Enum.TextTruncate.AtEnd; lbl.Parent = btn
+		local ts = Instance.new("UIStroke", lbl)
+		ts.Color = Color3.fromRGB(15, 10, 30); ts.Thickness = 1; ts.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
 		btn.MouseButton1Click:Connect(function() buildContent(id) end)
-		table.insert(sidebarBtns, { id = id, btn = btn })
+		table.insert(sidebarBtnLists[sidebarKey], { id = id, btn = btn })
 	end
 
-	addSection("— GEM TRADES —")
-	for i, tr in ipairs(Sacrifice.GemTrades) do
-		addTab("GemTrade_" .. i, tr.rarity .. " -> " .. formatNumber(tr.gems), DesignConfig.RarityColors[tr.rarity] or Color3.new(1, 1, 1))
-	end
-	addSection("— ONE-TIME —")
-	addTab("CommonArmy", "Common Army", Color3.fromRGB(160, 160, 190))
-	addTab("FatPeople", "Fat People", Color3.fromRGB(255, 200, 60))
-	addTab("GirlPower", "Girl Power", Color3.fromRGB(255, 130, 200))
-	addTab("RareRoundup", "Rare Roundup", Color3.fromRGB(80, 180, 255))
-	addTab("ContentHouse", "Content House", Color3.fromRGB(255, 150, 80))
-	addTab("EpicEnsemble", "Epic Ensemble", Color3.fromRGB(200, 80, 220))
-	addTab("GamblingAddicts", "Gambling Addicts", Color3.fromRGB(60, 220, 60))
-	addTab("TheOGs", "The OGs", Color3.fromRGB(180, 180, 180))
-	addTab("FPSLegends", "FPS Legends", Color3.fromRGB(255, 80, 80))
-	addTab("TwitchRoyalty", "Twitch Royalty", Color3.fromRGB(180, 120, 255))
-	addTab("TheUntouchables", "The Untouchables", Color3.fromRGB(255, 50, 50))
-	addTab("Rainbow", "Rainbow", Color3.fromRGB(120, 255, 200))
-	addTab("MythicRoyale", "Mythic Royale", Color3.fromRGB(255, 215, 0))
-	addSection("— ELEMENTAL ONE-TIME —")
-	addTab("AcidReflex", "Acid Reflex", Color3.fromRGB(50, 255, 50))
-	addTab("SnowyAvalanche", "Snowy Avalanche", Color3.fromRGB(180, 220, 255))
-	addTab("LavaEruption", "Lava Eruption", Color3.fromRGB(255, 100, 20))
-	addTab("LightningStrike", "Lightning Strike", Color3.fromRGB(255, 255, 80))
-	addTab("ShadowRealm", "Shadow Realm", Color3.fromRGB(100, 60, 140))
-	addTab("GlitchStorm", "Glitch Storm", Color3.fromRGB(0, 255, 255))
-	addTab("LunarTide", "Lunar Tide", Color3.fromRGB(200, 220, 255))
-	addTab("SolarFlare", "Solar Flare", Color3.fromRGB(255, 220, 60))
-	addTab("VoidAbyss", "Void Abyss", Color3.fromRGB(80, 40, 120))
-	addSection("— TEST YOUR LUCK —")
-	addTab("FiftyFifty", "50 / 50", Color3.fromRGB(255, 220, 60))
-	addTab("FeelingLucky", "Feeling Lucky?", Color3.fromRGB(100, 200, 255))
-	addTab("DontDoIt", "Streamer Sacrifice", Color3.fromRGB(255, 80, 80))
-	addTab("GemRoulette", "Gem Roulette", Color3.fromRGB(255, 180, 50))
-	addSection("— ELEMENTAL —")
-	addTab("Elem_", "Default", Color3.fromRGB(170, 170, 170))
-	for _, eff in ipairs(Effects.List) do
-		addTab("Elem_" .. eff.name, eff.name, eff.color)
-	end
+	-- ONE-TIME sidebar
+	local otSidebar = makeSidebar("OnetimeSidebar")
+	sidebars.onetime = otSidebar
+	local otTabs = {
+		{ "CommonArmy",      "Common Army",      Color3.fromRGB(160, 160, 190) },
+		{ "FatPeople",       "Fat People",       Color3.fromRGB(255, 200, 60)  },
+		{ "GirlPower",       "Girl Power",       Color3.fromRGB(255, 130, 200) },
+		{ "RareRoundup",     "Rare Roundup",     Color3.fromRGB(80, 180, 255)  },
+		{ "ContentHouse",    "Content House",    Color3.fromRGB(255, 150, 80)  },
+		{ "EpicEnsemble",    "Epic Ensemble",    Color3.fromRGB(200, 80, 220)  },
+		{ "GamblingAddicts", "Gambling Addicts",  Color3.fromRGB(60, 220, 60)  },
+		{ "TheOGs",          "The OGs",          Color3.fromRGB(180, 180, 180) },
+		{ "FPSLegends",      "FPS Legends",      Color3.fromRGB(255, 80, 80)  },
+		{ "TwitchRoyalty",   "Twitch Royalty",    Color3.fromRGB(180, 120, 255)},
+		{ "TheUntouchables", "The Untouchables",  Color3.fromRGB(255, 50, 50) },
+		{ "Rainbow",         "Rainbow",          Color3.fromRGB(120, 255, 200) },
+		{ "MythicRoyale",    "Mythic Royale",    Color3.fromRGB(255, 215, 0)   },
+	}
+	for i, t in ipairs(otTabs) do addTabTo("onetime", otSidebar, t[1], t[2], t[3], i) end
 
-	-- Content area
+	-- ELEMENTAL ONE-TIME sidebar
+	local eoSidebar = makeSidebar("ElemOnetimeSidebar")
+	sidebars.elemOnetime = eoSidebar
+	local eoTabs = {
+		{ "AcidReflex",       "Acid Reflex",       Color3.fromRGB(50, 255, 50)   },
+		{ "SnowyAvalanche",   "Snowy Avalanche",   Color3.fromRGB(180, 220, 255) },
+		{ "LavaEruption",     "Lava Eruption",     Color3.fromRGB(255, 100, 20)  },
+		{ "LightningStrike",  "Lightning Strike",  Color3.fromRGB(255, 255, 80)  },
+		{ "ShadowRealm",      "Shadow Realm",      Color3.fromRGB(100, 60, 140)  },
+		{ "GlitchStorm",      "Glitch Storm",      Color3.fromRGB(0, 255, 255)   },
+		{ "LunarTide",        "Lunar Tide",        Color3.fromRGB(200, 220, 255) },
+		{ "SolarFlare",       "Solar Flare",       Color3.fromRGB(255, 220, 60)  },
+		{ "VoidAbyss",        "Void Abyss",        Color3.fromRGB(80, 40, 120)   },
+	}
+	for i, t in ipairs(eoTabs) do addTabTo("elemOnetime", eoSidebar, t[1], t[2], t[3], i) end
+
+	-- TEST YOUR LUCK sidebar
+	local lkSidebar = makeSidebar("LuckSidebar")
+	sidebars.luck = lkSidebar
+	local lkTabs = {
+		{ "FiftyFifty",   "50 / 50",           Color3.fromRGB(255, 220, 60)  },
+		{ "FeelingLucky",  "Feeling Lucky?",    Color3.fromRGB(100, 200, 255) },
+		{ "DontDoIt",      "Streamer Sacrifice", Color3.fromRGB(255, 80, 80) },
+		{ "GemRoulette",   "Gem Roulette",      Color3.fromRGB(255, 180, 50) },
+	}
+	for i, t in ipairs(lkTabs) do addTabTo("luck", lkSidebar, t[1], t[2], t[3], i) end
+
+	-- Content area (position/size managed by switchTopTab)
 	contentFrame = Instance.new("ScrollingFrame")
 	contentFrame.Name = "Content"
-	contentFrame.Size = UDim2.new(1, -sidebarWidth - sx(16), 1, -topOffset)
-	contentFrame.Position = UDim2.new(0, sidebarWidth + sx(10), 0, topOffset)
+	contentFrame.Size = UDim2.new(1, -sx(22), 1, -sx(148))
+	contentFrame.Position = UDim2.new(0, sx(10), 0, sx(142))
 	contentFrame.BackgroundTransparency = 1; contentFrame.BorderSizePixel = 0
-	contentFrame.ScrollBarThickness = sx(8); contentFrame.ScrollBarImageColor3 = ACCENT
+	contentFrame.ScrollBarThickness = sx(6); contentFrame.ScrollBarImageColor3 = ACCENT
 	contentFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
 	contentFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y; contentFrame.Parent = modalFrame
 
 	local cl = Instance.new("UIListLayout", contentFrame)
-	cl.SortOrder = Enum.SortOrder.LayoutOrder; cl.Padding = UDim.new(0, sx(14))
+	cl.SortOrder = Enum.SortOrder.LayoutOrder; cl.Padding = UDim.new(0, sx(12))
 	cl.HorizontalAlignment = Enum.HorizontalAlignment.Center
-	Instance.new("UIPadding", contentFrame).PaddingTop = UDim.new(0, sx(12))
+	Instance.new("UIPadding", contentFrame).PaddingTop = UDim.new(0, sx(8))
 	contentFrame:FindFirstChildOfClass("UIPadding").PaddingBottom = UDim.new(0, sx(16))
 
 	-- Events
@@ -1977,6 +2332,7 @@ function SacrificeController.Init()
 
 	SacrificeResult.OnClientEvent:Connect(function(result)
 		if result.success then
+			clearAllQueues()
 			-----------------------------------------------------------
 			-- BINARY SPIN ANIMATIONS (unskippable, dramatic!)
 			-----------------------------------------------------------
@@ -2070,6 +2426,16 @@ function SacrificeController.Init()
 		if isOpen and activeTabId and not pickerFrame and not binarySpinOverlay and not gemRouletteInputActive then buildContent(activeTabId) end
 	end)
 
+	-- Refresh inventory/storage/sell when queues change
+	local InventoryCtrl = require(script.Parent.InventoryController)
+	local StorageCtrl = require(script.Parent.StorageController)
+	local SellCtrl = require(script.Parent.SellStandController)
+	SacrificeController.OnQueueChanged(function()
+		if InventoryCtrl and InventoryCtrl.RefreshVisuals then InventoryCtrl.RefreshVisuals() end
+		if StorageCtrl and StorageCtrl.Refresh then StorageCtrl.Refresh() end
+		if SellCtrl and SellCtrl.RefreshList then SellCtrl.RefreshList() end
+	end)
+
 	modalFrame.Visible = false
 end
 
@@ -2078,15 +2444,8 @@ function SacrificeController.GetQueuedIndices()
 	return allQueuedIndices()
 end
 
--- Callbacks for when queues change (so inventory/storage can refresh visuals)
-local onQueueChanged = {}
 function SacrificeController.OnQueueChanged(cb)
 	table.insert(onQueueChanged, cb)
-end
-local function fireQueueChanged()
-	for _, cb in ipairs(onQueueChanged) do
-		task.spawn(cb)
-	end
 end
 
 -- Callbacks for open/close (music, etc.)
