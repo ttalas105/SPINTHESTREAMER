@@ -17,9 +17,9 @@ local Effects = require(ReplicatedStorage.Shared.Config.Effects)
 local VFXHelper = require(ReplicatedStorage.Shared.VFXHelper)
 
 local RemoteEvents = ReplicatedStorage:WaitForChild("RemoteEvents")
-local BaseReady = RemoteEvents:WaitForChild("BaseReady")
-local EquipResult = RemoteEvents:WaitForChild("EquipResult")
-local UnequipResult = RemoteEvents:WaitForChild("UnequipResult")
+local BaseReady = nil
+local EquipResult = nil
+local UnequipResult = nil
 local DisplayInteract -- resolved in Init
 
 local BaseService = {}
@@ -246,7 +246,7 @@ local function tryCollectMoney(player: Player, padSlot: number)
 		pendingBySlot[padSlot] = 0
 		-- Restart this slot's income timer from now.
 		local nextBySlot = getNestedTable(BaseService._nextMoneyTickAt, userId)
-		nextBySlot[padSlot] = os.clock() + 1
+		nextBySlot[padSlot] = time() + 1
 		updateMoneyText(player, padSlot)
 	end
 
@@ -623,17 +623,8 @@ local function cleanDisplayModel(model: Model)
 		if animator then animator:Destroy() end
 	end
 
-	-- Preload clothing textures
-	local ContentProvider = game:GetService("ContentProvider")
-	local toPreload = {}
-	for _, d in ipairs(model:GetDescendants()) do
-		if d:IsA("Shirt") or d:IsA("Pants") or d:IsA("ShirtGraphic") or d:IsA("Decal") then
-			table.insert(toPreload, d)
-		end
-	end
-	if #toPreload > 0 then
-		pcall(function() ContentProvider:PreloadAsync(toPreload) end)
-	end
+	-- NOTE: Do not call PreloadAsync on the server during interaction flow.
+	-- Some avatar assets can stall load and block the remote event thread.
 
 	for _, p in ipairs(model:GetDescendants()) do
 		if p:IsA("BasePart") then
@@ -686,6 +677,25 @@ local function clearPlacedModel(player: Player, padSlot: number?)
 	end
 end
 
+local function hasLiveDisplayModel(player: Player, padSlot: number): boolean
+	local bySlot = BaseService._displayModels[player.UserId]
+	if not bySlot then return false end
+	local m = bySlot[padSlot]
+	return m ~= nil and m.Parent ~= nil
+end
+
+local function findOrphanedEquippedSlot(player: Player): number?
+	local data = PlayerData and PlayerData.Get(player)
+	if not data or not data.equippedPads then return nil end
+	for key, _item in pairs(data.equippedPads) do
+		local slot = tonumber(key)
+		if slot and not hasLiveDisplayModel(player, slot) then
+			return slot
+		end
+	end
+	return nil
+end
+
 local function placeOnGreySlot(player: Player, padSlot: number, streamerItem): boolean
 	local baseInfo = BaseService._bases[player.UserId]
 	local displayInfo = baseInfo and baseInfo.displays and baseInfo.displays[padSlot]
@@ -726,73 +736,82 @@ local function placeOnGreySlot(player: Player, padSlot: number, streamerItem): b
 		end
 	end
 
-	local grey = displayInfo.greyPart
-	local isSideMiddle = displayInfo.sideIndex == 3
-	-- Middle slots per side: resolve nearest grey at placement-time to avoid side pairing drift.
-	if isSideMiddle and baseInfo.baseModel then
-		local runtimeGrey = findNearestGreyForGreenInModel(baseInfo.baseModel, displayInfo.greenPart)
-		if runtimeGrey then
-			grey = runtimeGrey
+	local didPlace = pcall(function()
+		local grey = displayInfo.greyPart
+		local isSideMiddle = displayInfo.sideIndex == 3
+		-- Middle slots per side: resolve nearest grey at placement-time to avoid side pairing drift.
+		if isSideMiddle and baseInfo.baseModel then
+			local runtimeGrey = findNearestGreyForGreenInModel(baseInfo.baseModel, displayInfo.greenPart)
+			if runtimeGrey then
+				grey = runtimeGrey
+			end
 		end
-	end
-	local green = displayInfo.greenPart
-	local flatTarget = Vector3.new(green.Position.X, grey.Position.Y, green.Position.Z)
-	if (flatTarget - grey.Position).Magnitude < 0.05 then
-		flatTarget = grey.Position + Vector3.new(0, 0, -1)
-	end
-	local faceCF = CFrame.lookAt(grey.Position, flatTarget)
-	clone:PivotTo(faceCF)
-
-	if rootPart then
-		local rootPos = rootPart.Position
-		local xzDelta = Vector3.new(grey.Position.X - rootPos.X, 0, grey.Position.Z - rootPos.Z)
-		clone:PivotTo(clone:GetPivot() + xzDelta)
-	end
-
-	local padTopY = grey.Position.Y + (grey.Size.Y / 2)
-	local hum = clone:FindFirstChildOfClass("Humanoid")
-	if hum and rootPart then
-		local feetY = rootPart.Position.Y - (rootPart.Size.Y * 0.5 + hum.HipHeight)
-		local yLift = padTopY - feetY + 0.03
-		clone:PivotTo(clone:GetPivot() + Vector3.new(0, yLift, 0))
-	else
-		local boxCF, boxSize = clone:GetBoundingBox()
-		local bottomY = boxCF.Position.Y - (boxSize.Y / 2)
-		local yLift = padTopY - bottomY + 0.03
-		clone:PivotTo(clone:GetPivot() + Vector3.new(0, yLift, 0))
-	end
-
-	if streamerId == "Cinna" then
-		local cinnaCF, cinnaSize = clone:GetBoundingBox()
-		local cinnaBottom = cinnaCF.Position.Y - (cinnaSize.Y / 2)
-		local minBottom = padTopY + 0.03
-		if cinnaBottom < minBottom then
-			clone:PivotTo(clone:GetPivot() + Vector3.new(0, minBottom - cinnaBottom, 0))
+		local green = displayInfo.greenPart
+		local flatTarget = Vector3.new(green.Position.X, grey.Position.Y, green.Position.Z)
+		if (flatTarget - grey.Position).Magnitude < 0.05 then
+			flatTarget = grey.Position + Vector3.new(0, 0, -1)
 		end
-	end
+		local faceCF = CFrame.lookAt(grey.Position, flatTarget)
+		clone:PivotTo(faceCF)
 
-	-- Middle slots can have asymmetric rigs; force exact X/Z center on pad.
-	if isSideMiddle then
-		local boxCF = clone:GetBoundingBox()
-		local xzDelta = Vector3.new(grey.Position.X - boxCF.Position.X, 0, grey.Position.Z - boxCF.Position.Z)
-		clone:PivotTo(clone:GetPivot() + xzDelta)
-		-- Keep middle-slot models from dipping after re-centering.
-		local recenterCF, recenterSize = clone:GetBoundingBox()
-		local recenterBottomY = recenterCF.Position.Y - (recenterSize.Y / 2)
-		local minBottom = padTopY + 0.03
-		if recenterBottomY < minBottom then
-			clone:PivotTo(clone:GetPivot() + Vector3.new(0, minBottom - recenterBottomY, 0))
+		if rootPart then
+			local rootPos = rootPart.Position
+			local xzDelta = Vector3.new(grey.Position.X - rootPos.X, 0, grey.Position.Z - rootPos.Z)
+			clone:PivotTo(clone:GetPivot() + xzDelta)
 		end
-	end
 
-	-- Final safety: if any slot's model bottom is below the pad surface, lift it.
-	-- Only affects models that actually sank; correctly-placed ones stay untouched.
-	do
-		local finalCF, finalSize = clone:GetBoundingBox()
-		local finalBottomY = finalCF.Position.Y - (finalSize.Y / 2)
-		if finalBottomY < padTopY then
-			clone:PivotTo(clone:GetPivot() + Vector3.new(0, padTopY - finalBottomY + 0.03, 0))
+		local padTopY = grey.Position.Y + (grey.Size.Y / 2)
+		local hum = clone:FindFirstChildOfClass("Humanoid")
+		if hum and rootPart then
+			local feetY = rootPart.Position.Y - (rootPart.Size.Y * 0.5 + hum.HipHeight)
+			local yLift = padTopY - feetY + 0.03
+			clone:PivotTo(clone:GetPivot() + Vector3.new(0, yLift, 0))
+		else
+			local boxCF, boxSize = clone:GetBoundingBox()
+			local bottomY = boxCF.Position.Y - (boxSize.Y / 2)
+			local yLift = padTopY - bottomY + 0.03
+			clone:PivotTo(clone:GetPivot() + Vector3.new(0, yLift, 0))
 		end
+
+		if streamerId == "Cinna" then
+			local cinnaCF, cinnaSize = clone:GetBoundingBox()
+			local cinnaBottom = cinnaCF.Position.Y - (cinnaSize.Y / 2)
+			local minBottom = padTopY + 0.03
+			if cinnaBottom < minBottom then
+				clone:PivotTo(clone:GetPivot() + Vector3.new(0, minBottom - cinnaBottom, 0))
+			end
+		end
+
+		-- Middle slots can have asymmetric rigs; force exact X/Z center on pad.
+		if isSideMiddle then
+			local boxCF = clone:GetBoundingBox()
+			local xzDelta = Vector3.new(grey.Position.X - boxCF.Position.X, 0, grey.Position.Z - boxCF.Position.Z)
+			clone:PivotTo(clone:GetPivot() + xzDelta)
+			-- Keep middle-slot models from dipping after re-centering.
+			local recenterCF, recenterSize = clone:GetBoundingBox()
+			local recenterBottomY = recenterCF.Position.Y - (recenterSize.Y / 2)
+			local minBottom = padTopY + 0.03
+			if recenterBottomY < minBottom then
+				clone:PivotTo(clone:GetPivot() + Vector3.new(0, minBottom - recenterBottomY, 0))
+			end
+		end
+
+		-- Final safety: if any slot's model bottom is below the pad surface, lift it.
+		-- Only affects models that actually sank; correctly-placed ones stay untouched.
+		do
+			local finalCF, finalSize = clone:GetBoundingBox()
+			local finalBottomY = finalCF.Position.Y - (finalSize.Y / 2)
+			if finalBottomY < padTopY then
+				clone:PivotTo(clone:GetPivot() + Vector3.new(0, padTopY - finalBottomY + 0.03, 0))
+			end
+		end
+	end)
+
+	if not didPlace then
+		-- Fallback: simple center-on-pad spawn so a bad rig cannot become invisible.
+		local grey = displayInfo.greyPart
+		local fallbackY = grey.Position.Y + (grey.Size.Y / 2) + 2
+		clone:PivotTo(CFrame.new(grey.Position + Vector3.new(0, fallbackY - grey.Position.Y, 0)))
 	end
 
 	local parent = baseInfo.baseModel or Workspace
@@ -1035,7 +1054,7 @@ local function assignBase(player)
 					if placeOnGreySlot(player, padSlot, item) then
 						local pendingBySlot = getNestedTable(BaseService._pendingMoney, player.UserId)
 						pendingBySlot[padSlot] = 0
-						getNestedTable(BaseService._nextMoneyTickAt, player.UserId)[padSlot] = os.clock() + 1
+						getNestedTable(BaseService._nextMoneyTickAt, player.UserId)[padSlot] = time() + 1
 						updateMoneyText(player, padSlot)
 						updatePromptText(player, padSlot)
 					end
@@ -1057,6 +1076,10 @@ end
 function BaseService.Init(playerDataModule, potionServiceModule)
 	PlayerData = playerDataModule
 	PotionService = potionServiceModule
+	-- Resolve result remotes during init so we bind post-dedup instances.
+	BaseReady = RemoteEvents:WaitForChild("BaseReady")
+	EquipResult = RemoteEvents:WaitForChild("EquipResult")
+	UnequipResult = RemoteEvents:WaitForChild("UnequipResult")
 
 	Players.PlayerAdded:Connect(function(player)
 		task.wait(1)
@@ -1125,104 +1148,144 @@ function BaseService.Init(playerDataModule, potionServiceModule)
 
 		local userId = player.UserId
 		local debounceBySlot = getNestedTable(BaseService._equipDebounce, userId)
-		local now = os.clock()
+		local now = time()
 		if debounceBySlot[slot] and (now - debounceBySlot[slot]) < EQUIP_DEBOUNCE_SEC then
+			EquipResult:FireClient(player, { success = false, reason = "Too fast! Try again." })
 			return
 		end
 		debounceBySlot[slot] = now
 
-		PlayerData.WithLock(player, function()
-			local data = PlayerData and PlayerData.Get(player)
-			local baseInfo = BaseService._bases[userId]
-			local displayInfo = baseInfo and baseInfo.displays and baseInfo.displays[slot]
-			if not data then
-				EquipResult:FireClient(player, { success = false, reason = "Base slot not ready." })
-				return
-			end
-			if not baseInfo then
-				EquipResult:FireClient(player, { success = false, reason = "Base slot not ready." })
-				return
-			end
-			if not displayInfo then
-				EquipResult:FireClient(player, { success = false, reason = "Base slot not ready." })
-				return
-			end
-			if not displayInfo.greenPart or not displayInfo.greyPart then
-				EquipResult:FireClient(player, { success = false, reason = "Slot geometry missing." })
-				return
-			end
-
-			local key = tostring(slot)
-			local equipped = data.equippedPads[key]
-			if equipped then
-				local streamerId = type(equipped) == "table" and equipped.id or equipped
-				local effect = type(equipped) == "table" and equipped.effect or nil
-				local pendingBySlot = getNestedTable(BaseService._pendingMoney, userId)
-				local pending = pendingBySlot[slot] or 0
-				local ok = PlayerData.UnequipFromPad(player, slot)
-				if ok then
-					if pending > 0 then
-						PlayerData.AddCash(player, math.floor(pending))
-					end
-					clearPlacedModel(player, slot)
-					pendingBySlot[slot] = 0
-					getNestedTable(BaseService._nextMoneyTickAt, userId)[slot] = nil
-					updateMoneyText(player, slot)
-					updatePromptText(player, slot)
-					UnequipResult:FireClient(player, {
-						success = true,
-						padSlot = slot,
-						streamerId = streamerId,
-						effect = effect,
-					})
+		do
+			local okGuard, errGuard = pcall(function()
+				local data = PlayerData and PlayerData.Get(player)
+				local baseInfo = BaseService._bases[userId]
+				local displayInfo = baseInfo and baseInfo.displays and baseInfo.displays[slot]
+				if not data then
+					EquipResult:FireClient(player, { success = false, reason = "Base slot not ready." })
+					return
 				end
-				return
-			end
+				if not baseInfo then
+					EquipResult:FireClient(player, { success = false, reason = "Base slot not ready." })
+					return
+				end
+				if not displayInfo then
+					EquipResult:FireClient(player, { success = false, reason = "Base slot not ready." })
+					return
+				end
+				if not displayInfo.greenPart or not displayInfo.greyPart then
+					EquipResult:FireClient(player, { success = false, reason = "Slot geometry missing." })
+					return
+				end
 
-			if not isPadSlotUnlocked(player, slot) then
-				local rebirthNeeded = getRebirthNeededForPadSlot(slot)
-				EquipResult:FireClient(player, { success = false, reason = "Locked until Rebirth " .. tostring(rebirthNeeded) .. "." })
-				return
-			end
-
-			if not heldStreamerId or typeof(heldStreamerId) ~= "string" then
-				EquipResult:FireClient(player, { success = false, reason = "Select a streamer first." })
-				return
-			end
-
-			local ok = PlayerData.EquipToPad(player, heldStreamerId, slot, true, heldEffect)
-			if ok then
-				local item = data.equippedPads[key]
-				if placeOnGreySlot(player, slot, item) then
+				local key = tostring(slot)
+				local equipped = data.equippedPads[key]
+				if equipped then
+					local streamerId = type(equipped) == "table" and equipped.id or equipped
+					local effect = type(equipped) == "table" and equipped.effect or nil
 					local pendingBySlot = getNestedTable(BaseService._pendingMoney, userId)
-					pendingBySlot[slot] = 0
-					getNestedTable(BaseService._nextMoneyTickAt, userId)[slot] = os.clock() + 1
-					updateMoneyText(player, slot)
-					updatePromptText(player, slot)
-					EquipResult:FireClient(player, {
-						success = true,
-						padSlot = slot,
-						streamerId = heldStreamerId,
-					})
-				else
-					PlayerData.UnequipFromPad(player, slot)
-					updateMoneyText(player, slot)
-					updatePromptText(player, slot)
-					EquipResult:FireClient(player, {
-						success = false,
-						reason = "Could not place this streamer model.",
-					})
+					local pending = pendingBySlot[slot] or 0
+					local ok = PlayerData.UnequipFromPad(player, slot)
+					if ok then
+						if pending > 0 then
+							PlayerData.AddCash(player, math.floor(pending))
+						end
+						clearPlacedModel(player, slot)
+						pendingBySlot[slot] = 0
+						getNestedTable(BaseService._nextMoneyTickAt, userId)[slot] = nil
+						updateMoneyText(player, slot)
+						updatePromptText(player, slot)
+						UnequipResult:FireClient(player, {
+							success = true,
+							padSlot = slot,
+							streamerId = streamerId,
+							effect = effect,
+						})
+					else
+						EquipResult:FireClient(player, { success = false, reason = "Could not remove this streamer." })
+					end
+					return
 				end
-			else
-				EquipResult:FireClient(player, { success = false, reason = "Cannot place here." })
+
+				-- Recovery path: if a streamer is equipped but its display model is missing,
+				-- allow prompt interaction with empty hand to pull it back to inventory.
+				if (not heldStreamerId or typeof(heldStreamerId) ~= "string") then
+					local orphanedSlot = findOrphanedEquippedSlot(player)
+					if orphanedSlot then
+						local orphanKey = tostring(orphanedSlot)
+						local orphanItem = data.equippedPads[orphanKey]
+						local orphanId = type(orphanItem) == "table" and orphanItem.id or orphanItem
+						local orphanEffect = type(orphanItem) == "table" and orphanItem.effect or nil
+						if orphanItem and PlayerData.UnequipFromPad(player, orphanedSlot) then
+							local pendingBySlot = getNestedTable(BaseService._pendingMoney, userId)
+							local pending = pendingBySlot[orphanedSlot] or 0
+							if pending > 0 then
+								PlayerData.AddCash(player, math.floor(pending))
+							end
+							clearPlacedModel(player, orphanedSlot)
+							pendingBySlot[orphanedSlot] = 0
+							getNestedTable(BaseService._nextMoneyTickAt, userId)[orphanedSlot] = nil
+							updateMoneyText(player, orphanedSlot)
+							updatePromptText(player, orphanedSlot)
+							UnequipResult:FireClient(player, {
+								success = true,
+								padSlot = orphanedSlot,
+								streamerId = orphanId,
+								effect = orphanEffect,
+							})
+							return
+						end
+					end
+				end
+
+				if not isPadSlotUnlocked(player, slot) then
+					local rebirthNeeded = getRebirthNeededForPadSlot(slot)
+					EquipResult:FireClient(player, { success = false, reason = "Locked until Rebirth " .. tostring(rebirthNeeded) .. "." })
+					return
+				end
+
+				if not heldStreamerId or typeof(heldStreamerId) ~= "string" then
+					EquipResult:FireClient(player, { success = false, reason = "Select a streamer first." })
+					return
+				end
+
+				local ok = PlayerData.EquipToPad(player, heldStreamerId, slot, true, heldEffect)
+				if ok then
+					local item = data.equippedPads[key]
+					if placeOnGreySlot(player, slot, item) then
+						local pendingBySlot = getNestedTable(BaseService._pendingMoney, userId)
+						pendingBySlot[slot] = 0
+						getNestedTable(BaseService._nextMoneyTickAt, userId)[slot] = time() + 1
+						updateMoneyText(player, slot)
+						updatePromptText(player, slot)
+						EquipResult:FireClient(player, {
+							success = true,
+							padSlot = slot,
+							streamerId = heldStreamerId,
+						})
+					else
+						PlayerData.UnequipFromPad(player, slot)
+						updateMoneyText(player, slot)
+						updatePromptText(player, slot)
+						EquipResult:FireClient(player, {
+							success = false,
+							reason = "Could not place this streamer model.",
+						})
+					end
+				else
+					EquipResult:FireClient(player, { success = false, reason = "Cannot place here." })
+				end
+			end)
+			if not okGuard then
+				warn("[BaseService] DisplayInteract error for " .. player.Name .. ": " .. tostring(errGuard))
+				EquipResult:FireClient(player, { success = false, reason = "Base interaction failed. Try again." })
 			end
-		end)
+		end
 	end)
 
 	task.spawn(function()
 		while true do
 			task.wait(0.2)
-			local now = os.clock()
+			local now = time()
 			for _, player in ipairs(Players:GetPlayers()) do
 				local data = PlayerData and PlayerData.Get(player)
 				local baseInfo = BaseService._bases[player.UserId]

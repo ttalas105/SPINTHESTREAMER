@@ -7,6 +7,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+local StarterGui = game:GetService("StarterGui")
 
 -- Wait for shared modules
 ReplicatedStorage:WaitForChild("Shared")
@@ -39,6 +40,16 @@ local QuestController        = require(controllers.QuestController)
 local UIHelper               = require(controllers.UIHelper)
 
 local RemoteEvents = ReplicatedStorage:WaitForChild("RemoteEvents")
+
+local function showSystemToast(titleText, bodyText)
+	pcall(function()
+		StarterGui:SetCore("SendNotification", {
+			Title = titleText or "Spin the Streamer",
+			Text = bodyText or "",
+			Duration = 3,
+		})
+	end)
+end
 
 -------------------------------------------------
 -- INITIALIZE ALL CONTROLLERS
@@ -328,6 +339,7 @@ EquipResult.OnClientEvent:Connect(function(data)
 		HoldController.Drop()
 	elseif data and data.reason then
 		warn("[Client] Place failed: " .. tostring(data.reason))
+		showSystemToast("Base Slot", tostring(data.reason))
 	end
 	if TutorialController.IsActive() then
 		TutorialController.OnEquipResult(data)

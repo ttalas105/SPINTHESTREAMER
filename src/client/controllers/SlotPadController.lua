@@ -109,7 +109,12 @@ function SlotPadController.Init(_holdCtrl, _inventoryCtrl)
 
 	ProximityPromptService.PromptTriggered:Connect(function(prompt, _inputType)
 		if not prompt or prompt.Name ~= "BaseSingleSlotPrompt" then return end
-		local padSlot = tonumber(prompt:GetAttribute("PadSlot")) or 1
+		local padSlotAttr = prompt:GetAttribute("PadSlot")
+		local padSlot = tonumber(padSlotAttr)
+		if not padSlot or padSlot < 1 then
+			warn("[SlotPadController] Missing/invalid PadSlot attribute on prompt")
+			return
+		end
 		local heldId, heldEffect = nil, nil
 		local isHolding = HoldController and HoldController.IsHolding()
 		if isHolding then
@@ -117,7 +122,10 @@ function SlotPadController.Init(_holdCtrl, _inventoryCtrl)
 		end
 
 		local remote = getDisplayInteract()
-		if not remote then return end
+		if not remote then
+			warn("[SlotPadController] DisplayInteract remote unavailable")
+			return
+		end
 		remote:FireServer(padSlot, heldId, heldEffect)
 	end)
 	task.defer(scanAndWire)

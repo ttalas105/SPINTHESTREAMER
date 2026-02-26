@@ -23,7 +23,7 @@ PlayerData._cache = {} -- userId -> data table
 -- mutate the same player's data simultaneously.
 -- Usage: PlayerData.WithLock(player, function() ... end)
 -------------------------------------------------
-local playerLocks = {} -- [userId] = {locked = bool, queue = {}}
+local playerLocks = {} -- [userId] = {locked = bool, queue = { BindableEvent }}
 
 function PlayerData.WithLock(player, fn)
 	local userId = player.UserId
@@ -33,10 +33,12 @@ function PlayerData.WithLock(player, fn)
 	local lock = playerLocks[userId]
 
 	if lock.locked then
-		-- Queue this operation and yield until it's our turn
-		local co = coroutine.running()
-		table.insert(lock.queue, co)
-		coroutine.yield()
+		-- Queue this operation and wait until it's our turn.
+		-- BindableEvent-based waiting is more robust than coroutine handoff.
+		local waiter = Instance.new("BindableEvent")
+		table.insert(lock.queue, waiter)
+		waiter.Event:Wait()
+		waiter:Destroy()
 	end
 
 	lock.locked = true
@@ -45,8 +47,10 @@ function PlayerData.WithLock(player, fn)
 
 	-- Resume next queued operation
 	if #lock.queue > 0 then
-		local next = table.remove(lock.queue, 1)
-		task.spawn(next)
+		local nextWaiter = table.remove(lock.queue, 1)
+		if nextWaiter then
+			nextWaiter:Fire()
+		end
 	end
 
 	if not ok then
@@ -690,7 +694,9 @@ function PlayerData.EquipToPad(player, streamerId: string, padSlot: number, igno
 	end
 
 	data.equippedPads[tostring(padSlot)] = foundItem
-	PlayerData.Replicate(player)
+	task.defer(function()
+		PlayerData.Replicate(player)
+	end)
 	return true
 end
 
@@ -706,7 +712,9 @@ function PlayerData.UnequipFromPad(player, padSlot: number): boolean
 	-- Move back to inventory
 	table.insert(data.inventory, item)
 	data.equippedPads[key] = nil
-	PlayerData.Replicate(player)
+	task.defer(function()
+		PlayerData.Replicate(player)
+	end)
 	return true
 end
 
