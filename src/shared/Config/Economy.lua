@@ -262,15 +262,33 @@ function Economy.GetCashUpgradeCost(currentLevel: number): number
 end
 
 -------------------------------------------------
--- ROBUX PRODUCT IDS (placeholder — set real ids in Studio)
+-- ROBUX PRODUCT IDS
 -------------------------------------------------
 Economy.Products = {
-	ServerLuck   = 0,
-	Buy5Spins    = 0,
-	Buy10Spins   = 0,
-	DoubleCash   = 0,
-	PremiumSlot  = 0,
+	VIP             = 3545297066,  -- Permanent 1.5x luck + 1.5x money
+	X2Luck          = 3545296777,  -- Permanent 2x luck
+	Gems1K          = 3545346119,  -- Buy 1,000 gems
+	Gems10K         = 3545346338,  -- Buy 10,000 gems
+	Gems100K        = 3545346581,  -- Buy 100,000 gems
+	LunarEnhanced   = 3545377954,  -- Lunar Enhanced Case (1 spin)
+	SolarEnhanced   = 3545378176,  -- Solar Enhanced Case (1 spin)
+	VoidEnhanced    = 3545378349,  -- Void Enhanced Case (1 spin)
+	ServerLuck      = 0,
+	Buy5Spins       = 0,
+	Buy10Spins      = 0,
+	DoubleCash      = 0,
+	PremiumSlot     = 0,
 }
+
+Economy.GemPacks = {
+	{ key = "Gems1K",  amount = 1000,   label = "1,000 Gems"   },
+	{ key = "Gems10K", amount = 10000,  label = "10,000 Gems"  },
+	{ key = "Gems100K",amount = 100000, label = "100,000 Gems" },
+}
+
+Economy.VIPLuckMultiplier  = 1.5
+Economy.VIPCashMultiplier  = 1.5
+Economy.X2LuckMultiplier   = 2
 
 -------------------------------------------------
 -- 2x CASH MULTIPLIER

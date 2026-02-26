@@ -80,6 +80,9 @@ local function handleSell(player, streamerId: string)
 	if PlayerData.HasDoubleCash(player) then
 		price = price * Economy.DoubleCashMultiplier
 	end
+	if PlayerData.HasVIP(player) then
+		price = math.floor(price * (Economy.VIPCashMultiplier or 1.5))
+	end
 
 	PlayerData.AddCash(player, price)
 	PlayerData.IncrementStat(player, "totalCashEarned", price)
@@ -121,6 +124,9 @@ local function handleSellByIndex(player, inventoryIndex: number)
 	if PlayerData.HasDoubleCash(player) then
 		price = price * Economy.DoubleCashMultiplier
 	end
+	if PlayerData.HasVIP(player) then
+		price = math.floor(price * (Economy.VIPCashMultiplier or 1.5))
+	end
 
 	PlayerData.AddCash(player, price)
 	PlayerData.IncrementStat(player, "totalCashEarned", price)
@@ -155,6 +161,9 @@ local function handleSellAll(player)
 
 	if PlayerData.HasDoubleCash(player) then
 		totalCash = totalCash * Economy.DoubleCashMultiplier
+	end
+	if PlayerData.HasVIP(player) then
+		totalCash = math.floor(totalCash * (Economy.VIPCashMultiplier or 1.5))
 	end
 
 	-- Clear inventory

@@ -12,6 +12,9 @@ local Streamers = require(ReplicatedStorage.Shared.Config.Streamers)
 local Economy = require(ReplicatedStorage.Shared.Config.Economy)
 local Effects = require(ReplicatedStorage.Shared.Config.Effects)
 
+local VIP_LUCK = Economy.VIPLuckMultiplier or 1.5
+local X2L_LUCK = Economy.X2LuckMultiplier or 2
+
 local PITY_RARITY_ORDER = { "Rare", "Epic", "Legendary", "Mythic" }
 
 local SpinService = {}
@@ -253,12 +256,14 @@ local function handleSpin(player)
 		end
 	end
 
-	-- Rebirth + personal luck (1 luck = +1%) + potion multiplier
+	-- Rebirth + personal luck (1 luck = +1%) + potion + VIP + X2Luck multipliers
 	local rebirthLuck = 1 + (data.rebirthCount * 0.02)
 	local playerLuck = data.luck or 0
 	local playerLuckPercent = (playerLuck / 100)
 	local potionLuckMult = PotionService and PotionService.GetLuckMultiplier(player) or 1
-	local totalLuck = SpinService.ServerLuckMultiplier * rebirthLuck * (1 + playerLuckPercent) * potionLuckMult
+	local vipLuck = PlayerData.HasVIP(player) and VIP_LUCK or 1
+	local x2Luck = PlayerData.HasX2Luck(player) and X2L_LUCK or 1
+	local totalLuck = SpinService.ServerLuckMultiplier * rebirthLuck * (1 + playerLuckPercent) * potionLuckMult * vipLuck * x2Luck
 
 	-- Increment pity counters
 	incrementPityCounters(data)
@@ -387,12 +392,14 @@ local function handleCrateSpin(player, crateId: number)
 		return
 	end
 
-	-- Rebirth + personal luck (1 luck = +1%) + crate luck (additive) + potion multiplier
+	-- Rebirth + personal luck (1 luck = +1%) + crate luck (additive) + potion + VIP + X2Luck multipliers
 	local rebirthLuck = 1 + (data.rebirthCount * 0.02)
 	local playerLuck = data.luck or 0
 	local playerLuckPercent = (playerLuck / 100)
 	local potionLuckMult = PotionService and PotionService.GetLuckMultiplier(player) or 1
-	local totalLuck = SpinService.ServerLuckMultiplier * rebirthLuck * (1 + playerLuckPercent + luckBonus) * potionLuckMult
+	local vipLuck = PlayerData.HasVIP(player) and VIP_LUCK or 1
+	local x2Luck = PlayerData.HasX2Luck(player) and X2L_LUCK or 1
+	local totalLuck = SpinService.ServerLuckMultiplier * rebirthLuck * (1 + playerLuckPercent + luckBonus) * potionLuckMult * vipLuck * x2Luck
 
 	-- Increment pity counters
 	incrementPityCounters(data)

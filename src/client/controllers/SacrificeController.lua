@@ -16,6 +16,7 @@ local Effects      = require(ReplicatedStorage.Shared.Config.Effects)
 local DesignConfig = require(ReplicatedStorage.Shared.Config.DesignConfig)
 local UIHelper     = require(script.Parent.UIHelper)
 local HUDController = require(script.Parent.HUDController)
+local StoreController = require(script.Parent.StoreController)
 
 local SacrificeController = {}
 
@@ -282,6 +283,214 @@ local function showToast(text, color, dur)
 		TweenService:Create(toast, TweenInfo.new(0.2), { Position = UDim2.new(0.5, 0, 0, -sx(70)) }):Play()
 		task.delay(0.25, function() if toast.Parent then toast:Destroy() end end)
 	end)
+end
+
+-------------------------------------------------
+-- NOT ENOUGH GEMS POPUP
+-------------------------------------------------
+
+local activeGemPopup = nil
+
+local function showNotEnoughGemsPopup()
+	if activeGemPopup and activeGemPopup.Parent then activeGemPopup:Destroy() end
+
+	local dim = Instance.new("Frame")
+	dim.Name = "GemPopupDim"
+	dim.Size = UDim2.new(1, 0, 1, 0)
+	dim.BackgroundColor3 = Color3.new(0, 0, 0)
+	dim.BackgroundTransparency = 1
+	dim.BorderSizePixel = 0
+	dim.ZIndex = 80
+	dim.Parent = screenGui
+	activeGemPopup = dim
+
+	TweenService:Create(dim, TweenInfo.new(0.2), { BackgroundTransparency = 0.4 }):Play()
+
+	local box = Instance.new("Frame")
+	box.Name = "GemPopupBox"
+	box.Size = UDim2.new(0, sx(400), 0, sx(240))
+	box.Position = UDim2.new(0.5, 0, 0.5, 0)
+	box.AnchorPoint = Vector2.new(0.5, 0.5)
+	box.BackgroundColor3 = Color3.fromRGB(28, 22, 48)
+	box.BorderSizePixel = 0
+	box.ZIndex = 81
+	box.Parent = dim
+	Instance.new("UICorner", box).CornerRadius = UDim.new(0, sx(22))
+
+	local boxStroke = Instance.new("UIStroke")
+	boxStroke.Color = Color3.fromRGB(120, 90, 200)
+	boxStroke.Thickness = 2.5
+	boxStroke.Parent = box
+
+	local grad = Instance.new("UIGradient")
+	grad.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(45, 35, 75)),
+		ColorSequenceKeypoint.new(0.5, Color3.fromRGB(32, 26, 55)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(22, 18, 38)),
+	})
+	grad.Rotation = 90
+	grad.Parent = box
+
+	UIHelper.CreateShadow(box)
+
+	local gemIcon = Instance.new("TextLabel")
+	gemIcon.Size = UDim2.new(0, sx(56), 0, sx(56))
+	gemIcon.Position = UDim2.new(0.5, 0, 0, sx(22))
+	gemIcon.AnchorPoint = Vector2.new(0.5, 0)
+	gemIcon.BackgroundTransparency = 1
+	gemIcon.Text = "\u{1F48E}"
+	gemIcon.TextScaled = true
+	gemIcon.Font = FONT
+	gemIcon.ZIndex = 83
+	gemIcon.Parent = box
+
+	local title = Instance.new("TextLabel")
+	title.Size = UDim2.new(1, -40, 0, sx(30))
+	title.Position = UDim2.new(0.5, 0, 0, sx(84))
+	title.AnchorPoint = Vector2.new(0.5, 0)
+	title.BackgroundTransparency = 1
+	title.Text = "Not Enough Gems!"
+	title.TextColor3 = Color3.fromRGB(255, 90, 90)
+	title.Font = FONT
+	title.TextSize = sx(26)
+	title.ZIndex = 82
+	title.Parent = box
+
+	local titleStroke = Instance.new("UIStroke")
+	titleStroke.Color = Color3.fromRGB(0, 0, 0)
+	titleStroke.Thickness = 2.5
+	titleStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+	titleStroke.Parent = title
+
+	local descLbl = Instance.new("TextLabel")
+	descLbl.Size = UDim2.new(1, -50, 0, sx(20))
+	descLbl.Position = UDim2.new(0.5, 0, 0, sx(120))
+	descLbl.AnchorPoint = Vector2.new(0.5, 0)
+	descLbl.BackgroundTransparency = 1
+	descLbl.Text = "Would you like to buy more gems?"
+	descLbl.TextColor3 = Color3.fromRGB(190, 185, 210)
+	descLbl.Font = FONT2
+	descLbl.TextSize = sx(14)
+	descLbl.ZIndex = 82
+	descLbl.Parent = box
+
+	local function dismiss()
+		TweenService:Create(dim, TweenInfo.new(0.15), { BackgroundTransparency = 1 }):Play()
+		TweenService:Create(box, TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.In), {
+			Size = UDim2.new(0, sx(200), 0, sx(120)),
+		}):Play()
+		task.delay(0.16, function()
+			if dim.Parent then dim:Destroy() end
+			activeGemPopup = nil
+		end)
+	end
+
+	local btnRow = Instance.new("Frame")
+	btnRow.Size = UDim2.new(1, -60, 0, sx(44))
+	btnRow.Position = UDim2.new(0.5, 0, 1, -sx(32))
+	btnRow.AnchorPoint = Vector2.new(0.5, 1)
+	btnRow.BackgroundTransparency = 1
+	btnRow.ZIndex = 82
+	btnRow.Parent = box
+
+	local btnLayout = Instance.new("UIListLayout")
+	btnLayout.FillDirection = Enum.FillDirection.Horizontal
+	btnLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	btnLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+	btnLayout.Padding = UDim.new(0, sx(16))
+	btnLayout.Parent = btnRow
+
+	local yesBtn = Instance.new("TextButton")
+	yesBtn.Name = "YesBtn"
+	yesBtn.Size = UDim2.new(0, sx(150), 0, sx(44))
+	yesBtn.BackgroundColor3 = Color3.fromRGB(50, 190, 80)
+	yesBtn.Text = "Yes, Buy Gems!"
+	yesBtn.TextColor3 = Color3.new(1, 1, 1)
+	yesBtn.Font = FONT
+	yesBtn.TextSize = sx(16)
+	yesBtn.BorderSizePixel = 0
+	yesBtn.AutoButtonColor = false
+	yesBtn.ZIndex = 83
+	yesBtn.Parent = btnRow
+	Instance.new("UICorner", yesBtn).CornerRadius = UDim.new(0, sx(12))
+
+	local yesStroke = Instance.new("UIStroke")
+	yesStroke.Color = Color3.fromRGB(30, 140, 50)
+	yesStroke.Thickness = 2
+	yesStroke.Parent = yesBtn
+
+	local yesGrad = Instance.new("UIGradient")
+	yesGrad.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(70, 220, 100)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(40, 170, 65)),
+	})
+	yesGrad.Rotation = 90
+	yesGrad.Parent = yesBtn
+
+	local noBtn = Instance.new("TextButton")
+	noBtn.Name = "NoBtn"
+	noBtn.Size = UDim2.new(0, sx(120), 0, sx(44))
+	noBtn.BackgroundColor3 = Color3.fromRGB(65, 55, 85)
+	noBtn.Text = "No Thanks"
+	noBtn.TextColor3 = Color3.fromRGB(180, 170, 200)
+	noBtn.Font = FONT
+	noBtn.TextSize = sx(16)
+	noBtn.BorderSizePixel = 0
+	noBtn.AutoButtonColor = false
+	noBtn.ZIndex = 83
+	noBtn.Parent = btnRow
+	Instance.new("UICorner", noBtn).CornerRadius = UDim.new(0, sx(12))
+
+	local noStroke = Instance.new("UIStroke")
+	noStroke.Color = Color3.fromRGB(90, 75, 120)
+	noStroke.Thickness = 2
+	noStroke.Parent = noBtn
+
+	local hoverTI = TweenInfo.new(0.12, Enum.EasingStyle.Quad)
+	yesBtn.MouseEnter:Connect(function()
+		TweenService:Create(yesBtn, hoverTI, { Size = UDim2.new(0, sx(156), 0, sx(46)) }):Play()
+		TweenService:Create(yesStroke, hoverTI, { Color = Color3.fromRGB(50, 200, 80) }):Play()
+	end)
+	yesBtn.MouseLeave:Connect(function()
+		TweenService:Create(yesBtn, hoverTI, { Size = UDim2.new(0, sx(150), 0, sx(44)) }):Play()
+		TweenService:Create(yesStroke, hoverTI, { Color = Color3.fromRGB(30, 140, 50) }):Play()
+	end)
+	noBtn.MouseEnter:Connect(function()
+		TweenService:Create(noBtn, hoverTI, { Size = UDim2.new(0, sx(126), 0, sx(46)) }):Play()
+		TweenService:Create(noBtn, hoverTI, { BackgroundColor3 = Color3.fromRGB(85, 70, 110) }):Play()
+	end)
+	noBtn.MouseLeave:Connect(function()
+		TweenService:Create(noBtn, hoverTI, { Size = UDim2.new(0, sx(120), 0, sx(44)) }):Play()
+		TweenService:Create(noBtn, hoverTI, { BackgroundColor3 = Color3.fromRGB(65, 55, 85) }):Play()
+	end)
+
+	yesBtn.MouseButton1Click:Connect(function()
+		dismiss()
+		SacrificeController.Close()
+		StoreController.Open()
+	end)
+
+	noBtn.MouseButton1Click:Connect(function()
+		dismiss()
+	end)
+
+	dim.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			if input.Position then
+				local absPos = box.AbsolutePosition
+				local absSize = box.AbsoluteSize
+				local px, py = input.Position.X, input.Position.Y
+				if px < absPos.X or px > absPos.X + absSize.X or py < absPos.Y or py > absPos.Y + absSize.Y then
+					dismiss()
+				end
+			end
+		end
+	end)
+
+	box.Size = UDim2.new(0, sx(200), 0, sx(120))
+	TweenService:Create(box, TweenInfo.new(0.25, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+		Size = UDim2.new(0, sx(400), 0, sx(240)),
+	}):Play()
 end
 
 -------------------------------------------------
@@ -1974,7 +2183,7 @@ local function buildGemRouletteContent()
 			end
 			local g = HUDController.Data.gems or 0
 			if amount > g then
-				showToast("Not enough gems! You have " .. formatNumber(g), Color3.fromRGB(200, 50, 50), 2)
+				showNotEnoughGemsPopup()
 				return
 			end
 			showConfirmation("Wager " .. formatNumber(amount) .. " Gems? 50/50 to DOUBLE or LOSE them all!", function()

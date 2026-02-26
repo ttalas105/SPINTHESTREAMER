@@ -2,7 +2,7 @@
 	PotionController.lua
 	Client UI for buying potions (shop modal) and showing active potion indicators
 	in the bottom-right corner with timer, potion icon, and tier number.
-	Includes Prismatic Potion (premium Robux) section with rainbow design.
+	Includes Divine Potion (premium Robux) section with rainbow design.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -31,12 +31,12 @@ local shopModal
 local indicatorContainer
 local luckIndicator
 local cashIndicator
-local prismaticIndicator
+local divineIndicator
 local isShopOpen = false
-local prismaticCountLabel -- shows how many prismatic potions player owns
+local divineCountLabel -- shows how many divine potions player owns
 
 -- Exposed active potion data so other controllers (HUD) can read it
-PotionController.ActivePotions = {} -- { Luck = {multiplier, tier, remaining}, Cash = ..., Prismatic = ... }
+PotionController.ActivePotions = {} -- { Luck = {multiplier, tier, remaining}, Cash = ..., Divine = ... }
 
 local BUBBLE_FONT = Enum.Font.FredokaOne
 
@@ -259,7 +259,7 @@ local function createIndicator(potionType, liquidColor, isRainbow)
 	typeLabel.Position = UDim2.new(0.5, 0, 0, 22)
 	typeLabel.AnchorPoint = Vector2.new(0.5, 0)
 	typeLabel.BackgroundTransparency = 1
-	typeLabel.Text = potionType == "Prismatic" and "PRISM" or potionType:upper()
+	typeLabel.Text = potionType == "Divine" and "DIVINE" or potionType:upper()
 	typeLabel.TextColor3 = liquidColor
 	typeLabel.Font = BUBBLE_FONT
 	typeLabel.TextSize = 10
@@ -645,11 +645,11 @@ local function buildShopModal()
 	scrollPad.Parent = scroll
 
 	-------------------------------------------------
-	-- PRISMATIC POTION (featured at top, special card)
+	-- DIVINE POTION (featured at top, special card)
 	-------------------------------------------------
-	local prisData = Potions.Prismatic
+	local prisData = Potions.Divine
 	local prisRow = Instance.new("Frame")
-	prisRow.Name = "PrismaticRow"
+	prisRow.Name = "DivineRow"
 	prisRow.Size = UDim2.new(1, -24, 0, 180)
 	prisRow.BackgroundColor3 = Color3.fromRGB(40, 30, 55)
 	prisRow.BorderSizePixel = 0
@@ -673,7 +673,7 @@ local function buildShopModal()
 	prisGrad.Rotation = 90
 	prisGrad.Parent = prisRow
 
-	-- Prismatic image
+	-- Divine image
 	local prisImgFrame = Instance.new("Frame")
 	prisImgFrame.Size = UDim2.new(0, IMG_SIZE, 0, IMG_SIZE)
 	prisImgFrame.Position = UDim2.new(0, 14, 0, 14)
@@ -708,7 +708,7 @@ local function buildShopModal()
 
 	local prisTextX = IMG_SIZE + 30
 
-	-- Prismatic name
+	-- Divine name
 	local prisName = Instance.new("TextLabel")
 	prisName.Size = UDim2.new(1, -(prisTextX + 14), 0, 28)
 	prisName.Position = UDim2.new(0, prisTextX, 0, 10)
@@ -726,7 +726,7 @@ local function buildShopModal()
 	pnStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
 	pnStroke.Parent = prisName
 
-	-- Prismatic description
+	-- Divine description
 	local prisDesc = Instance.new("TextLabel")
 	prisDesc.Size = UDim2.new(1, -(prisTextX + 14), 0, 20)
 	prisDesc.Position = UDim2.new(0, prisTextX, 0, 38)
@@ -740,12 +740,12 @@ local function buildShopModal()
 	prisDesc.ZIndex = 53
 	prisDesc.Parent = prisRow
 
-	-- "Prismatic" rarity label
+	-- "Divine" rarity label
 	local prisRarity = Instance.new("TextLabel")
 	prisRarity.Size = UDim2.new(0, 100, 0, 20)
 	prisRarity.Position = UDim2.new(0, prisTextX, 0, 60)
 	prisRarity.BackgroundTransparency = 1
-	prisRarity.Text = "Prismatic"
+	prisRarity.Text = "Divine"
 	prisRarity.TextColor3 = Color3.fromRGB(220, 140, 255)
 	prisRarity.Font = BUBBLE_FONT
 	prisRarity.TextSize = 14
@@ -753,19 +753,19 @@ local function buildShopModal()
 	prisRarity.ZIndex = 53
 	prisRarity.Parent = prisRow
 
-	-- Prismatic count + USE
-	prismaticCountLabel = Instance.new("TextLabel")
-	prismaticCountLabel.Name = "PrisCount"
-	prismaticCountLabel.Size = UDim2.new(0, 120, 0, 18)
-	prismaticCountLabel.Position = UDim2.new(0, prisTextX, 0, 82)
-	prismaticCountLabel.BackgroundTransparency = 1
-	prismaticCountLabel.Text = "Owned: 0"
-	prismaticCountLabel.TextColor3 = Color3.fromRGB(200, 180, 230)
-	prismaticCountLabel.Font = FONT_SUB
-	prismaticCountLabel.TextSize = 12
-	prismaticCountLabel.TextXAlignment = Enum.TextXAlignment.Left
-	prismaticCountLabel.ZIndex = 53
-	prismaticCountLabel.Parent = prisRow
+	-- Divine count + USE
+	divineCountLabel = Instance.new("TextLabel")
+	divineCountLabel.Name = "DivineCount"
+	divineCountLabel.Size = UDim2.new(0, 120, 0, 18)
+	divineCountLabel.Position = UDim2.new(0, prisTextX, 0, 82)
+	divineCountLabel.BackgroundTransparency = 1
+	divineCountLabel.Text = "Owned: 0"
+	divineCountLabel.TextColor3 = Color3.fromRGB(200, 180, 230)
+	divineCountLabel.Font = FONT_SUB
+	divineCountLabel.TextSize = 12
+	divineCountLabel.TextXAlignment = Enum.TextXAlignment.Left
+	divineCountLabel.ZIndex = 53
+	divineCountLabel.Parent = prisRow
 
 	local useBtn = Instance.new("TextButton")
 	useBtn.Name = "UseBtn"
@@ -789,7 +789,7 @@ local function buildShopModal()
 	ubStroke.Parent = useBtn
 
 	useBtn.MouseButton1Click:Connect(function()
-		BuyPotionRequest:FireServer("UsePrismatic", 0)
+		BuyPotionRequest:FireServer("UseDivine", 0)
 	end)
 	useBtn.MouseEnter:Connect(function()
 		TweenService:Create(useBtn, TweenInfo.new(0.1), { BackgroundColor3 = Color3.fromRGB(210, 110, 255) }):Play()
@@ -868,7 +868,7 @@ local function buildShopModal()
 			TweenService:Create(packBtn, TweenInfo.new(0.1), { BackgroundColor3 = Color3.fromRGB(60, 45, 85) }):Play()
 		end)
 		packBtn.MouseButton1Click:Connect(function()
-			local productId = Potions.PrismaticProductIds[capturedAmount]
+			local productId = Potions.DivineProductIds[capturedAmount]
 			if productId and productId > 0 then
 				MarketplaceService:PromptProductPurchase(player, productId)
 			end
@@ -958,21 +958,21 @@ function PotionController.Init()
 	cashIndicator.LayoutOrder = 2
 	cashIndicator.Parent = indicatorContainer
 
-	prismaticIndicator = createIndicator("Prismatic", Color3.fromRGB(255, 120, 255), true)
-	prismaticIndicator.LayoutOrder = 3
-	prismaticIndicator.Parent = indicatorContainer
+	divineIndicator = createIndicator("Divine", Color3.fromRGB(255, 120, 255), true)
+	divineIndicator.LayoutOrder = 3
+	divineIndicator.Parent = indicatorContainer
 
 	-- Listen for potion updates from server
 	PotionUpdate.OnClientEvent:Connect(function(payload)
 		PotionController.ActivePotions = payload or {}
 		updateIndicator(luckIndicator, payload.Luck, false)
 		updateIndicator(cashIndicator, payload.Cash, false)
-		updateIndicator(prismaticIndicator, payload.Prismatic, true)
+		updateIndicator(divineIndicator, payload.Divine, true)
 
-		-- Update prismatic count in shop
-		if prismaticCountLabel then
-			local count = payload._prismaticCount or 0
-			prismaticCountLabel.Text = "You have: " .. count .. " potion" .. (count ~= 1 and "s" or "")
+		-- Update divine count in shop
+		if divineCountLabel then
+			local count = payload._divineCount or 0
+			divineCountLabel.Text = "You have: " .. count .. " potion" .. (count ~= 1 and "s" or "")
 		end
 	end)
 
@@ -983,7 +983,7 @@ function PotionController.Init()
 			if shopModal and shopModal.Visible then
 				local flash = Instance.new("Frame")
 				flash.Size = UDim2.new(1, 0, 1, 0)
-				flash.BackgroundColor3 = result.potionType == "Prismatic" and Color3.fromRGB(200, 100, 255) or Color3.fromRGB(80, 255, 100)
+				flash.BackgroundColor3 = result.potionType == "Divine" and Color3.fromRGB(200, 100, 255) or Color3.fromRGB(80, 255, 100)
 				flash.BackgroundTransparency = 0.6
 				flash.ZIndex = 60
 				flash.Parent = shopModal

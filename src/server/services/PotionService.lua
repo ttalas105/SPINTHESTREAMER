@@ -1,9 +1,9 @@
 --[[
 	PotionService.lua
 	Server-side potion management.
-	Tracks active luck/cash/prismatic potions per player with expiry times.
+	Tracks active luck/cash/divine potions per player with expiry times.
 	Time stacks (+5 min each use, max 3 hours). Multiplier does NOT stack (replaced).
-	Prismatic (Robux) boosts both luck and cash simultaneously (x7).
+	Divine (Robux) boosts both luck and cash simultaneously (x5).
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -23,11 +23,11 @@ local BuyPotionResult = RemoteEvents:WaitForChild("BuyPotionResult")
 local PotionUpdate = RemoteEvents:WaitForChild("PotionUpdate")
 
 -- Per-player active potions:
--- { [userId] = { Luck = {multiplier, tier, expiresAt}, Cash = {...}, Prismatic = {...} } }
+-- { [userId] = { Luck = {multiplier, tier, expiresAt}, Cash = {...}, Divine = {...} } }
 local activeEffects = {}
 
--- Per-player pending Prismatic potion count (bought with Robux, consumed one at a time)
-local prismaticInventory = {} -- { [userId] = count }
+-- Per-player pending Divine potion count (bought with Robux, consumed one at a time)
+local divineInventory = {} -- { [userId] = count }
 
 -------------------------------------------------
 -- HELPERS
@@ -53,8 +53,8 @@ local function sendPotionUpdate(player)
 			}
 		end
 	end
-	-- Include prismatic inventory count
-	payload._prismaticCount = prismaticInventory[player.UserId] or 0
+	-- Include divine inventory count
+	payload._divineCount = divineInventory[player.UserId] or 0
 	PotionUpdate:FireClient(player, payload)
 end
 
@@ -100,14 +100,14 @@ local function handleBuyPotion(player, potionType, tier)
 		return
 	end
 
-	-- Check conflicts with Prismatic (Prismatic covers both Luck + Cash)
+	-- Check conflicts with Divine (Divine covers both Luck + Cash)
 	local effects = getEffects(player.UserId)
 	local now = os.time()
-	local prismatic = effects.Prismatic
-	if prismatic and prismatic.expiresAt > now then
+	local divine = effects.Divine
+	if divine and divine.expiresAt > now then
 		BuyPotionResult:FireClient(player, {
 			success = false,
-			reason = "You have a Prismatic Potion active! It already boosts " .. potionType .. ".",
+			reason = "You have a Divine Potion active! It already boosts " .. potionType .. ".",
 		})
 		return
 	end
@@ -152,17 +152,17 @@ local function handleBuyPotion(player, potionType, tier)
 end
 
 -------------------------------------------------
--- PRISMATIC POTION (Robux)
+-- DIVINE POTION (Robux)
 -------------------------------------------------
 
--- Consume one prismatic potion from inventory (activate or extend time)
-local function handleUsePrismatic(player)
+-- Consume one divine potion from inventory (activate or extend time)
+local function handleUseDivine(player)
 	local userId = player.UserId
-	local count = prismaticInventory[userId] or 0
+	local count = divineInventory[userId] or 0
 	if count <= 0 then
 		BuyPotionResult:FireClient(player, {
 			success = false,
-			reason = "You have no Prismatic Potions! Purchase some first.",
+			reason = "You have no Divine Potions! Purchase some first.",
 		})
 		return
 	end
@@ -170,22 +170,22 @@ local function handleUsePrismatic(player)
 	local effects = getEffects(userId)
 	local now = os.time()
 
-	-- Check conflicts: cannot use Prismatic if Luck or Cash potion is active
+	-- Check conflicts: cannot use Divine if Luck or Cash potion is active
 	local luckActive = effects.Luck and effects.Luck.expiresAt > now
 	local cashActive = effects.Cash and effects.Cash.expiresAt > now
 	if luckActive or cashActive then
 		local activeType = luckActive and "Luck" or "Cash"
 		BuyPotionResult:FireClient(player, {
 			success = false,
-			reason = "You have a " .. activeType .. " Potion active! Wait for it to expire before using Prismatic.",
+			reason = "You have a " .. activeType .. " Potion active! Wait for it to expire before using Divine.",
 		})
 		return
 	end
 
 	-- Use one potion
-	prismaticInventory[userId] = count - 1
+	divineInventory[userId] = count - 1
 
-	local existing = effects.Prismatic
+	local existing = effects.Divine
 	if existing and existing.expiresAt > now then
 		-- Stack time
 		local currentRemaining = existing.expiresAt - now
@@ -193,9 +193,9 @@ local function handleUsePrismatic(player)
 		existing.expiresAt = now + newRemaining
 	else
 		-- Start fresh
-		effects.Prismatic = {
-			multiplier = Potions.Prismatic.multiplier,
-			tier = 0, -- Prismatic has no tier
+		effects.Divine = {
+			multiplier = Potions.Divine.multiplier,
+			tier = 0,
 			expiresAt = now + Potions.DURATION_PER_USE,
 		}
 	end
@@ -203,22 +203,22 @@ local function handleUsePrismatic(player)
 	sendPotionUpdate(player)
 	BuyPotionResult:FireClient(player, {
 		success = true,
-		potionType = "Prismatic",
+		potionType = "Divine",
 		tier = 0,
-		name = Potions.Prismatic.name,
+		name = Potions.Divine.name,
 	})
 end
 
--- Grant prismatic potions after Robux purchase
-local function grantPrismaticPotions(player, amount)
+-- Grant divine potions after Robux purchase
+local function grantDivinePotions(player, amount)
 	local userId = player.UserId
-	prismaticInventory[userId] = (prismaticInventory[userId] or 0) + amount
+	divineInventory[userId] = (divineInventory[userId] or 0) + amount
 	sendPotionUpdate(player)
 	BuyPotionResult:FireClient(player, {
 		success = true,
-		potionType = "PrismaticPurchase",
+		potionType = "DivinePurchase",
 		tier = 0,
-		name = amount .. "x Prismatic Potion" .. (amount > 1 and "s" or ""),
+		name = amount .. "x Divine Potion" .. (amount > 1 and "s" or ""),
 		amount = amount,
 	})
 	if QuestService then
@@ -248,9 +248,9 @@ function PotionService.GetLuckMultiplier(player): number
 	end
 	if effects.SacrificeLuck and effects.SacrificeLuck.expiresAt <= now then effects.SacrificeLuck = nil end
 
-	-- Check Prismatic first (it covers luck)
-	if effects.Prismatic and effects.Prismatic.expiresAt > now then
-		return effects.Prismatic.multiplier
+	-- Check Divine first (it covers luck)
+	if effects.Divine and effects.Divine.expiresAt > now then
+		return effects.Divine.multiplier
 	end
 
 	if effects.Luck and effects.Luck.expiresAt > now then
@@ -259,7 +259,7 @@ function PotionService.GetLuckMultiplier(player): number
 
 	-- Cleanup expired
 	if effects.Luck and effects.Luck.expiresAt <= now then effects.Luck = nil end
-	if effects.Prismatic and effects.Prismatic.expiresAt <= now then effects.Prismatic = nil end
+	if effects.Divine and effects.Divine.expiresAt <= now then effects.Divine = nil end
 
 	return 1
 end
@@ -281,9 +281,9 @@ function PotionService.GetCashMultiplier(player): number
 
 	local now = os.time()
 
-	-- Check Prismatic first (it covers cash)
-	if effects.Prismatic and effects.Prismatic.expiresAt > now then
-		return effects.Prismatic.multiplier
+	-- Check Divine first (it covers cash)
+	if effects.Divine and effects.Divine.expiresAt > now then
+		return effects.Divine.multiplier
 	end
 
 	if effects.Cash and effects.Cash.expiresAt > now then
@@ -292,20 +292,20 @@ function PotionService.GetCashMultiplier(player): number
 
 	-- Cleanup expired
 	if effects.Cash and effects.Cash.expiresAt <= now then effects.Cash = nil end
-	if effects.Prismatic and effects.Prismatic.expiresAt <= now then effects.Prismatic = nil end
+	if effects.Divine and effects.Divine.expiresAt <= now then effects.Divine = nil end
 
 	return 1
 end
 
---- Grant prismatic potions (called by ReceiptHandler after Robux purchase)
-function PotionService.GrantPrismaticPotions(player, amount)
-	grantPrismaticPotions(player, amount)
+--- Grant divine potions (called by ReceiptHandler after Robux purchase)
+function PotionService.GrantDivinePotions(player, amount)
+	grantDivinePotions(player, amount)
 end
 
 --- Clear all active potions for a player (used on rebirth)
 function PotionService.ClearPotions(player)
 	activeEffects[player.UserId] = {}
-	-- Note: prismatic inventory (bought with Robux) and SacrificeLuck are cleared
+	-- Note: divine inventory (bought with Robux) and SacrificeLuck are cleared
 	sendPotionUpdate(player)
 end
 
@@ -318,8 +318,8 @@ function PotionService.Init(playerDataModule)
 
 	-- Regular potion purchases (in-game cash)
 	BuyPotionRequest.OnServerEvent:Connect(function(player, potionType, tier)
-		if potionType == "UsePrismatic" then
-			handleUsePrismatic(player)
+		if potionType == "UseDivine" then
+			handleUseDivine(player)
 		else
 			handleBuyPotion(player, potionType, tier)
 		end
@@ -343,7 +343,7 @@ function PotionService.Init(playerDataModule)
 	-- Cleanup on leave
 	Players.PlayerRemoving:Connect(function(player)
 		activeEffects[player.UserId] = nil
-		prismaticInventory[player.UserId] = nil
+		divineInventory[player.UserId] = nil
 	end)
 end
 

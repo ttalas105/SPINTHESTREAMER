@@ -16,6 +16,7 @@ local Effects     = require(ReplicatedStorage.Shared.Config.Effects)
 local Rarities    = require(ReplicatedStorage.Shared.Config.Rarities)
 local UIHelper    = require(script.Parent.UIHelper)
 local HUDController = require(script.Parent.HUDController)
+local StoreController = require(script.Parent.StoreController)
 
 local GemShopController = {}
 
@@ -67,6 +68,205 @@ local function addStroke(parent, color, thickness)
 	s.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
 	s.Parent = parent
 	return s
+end
+
+local activeGemPopup = nil
+
+local function showNotEnoughGemsPopup()
+	if activeGemPopup and activeGemPopup.Parent then activeGemPopup:Destroy() end
+
+	local dim = Instance.new("Frame")
+	dim.Name = "GemPopupDim"
+	dim.Size = UDim2.new(1, 0, 1, 0)
+	dim.BackgroundColor3 = Color3.new(0, 0, 0)
+	dim.BackgroundTransparency = 1
+	dim.BorderSizePixel = 0
+	dim.ZIndex = 80
+	dim.Parent = screenGui
+	activeGemPopup = dim
+
+	TweenService:Create(dim, TweenInfo.new(0.2), { BackgroundTransparency = 0.4 }):Play()
+
+	local box = Instance.new("Frame")
+	box.Name = "GemPopupBox"
+	box.Size = UDim2.new(0, 400, 0, 240)
+	box.Position = UDim2.new(0.5, 0, 0.5, 0)
+	box.AnchorPoint = Vector2.new(0.5, 0.5)
+	box.BackgroundColor3 = Color3.fromRGB(28, 22, 48)
+	box.BorderSizePixel = 0
+	box.ZIndex = 81
+	box.Parent = dim
+	Instance.new("UICorner", box).CornerRadius = UDim.new(0, 22)
+
+	local boxStroke = Instance.new("UIStroke")
+	boxStroke.Color = Color3.fromRGB(120, 90, 200)
+	boxStroke.Thickness = 2.5
+	boxStroke.Parent = box
+
+	local grad = Instance.new("UIGradient")
+	grad.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(45, 35, 75)),
+		ColorSequenceKeypoint.new(0.5, Color3.fromRGB(32, 26, 55)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(22, 18, 38)),
+	})
+	grad.Rotation = 90
+	grad.Parent = box
+
+	UIHelper.CreateShadow(box)
+
+	local gemIcon = Instance.new("TextLabel")
+	gemIcon.Size = UDim2.new(0, 56, 0, 56)
+	gemIcon.Position = UDim2.new(0.5, 0, 0, 22)
+	gemIcon.AnchorPoint = Vector2.new(0.5, 0)
+	gemIcon.BackgroundTransparency = 1
+	gemIcon.Text = "\u{1F48E}"
+	gemIcon.TextScaled = true
+	gemIcon.Font = FONT
+	gemIcon.ZIndex = 83
+	gemIcon.Parent = box
+
+	local title = Instance.new("TextLabel")
+	title.Size = UDim2.new(1, -40, 0, 30)
+	title.Position = UDim2.new(0.5, 0, 0, 84)
+	title.AnchorPoint = Vector2.new(0.5, 0)
+	title.BackgroundTransparency = 1
+	title.Text = "Not Enough Gems!"
+	title.TextColor3 = Color3.fromRGB(255, 90, 90)
+	title.Font = FONT
+	title.TextSize = 26
+	title.ZIndex = 82
+	title.Parent = box
+	addStroke(title, Color3.fromRGB(0, 0, 0), 2.5)
+
+	local desc = Instance.new("TextLabel")
+	desc.Size = UDim2.new(1, -50, 0, 20)
+	desc.Position = UDim2.new(0.5, 0, 0, 120)
+	desc.AnchorPoint = Vector2.new(0.5, 0)
+	desc.BackgroundTransparency = 1
+	desc.Text = "Would you like to buy more gems?"
+	desc.TextColor3 = Color3.fromRGB(190, 185, 210)
+	desc.Font = FONT_SUB
+	desc.TextSize = 14
+	desc.ZIndex = 82
+	desc.Parent = box
+
+	local function dismiss()
+		TweenService:Create(dim, TweenInfo.new(0.15), { BackgroundTransparency = 1 }):Play()
+		TweenService:Create(box, TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.In), {
+			Size = UDim2.new(0, 200, 0, 120),
+		}):Play()
+		task.delay(0.16, function()
+			if dim.Parent then dim:Destroy() end
+			activeGemPopup = nil
+		end)
+	end
+
+	local btnRow = Instance.new("Frame")
+	btnRow.Size = UDim2.new(1, -60, 0, 44)
+	btnRow.Position = UDim2.new(0.5, 0, 1, -32)
+	btnRow.AnchorPoint = Vector2.new(0.5, 1)
+	btnRow.BackgroundTransparency = 1
+	btnRow.ZIndex = 82
+	btnRow.Parent = box
+
+	local btnLayout = Instance.new("UIListLayout")
+	btnLayout.FillDirection = Enum.FillDirection.Horizontal
+	btnLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	btnLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+	btnLayout.Padding = UDim.new(0, 16)
+	btnLayout.Parent = btnRow
+
+	local yesBtn = Instance.new("TextButton")
+	yesBtn.Name = "YesBtn"
+	yesBtn.Size = UDim2.new(0, 150, 0, 44)
+	yesBtn.BackgroundColor3 = Color3.fromRGB(50, 190, 80)
+	yesBtn.Text = "Yes, Buy Gems!"
+	yesBtn.TextColor3 = Color3.new(1, 1, 1)
+	yesBtn.Font = FONT
+	yesBtn.TextSize = 16
+	yesBtn.BorderSizePixel = 0
+	yesBtn.AutoButtonColor = false
+	yesBtn.ZIndex = 83
+	yesBtn.Parent = btnRow
+	Instance.new("UICorner", yesBtn).CornerRadius = UDim.new(0, 12)
+
+	local yesStroke = Instance.new("UIStroke")
+	yesStroke.Color = Color3.fromRGB(30, 140, 50)
+	yesStroke.Thickness = 2
+	yesStroke.Parent = yesBtn
+
+	local yesGrad = Instance.new("UIGradient")
+	yesGrad.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(70, 220, 100)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(40, 170, 65)),
+	})
+	yesGrad.Rotation = 90
+	yesGrad.Parent = yesBtn
+
+	local noBtn = Instance.new("TextButton")
+	noBtn.Name = "NoBtn"
+	noBtn.Size = UDim2.new(0, 120, 0, 44)
+	noBtn.BackgroundColor3 = Color3.fromRGB(65, 55, 85)
+	noBtn.Text = "No Thanks"
+	noBtn.TextColor3 = Color3.fromRGB(180, 170, 200)
+	noBtn.Font = FONT
+	noBtn.TextSize = 16
+	noBtn.BorderSizePixel = 0
+	noBtn.AutoButtonColor = false
+	noBtn.ZIndex = 83
+	noBtn.Parent = btnRow
+	Instance.new("UICorner", noBtn).CornerRadius = UDim.new(0, 12)
+
+	local noStroke = Instance.new("UIStroke")
+	noStroke.Color = Color3.fromRGB(90, 75, 120)
+	noStroke.Thickness = 2
+	noStroke.Parent = noBtn
+
+	local hoverTI = TweenInfo.new(0.12, Enum.EasingStyle.Quad)
+	yesBtn.MouseEnter:Connect(function()
+		TweenService:Create(yesBtn, hoverTI, { Size = UDim2.new(0, 156, 0, 46) }):Play()
+		TweenService:Create(yesStroke, hoverTI, { Color = Color3.fromRGB(50, 200, 80) }):Play()
+	end)
+	yesBtn.MouseLeave:Connect(function()
+		TweenService:Create(yesBtn, hoverTI, { Size = UDim2.new(0, 150, 0, 44) }):Play()
+		TweenService:Create(yesStroke, hoverTI, { Color = Color3.fromRGB(30, 140, 50) }):Play()
+	end)
+	noBtn.MouseEnter:Connect(function()
+		TweenService:Create(noBtn, hoverTI, { Size = UDim2.new(0, 126, 0, 46) }):Play()
+		TweenService:Create(noBtn, hoverTI, { BackgroundColor3 = Color3.fromRGB(85, 70, 110) }):Play()
+	end)
+	noBtn.MouseLeave:Connect(function()
+		TweenService:Create(noBtn, hoverTI, { Size = UDim2.new(0, 120, 0, 44) }):Play()
+		TweenService:Create(noBtn, hoverTI, { BackgroundColor3 = Color3.fromRGB(65, 55, 85) }):Play()
+	end)
+
+	yesBtn.MouseButton1Click:Connect(function()
+		dismiss()
+		GemShopController.Close()
+		StoreController.Open()
+	end)
+
+	noBtn.MouseButton1Click:Connect(function()
+		dismiss()
+	end)
+
+	dim.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			if input.Position then
+				local absPos = box.AbsolutePosition
+				local absSize = box.AbsoluteSize
+				local px, py = input.Position.X, input.Position.Y
+				if px < absPos.X or px > absPos.X + absSize.X or py < absPos.Y or py > absPos.Y + absSize.Y then
+					dismiss()
+				end
+			end
+		end
+	end)
+
+	box.Size = UDim2.new(0, 200, 0, 120)
+	TweenService:Create(box, TweenInfo.new(0.25, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+		Size = UDim2.new(0, 400, 0, 240),
+	}):Play()
 end
 
 local function stopViewports()
@@ -697,10 +897,7 @@ local function buildCaseCard(caseData, parent, order)
 		buyBtn.MouseButton1Click:Connect(function()
 			local gems = HUDController.Data.gems or 0
 			if gems < caseData.cost then
-				buyText.Text = "Need more gems!"
-				task.delay(1.5, function()
-					if buyText.Parent then buyText.Text = "OPEN" end
-				end)
+				showNotEnoughGemsPopup()
 				return
 			end
 			BuyGemCase:FireServer(caseData.id)
@@ -915,24 +1112,29 @@ function GemShopController.Init()
 			if autoOpenEnabled then
 				autoOpenEnabled = false; autoOpenCaseId = nil
 			end
-			local toast = Instance.new("Frame")
-			toast.Size = UDim2.new(0.7, 0, 0, 42)
-			toast.Position = UDim2.new(0.5, 0, 0.92, 0)
-			toast.AnchorPoint = Vector2.new(0.5, 0.5)
-			toast.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-			toast.BorderSizePixel = 0; toast.ZIndex = 25
-			toast.Parent = modalFrame
-			Instance.new("UICorner", toast).CornerRadius = UDim.new(0, 10)
-			local tL = Instance.new("TextLabel")
-			tL.Size = UDim2.new(1, -12, 1, 0)
-			tL.Position = UDim2.new(0.5, 0, 0.5, 0)
-			tL.AnchorPoint = Vector2.new(0.5, 0.5)
-			tL.BackgroundTransparency = 1
-			tL.Text = result.reason or "Error!"
-			tL.TextColor3 = Color3.new(1, 1, 1)
-			tL.Font = FONT; tL.TextSize = 14; tL.ZIndex = 26
-			tL.Parent = toast
-			task.delay(2, function() if toast.Parent then toast:Destroy() end end)
+			local isGemError = result.reason and string.find(result.reason, "gem", 1, true)
+			if isGemError then
+				showNotEnoughGemsPopup()
+			else
+				local toast = Instance.new("Frame")
+				toast.Size = UDim2.new(0.7, 0, 0, 42)
+				toast.Position = UDim2.new(0.5, 0, 0.92, 0)
+				toast.AnchorPoint = Vector2.new(0.5, 0.5)
+				toast.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+				toast.BorderSizePixel = 0; toast.ZIndex = 25
+				toast.Parent = modalFrame
+				Instance.new("UICorner", toast).CornerRadius = UDim.new(0, 10)
+				local tL = Instance.new("TextLabel")
+				tL.Size = UDim2.new(1, -12, 1, 0)
+				tL.Position = UDim2.new(0.5, 0, 0.5, 0)
+				tL.AnchorPoint = Vector2.new(0.5, 0.5)
+				tL.BackgroundTransparency = 1
+				tL.Text = result.reason or "Error!"
+				tL.TextColor3 = Color3.new(1, 1, 1)
+				tL.Font = FONT; tL.TextSize = 14; tL.ZIndex = 26
+				tL.Parent = toast
+				task.delay(2, function() if toast.Parent then toast:Destroy() end end)
+			end
 		end
 	end)
 

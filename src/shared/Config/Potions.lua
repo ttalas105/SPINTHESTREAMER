@@ -1,8 +1,8 @@
 --[[
 	Potions.lua
-	Potion definitions: Luck potions, Cash (Gold) potions, and Prismatic (premium).
+	Potion definitions: Luck potions, Cash (Gold) potions, and Divine (premium).
 	Each has 3 tiers with increasing multipliers (Luck/Cash).
-	Prismatic is a single-tier premium potion (Robux) that boosts both luck AND cash x7.
+	Divine is a single-tier premium potion (Robux) that boosts both luck AND cash x5.
 	Duration: 5 minutes per use. Time stacks up to 3 hours. Multiplier does NOT stack.
 ]]
 
@@ -12,7 +12,7 @@ local Potions = {}
 Potions.DURATION_PER_USE = 5 * 60  -- 5 minutes
 Potions.MAX_DURATION = 3 * 60 * 60 -- 3 hours
 
--- Luck3 and Prismatic imageIds = pending (no decal yet).
+-- Luck3 and Divine imageIds = pending (no decal yet).
 Potions.Types = {
 	Luck = {
 		{ tier = 1, name = "Luck Potion 1",  multiplier = 1.2, cost = 10000,    rarity = "Common",   color = Color3.fromRGB(80, 255, 100),  imageId = "rbxassetid://117397968445761", desc = "+1.2x luck multiplier for 5m" },
@@ -26,10 +26,10 @@ Potions.Types = {
 	},
 }
 
--- Prismatic potion: premium (Robux). Boosts BOTH luck and cash x5.
+-- Divine potion: premium (Robux). Boosts BOTH luck and cash x5.
 -- Single tier only. Stacks time, not buffs. Same stacking rules apply.
-Potions.Prismatic = {
-	name = "Prismatic Potion",
+Potions.Divine = {
+	name = "Divine Potion",
 	multiplier = 5,
 	color = Color3.fromRGB(255, 120, 255),
 	imageId = "rbxassetid://126494728573780",
@@ -41,17 +41,16 @@ Potions.Prismatic = {
 	},
 }
 
--- Developer Product IDs (set these in Roblox Game Settings > Monetization)
--- IMPORTANT: Create Developer Products in your game settings and paste the IDs here
-Potions.PrismaticProductIds = {
-	[1]  = 0,  -- Replace 0 with the Developer Product ID for 1 Prismatic Potion (60 Robux)
-	[5]  = 0,  -- Replace 0 with the Developer Product ID for 5 Prismatic Potions (240 Robux)
-	[10] = 0,  -- Replace 0 with the Developer Product ID for 10 Prismatic Potions (480 Robux)
+-- Developer Product IDs for Divine Potion packs
+Potions.DivineProductIds = {
+	[1]  = 3545295679,
+	[3]  = 3545295909,
+	[10] = 3545296046,
 }
 
 -- Reverse lookup: productId -> pack amount
 Potions.ProductIdToAmount = {}
-for amount, productId in pairs(Potions.PrismaticProductIds) do
+for amount, productId in pairs(Potions.DivineProductIds) do
 	if productId > 0 then
 		Potions.ProductIdToAmount[productId] = amount
 	end

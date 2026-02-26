@@ -14,6 +14,7 @@ local DesignConfig = require(ReplicatedStorage.Shared.Config.DesignConfig)
 local SlotsConfig = require(ReplicatedStorage.Shared.Config.SlotsConfig)
 local Streamers = require(ReplicatedStorage.Shared.Config.Streamers)
 local Effects = require(ReplicatedStorage.Shared.Config.Effects)
+local Economy = require(ReplicatedStorage.Shared.Config.Economy)
 local VFXHelper = require(ReplicatedStorage.Shared.VFXHelper)
 
 local RemoteEvents = ReplicatedStorage:WaitForChild("RemoteEvents")
@@ -97,7 +98,7 @@ local function updatePadVisuals(player: Player, padSlot: number)
 	end
 end
 
---- Effective cash/sec for a streamer item including effect, cash upgrade, and potion
+--- Effective cash/sec for a streamer item including effect, cash upgrade, potion, and VIP
 local function getEffectiveCps(player: Player, streamerItem): number
 	local streamerId = type(streamerItem) == "table" and streamerItem.id or streamerItem
 	local effectName = type(streamerItem) == "table" and streamerItem.effect or nil
@@ -112,7 +113,8 @@ local function getEffectiveCps(player: Player, streamerItem): number
 	end
 	local cashUpgradeMult = PlayerData and PlayerData.GetCashUpgradeMultiplier(player) or 1
 	local potionMult = PotionService and PotionService.GetCashMultiplier(player) or 1
-	return cps * cashUpgradeMult * potionMult
+	local vipCashMult = (PlayerData and PlayerData.HasVIP(player)) and (Economy.VIPCashMultiplier or 1.5) or 1
+	return cps * cashUpgradeMult * potionMult * vipCashMult
 end
 
 local function buildBillboardText(info, streamerId, effectName, rarityColor, cps)

@@ -39,9 +39,12 @@ HUDController.Data = {
 	totalSlots = 1,
 	premiumSlotUnlocked = false,
 	doubleCash = false,
+	hasVIP = false,
+	hasX2Luck = false,
 	spinCredits = 0,
 	sacrificeOneTime = {},
 	sacrificeChargeState = { FiftyFifty = { count = 0, nextAt = nil }, FeelingLucky = { count = 0, nextAt = nil } },
+	tutorialComplete = nil,
 }
 
 local onDataUpdated = {}
@@ -197,19 +200,19 @@ function HUDController.UpdateData(payload)
 		local potionMult = 1
 		local potionSource = ""
 		if PotionController and PotionController.ActivePotions then
-			-- Prismatic covers both luck and cash
-			if PotionController.ActivePotions.Prismatic and PotionController.ActivePotions.Prismatic.multiplier then
-				potionMult = PotionController.ActivePotions.Prismatic.multiplier
-				potionSource = "Prismatic"
+			-- Divine covers both luck and cash
+			if PotionController.ActivePotions.Divine and PotionController.ActivePotions.Divine.multiplier then
+				potionMult = PotionController.ActivePotions.Divine.multiplier
+				potionSource = "Divine"
 			elseif PotionController.ActivePotions.Luck and PotionController.ActivePotions.Luck.multiplier then
 				potionMult = PotionController.ActivePotions.Luck.multiplier
 				potionSource = "Luck"
 			end
 		end
 		if potionMult > 1 then
-			local potionLabel = potionSource == "Prismatic" and "Prismatic" or "Potion"
+			local potionLabel = potionSource == "Divine" and "Divine" or "Potion"
 			luckLabel.Text = ("Luck: %d (+%d%%)  |  %s: x%.1f"):format(luck, percent, potionLabel, potionMult)
-			luckLabel.TextColor3 = potionSource == "Prismatic" and Color3.fromRGB(255, 150, 255) or Color3.fromRGB(80, 255, 100)
+			luckLabel.TextColor3 = potionSource == "Divine" and Color3.fromRGB(255, 150, 255) or Color3.fromRGB(80, 255, 100)
 		else
 			luckLabel.Text = ("Luck: %d (+%d%%)"):format(luck, percent)
 			luckLabel.TextColor3 = Color3.fromRGB(200, 180, 255) -- default purple

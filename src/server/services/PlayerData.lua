@@ -107,6 +107,8 @@ local DEFAULT_DATA = {
 	cashUpgrade = 0,          -- coin multiplier upgrade count; each +1 = +2% cash production
 	premiumSlotUnlocked = false,
 	doubleCash = false,
+	hasVIP = false,
+	hasX2Luck = false,
 	spinCredits = 0,
 	-- Sacrifice: one-time completed, charge slots (rechargeAt times)
 	sacrificeOneTime = {},
@@ -256,6 +258,8 @@ local function buildFullPayload(player, data)
 		cashUpgrade = data.cashUpgrade or 0,
 		premiumSlotUnlocked = data.premiumSlotUnlocked,
 		doubleCash = data.doubleCash,
+		hasVIP = data.hasVIP or false,
+		hasX2Luck = data.hasX2Luck or false,
 		spinCredits = data.spinCredits,
 		totalSlots = SlotsConfig.GetTotalSlots(data.rebirthCount, data.premiumSlotUnlocked),
 		tutorialComplete = data.tutorialComplete or false,
@@ -278,8 +282,8 @@ end
 -- Scalar fields use == comparison; tables always resend (cheap enough for correctness)
 local SCALAR_FIELDS = {
 	"cash", "gems", "rebirthCount", "luck", "cashUpgrade",
-	"premiumSlotUnlocked", "doubleCash", "spinCredits", "totalSlots",
-	"tutorialComplete",
+	"premiumSlotUnlocked", "doubleCash", "hasVIP", "hasX2Luck",
+	"spinCredits", "totalSlots", "tutorialComplete",
 }
 local SCALAR_SET = {}
 for _, f in ipairs(SCALAR_FIELDS) do SCALAR_SET[f] = true end
@@ -905,6 +909,32 @@ function PlayerData.HasDoubleCash(player): boolean
 	local data = PlayerData.Get(player)
 	if not data then return false end
 	return data.doubleCash == true
+end
+
+function PlayerData.SetVIP(player, active: boolean)
+	local data = PlayerData.Get(player)
+	if not data then return end
+	data.hasVIP = active
+	PlayerData.Replicate(player)
+end
+
+function PlayerData.HasVIP(player): boolean
+	local data = PlayerData.Get(player)
+	if not data then return false end
+	return data.hasVIP == true
+end
+
+function PlayerData.SetX2Luck(player, active: boolean)
+	local data = PlayerData.Get(player)
+	if not data then return end
+	data.hasX2Luck = active
+	PlayerData.Replicate(player)
+end
+
+function PlayerData.HasX2Luck(player): boolean
+	local data = PlayerData.Get(player)
+	if not data then return false end
+	return data.hasX2Luck == true
 end
 
 function PlayerData.IncrementStat(player, statName: string, amount: number)

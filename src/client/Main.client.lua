@@ -284,6 +284,20 @@ HUDController.OnDataUpdated(function(data)
 	end
 end)
 
+-- Safety fallback: if the initial data arrived before the callback was registered,
+-- check now so the tutorial still triggers for new players.
+task.defer(function()
+	local data = HUDController.Data
+	if not tutorialStarted and data.tutorialComplete ~= nil then
+		tutorialStarted = true
+		if TutorialController.ShouldStart(data) then
+			task.delay(1.5, function()
+				TutorialController.Start()
+			end)
+		end
+	end
+end)
+
 -- When sacrifice queues change, refresh inventory/storage visuals
 SacrificeController.OnQueueChanged(function()
 	InventoryController.RefreshVisuals()
@@ -376,6 +390,26 @@ SellResult.OnClientEvent:Connect(function(data)
 		print("[Client] Sold! +$" .. data.cashEarned)
 	else
 		print("[Client] Sell failed: " .. (data.reason or "unknown"))
+	end
+end)
+
+-------------------------------------------------
+-- ENHANCED CASE RESULT (uses same spin animation)
+-------------------------------------------------
+
+local EnhancedCaseResult = RemoteEvents:WaitForChild("EnhancedCaseResult")
+EnhancedCaseResult.OnClientEvent:Connect(function(data)
+	if data.success then
+		StoreController.Close()
+		closeAllModals("EnhancedCase")
+
+		SpinController._startSpin({
+			success = true,
+			streamerId = data.streamerId,
+			displayName = data.displayName,
+			rarity = data.rarity,
+			effect = data.effect,
+		})
 	end
 end)
 

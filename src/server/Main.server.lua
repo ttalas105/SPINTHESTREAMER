@@ -361,7 +361,7 @@ end
 -- Ensure new remote events exist before services init
 do
 	local remotes = ReplicatedStorage:WaitForChild("RemoteEvents")
-	local newRemotes = { "ClaimQuestReward", "QuestUpdate" }
+	local newRemotes = { "ClaimQuestReward", "QuestUpdate", "EnhancedCaseResult" }
 	for _, name in ipairs(newRemotes) do
 		if not remotes:FindFirstChild(name) then
 			local re = Instance.new("RemoteEvent")
