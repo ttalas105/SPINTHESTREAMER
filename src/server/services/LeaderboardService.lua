@@ -258,26 +258,32 @@ function LeaderboardService.Init(playerDataModule)
 		print("[LeaderboardService] Initial local board refresh done")
 	end)
 
-	-- Push stats loop
-	task.spawn(function()
-		task.wait(10)
-		pcall(pushAllPlayerStats)
-		while true do
-			task.wait(PUSH_INTERVAL)
-			local ok, err = pcall(pushAllPlayerStats)
-			if not ok then warn("[LeaderboardService] Push cycle error: " .. tostring(err)) end
-		end
-	end)
+	-- OrderedDataStore loops are disabled in Studio by default (API access is commonly off),
+	-- which avoids noisy 403/GetSortedAsync spam while keeping local fallback boards active.
+	if not isStudio then
+		-- Push stats loop
+		task.spawn(function()
+			task.wait(10)
+			pcall(pushAllPlayerStats)
+			while true do
+				task.wait(PUSH_INTERVAL)
+				local ok, err = pcall(pushAllPlayerStats)
+				if not ok then warn("[LeaderboardService] Push cycle error: " .. tostring(err)) end
+			end
+		end)
 
-	-- Fetch + display loop
-	task.spawn(function()
-		task.wait(15)
-		while true do
-			local ok, err = pcall(fetchAndDisplay)
-			if not ok then warn("[LeaderboardService] Fetch cycle error: " .. tostring(err)) end
-			task.wait(FETCH_INTERVAL)
-		end
-	end)
+		-- Fetch + display loop
+		task.spawn(function()
+			task.wait(15)
+			while true do
+				local ok, err = pcall(fetchAndDisplay)
+				if not ok then warn("[LeaderboardService] Fetch cycle error: " .. tostring(err)) end
+				task.wait(FETCH_INTERVAL)
+			end
+		end)
+	else
+		print("[LeaderboardService] Studio mode: using local leaderboard fallback only")
+	end
 
 	-- Time played tick (every 10 seconds)
 	task.spawn(function()

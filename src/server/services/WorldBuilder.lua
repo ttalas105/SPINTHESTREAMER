@@ -924,6 +924,12 @@ local LB_BOARD_H      = 22
 local LB_BOARD_DEPTH  = 1.5
 local LB_SPACING      = 20
 local LB_DISPLAY_ROWS = 10
+local LB_BOARD_W      = 28
+local LB_BOARD_H      = 38
+local LB_BOARD_DEPTH  = 2.5
+local LB_SPACING      = 34
+local LB_DISPLAY_ROWS = 10
+local LB_CENTER_OFFSET = Vector3.new(0, 52, 0) -- centered above shop stalls
 
 local function buildLeaderboards()
 	local folder = Instance.new("Folder")
@@ -931,13 +937,14 @@ local function buildLeaderboards()
 	folder.Parent = Workspace
 
 	local ctr = DesignConfig.HubCenter
+	local lbCenter = ctr + LB_CENTER_OFFSET
 	local totalW = (#LEADERBOARD_CATEGORIES - 1) * LB_SPACING
-	local startX = ctr.X - totalW / 2 - 150
-	local boardZ = ctr.Z
+	local startX = lbCenter.X - totalW / 2
+	local boardZ = lbCenter.Z
 
 	for i, cat in ipairs(LEADERBOARD_CATEGORIES) do
 		local x = startX + (i - 1) * LB_SPACING
-		local boardY = ctr.Y + LB_BOARD_H / 2 + 0.5
+		local boardY = lbCenter.Y
 
 		local boardCF = CFrame.new(Vector3.new(x, boardY, boardZ)) * CFrame.Angles(0, math.rad(180), 0)
 
