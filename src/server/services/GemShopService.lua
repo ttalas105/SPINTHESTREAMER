@@ -88,6 +88,10 @@ end
 -------------------------------------------------
 
 local function handleBuyGemCase(player, caseId)
+	if not PlayerData.IsTutorialComplete(player) then
+		GemCaseResult:FireClient(player, { success = false, reason = "Complete the tutorial first!" })
+		return
+	end
 	if type(caseId) ~= "string" then
 		GemCaseResult:FireClient(player, { success = false, reason = "Invalid request." })
 		return

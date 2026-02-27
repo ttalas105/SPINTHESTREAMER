@@ -657,6 +657,8 @@ function SellStandController.Init()
 	end)
 
 	OpenSellStandGui.OnClientEvent:Connect(function()
+		local TutorialController = require(script.Parent.TutorialController)
+		if TutorialController.IsActive() then return end
 		if isOpen then
 			SellStandController.Close()
 		else

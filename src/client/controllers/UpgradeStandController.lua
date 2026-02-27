@@ -397,6 +397,8 @@ function UpgradeStandController.Init()
 	end)
 
 	OpenUpgradeStandGui.OnClientEvent:Connect(function()
+		local TutorialController = require(script.Parent.TutorialController)
+		if TutorialController.IsActive() then return end
 		if isOpen then
 			UpgradeStandController.Close()
 		else

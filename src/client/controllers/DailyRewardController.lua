@@ -31,10 +31,7 @@ local function showRewardPopup(data)
 	local reward = data.reward
 	if not reward then return end
 
-	local sg = Instance.new("ScreenGui")
-	sg.Name = "DailyRewardPopup"
-	sg.ResetOnSpawn = false
-	sg.DisplayOrder = 100
+	local sg = UIHelper.CreateScreenGui("DailyRewardPopup", 100)
 	sg.Parent = playerGui
 
 	local overlay = Instance.new("Frame")
@@ -54,6 +51,8 @@ local function showRewardPopup(data)
 	modal.ZIndex = 2
 	modal.Parent = sg
 	Instance.new("UICorner", modal).CornerRadius = UDim.new(0, 18)
+
+	UIHelper.MakeResponsiveModal(modal, 360, 280)
 
 	local stroke = Instance.new("UIStroke")
 	stroke.Color = Color3.fromRGB(255, 200, 60)
@@ -129,9 +128,10 @@ local function showRewardPopup(data)
 		end)
 	end)
 
+	local targetSize = modal.Size
 	modal.Size = UDim2.new(0, 0, 0, 0)
 	TweenService:Create(modal, TweenInfo.new(0.3, Enum.EasingStyle.Back), {
-		Size = UDim2.new(0, 360, 0, 280)
+		Size = targetSize
 	}):Play()
 end
 

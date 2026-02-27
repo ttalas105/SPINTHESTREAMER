@@ -134,7 +134,10 @@ function LeftSideNavController.Init()
 
 	local camera = workspace.CurrentCamera
 	local function onViewportChanged()
-		layoutNav(container, btnFrames, camera.ViewportSize.Y)
+		local uiScale = UIHelper.GetScale()
+		if uiScale <= 0 then uiScale = 1 end
+		local designH = camera.ViewportSize.Y / uiScale
+		layoutNav(container, btnFrames, designH)
 	end
 	camera:GetPropertyChangedSignal("ViewportSize"):Connect(onViewportChanged)
 	onViewportChanged()

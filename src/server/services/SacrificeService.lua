@@ -525,6 +525,10 @@ local function onSacrificeRequest(player, sacrificeType, ...)
 		SacrificeResult:FireClient(player, { success = false, reason = "Invalid request." })
 		return
 	end
+	if not PlayerData.IsTutorialComplete(player) then
+		SacrificeResult:FireClient(player, { success = false, reason = "Complete the tutorial first!" })
+		return
+	end
 	if sacrificeType == "GemTrade" then
 		handleGemTrade(player, ...)
 	elseif sacrificeType == "OneTime" then

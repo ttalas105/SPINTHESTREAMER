@@ -367,6 +367,12 @@ function PlayerData.Get(player)
 	return PlayerData._cache[player.UserId]
 end
 
+function PlayerData.IsTutorialComplete(player)
+	local data = PlayerData._cache[player.UserId]
+	if not data then return true end
+	return data.tutorialComplete ~= false
+end
+
 -------------------------------------------------
 -- CASH
 -------------------------------------------------

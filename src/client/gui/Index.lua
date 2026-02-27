@@ -71,6 +71,9 @@ function IndexGui.Build(parent)
 	gl.CellSize = UDim2.new(0, 180, 0, 240)
 	gl.CellPadding = UDim2.new(0, 10, 0, 10)
 	gl.SortOrder = Enum.SortOrder.LayoutOrder
+
+	UIHelper.MakeResponsiveModal(modal, 940, 670)
+
 	return modal, { modal = modal, header = header, titleLabel = titleLabel, counterLabel = counterLabel, content = content, sidebar = sidebar, gridFrame = gridFrame }
 end
 return IndexGui

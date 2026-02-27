@@ -1030,6 +1030,8 @@ function PotionController.Init()
 
 	-- Open shop from proximity prompt
 	OpenPotionStandGui.OnClientEvent:Connect(function()
+		local TutorialController = require(script.Parent.TutorialController)
+		if TutorialController.IsActive() then return end
 		if isShopOpen then
 			PotionController.CloseShop()
 		else

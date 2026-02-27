@@ -762,13 +762,15 @@ local function showResult(data)
 	local messageHeight = hasModel and 400 or 180
 	local receivedMessage = Instance.new("Frame")
 	receivedMessage.Name = "ReceivedMessage"
-	receivedMessage.Size = UDim2.new(0.35, 0, 0, messageHeight)
+	receivedMessage.Size = UDim2.new(0, 450, 0, messageHeight)
 	receivedMessage.Position = UDim2.new(0.5, 0, 0.45, 0)
 	receivedMessage.AnchorPoint = Vector2.new(0.5, 0.5)
 	receivedMessage.BackgroundColor3 = Color3.fromRGB(25, 15, 50)
 	receivedMessage.BorderSizePixel = 0
 	receivedMessage.ZIndex = 20
 	receivedMessage.Parent = screenGui
+
+	UIHelper.MakeResponsiveModal(receivedMessage, 450, messageHeight)
 
 	local rmCorner = Instance.new("UICorner")
 	rmCorner.CornerRadius = UDim.new(0, 20)
@@ -792,7 +794,7 @@ local function showResult(data)
 	if hasModel then
 		local viewport = Instance.new("ViewportFrame")
 		viewport.Name = "ModelViewport"
-		viewport.Size = UDim2.new(0, 230, 0, 230)
+		viewport.Size = UDim2.new(0.55, 0, 0.55, 0)
 		viewport.Position = UDim2.new(0.5, 0, 0, 12)
 		viewport.AnchorPoint = Vector2.new(0.5, 0)
 		viewport.BackgroundTransparency = 1
@@ -999,7 +1001,7 @@ end
 local function showMythicAlert(data)
 	local alert = UIHelper.CreateRoundedFrame({
 		Name = "MythicAlert",
-		Size = UDim2.new(0.5, 0, 0, 60),
+		Size = UDim2.new(0, 640, 0, 60),
 		Position = UDim2.new(0.5, 0, 0.15, 0),
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Color = Color3.fromRGB(40, 10, 10),
@@ -1007,6 +1009,8 @@ local function showMythicAlert(data)
 		StrokeColor = Rarities.ByName["Mythic"].color,
 		Parent = screenGui,
 	})
+
+	UIHelper.MakeResponsiveModal(alert, 640, 60)
 
 	UIHelper.CreateLabel({
 		Name = "AlertText",

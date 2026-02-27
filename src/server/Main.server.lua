@@ -309,6 +309,10 @@ do
 			StorageResult:FireClient(player, { success = false, reason = "Invalid request." })
 			return
 		end
+		if not PlayerData.IsTutorialComplete(player) then
+			StorageResult:FireClient(player, { success = false, reason = "Complete the tutorial first!" })
+			return
+		end
 		if action == "swap" then
 			local hotbarIdx = tonumber(arg1)
 			local storageIdx = tonumber(arg2)

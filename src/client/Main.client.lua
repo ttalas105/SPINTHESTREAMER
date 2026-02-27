@@ -105,6 +105,21 @@ if RunService:IsStudio() then
 				task.wait(1)
 				btn.Text = "DEBUG: Give All"
 			end)
+
+			local skipBtn = Instance.new("TextButton")
+			skipBtn.Size = UDim2.new(0, 160, 0, 36)
+			skipBtn.Position = UDim2.new(0, 10, 0, 52)
+			skipBtn.BackgroundColor3 = Color3.fromRGB(180, 120, 30)
+			skipBtn.Text = "DEBUG: Skip Tutorial"; skipBtn.TextColor3 = Color3.new(1, 1, 1)
+			skipBtn.Font = Enum.Font.FredokaOne; skipBtn.TextSize = 14; skipBtn.BorderSizePixel = 0
+			skipBtn.Parent = sg
+			Instance.new("UICorner", skipBtn).CornerRadius = UDim.new(0, 8)
+			skipBtn.MouseButton1Click:Connect(function()
+				skipBtn.Text = "Skipping..."
+				TutorialController.ForceComplete()
+				task.wait(0.5)
+				skipBtn.Text = "Done!"
+			end)
 		end
 	end)
 end
@@ -201,6 +216,7 @@ end)
 -------------------------------------------------
 
 LeftSideNavController.OnClick("Index", function()
+	if TutorialController.IsActive() then return end
 	if IndexController.IsOpen() then
 		IndexController.Close()
 	else
@@ -210,6 +226,7 @@ LeftSideNavController.OnClick("Index", function()
 end)
 
 LeftSideNavController.OnClick("Storage", function()
+	if TutorialController.IsActive() then return end
 	if StorageController.IsOpen() then
 		StorageController.Close()
 	else
@@ -219,6 +236,7 @@ LeftSideNavController.OnClick("Storage", function()
 end)
 
 LeftSideNavController.OnClick("Store", function()
+	if TutorialController.IsActive() then return end
 	if StoreController.IsOpen() then
 		StoreController.Close()
 	else
@@ -232,6 +250,7 @@ end)
 -------------------------------------------------
 
 RightSideNavController.OnClick("Rebirth", function()
+	if TutorialController.IsActive() then return end
 	if RebirthController.IsOpen() then
 		RebirthController.Close()
 	else
@@ -241,6 +260,7 @@ RightSideNavController.OnClick("Rebirth", function()
 end)
 
 RightSideNavController.OnClick("Settings", function()
+	if TutorialController.IsActive() then return end
 	if SettingsController.IsOpen() then
 		SettingsController.Close()
 	else
@@ -250,6 +270,7 @@ RightSideNavController.OnClick("Settings", function()
 end)
 
 RightSideNavController.OnClick("Quests", function()
+	if TutorialController.IsActive() then return end
 	if QuestController.IsOpen() then
 		QuestController.Close()
 	else
@@ -421,12 +442,15 @@ RemoteEvents:WaitForChild("OpenSpinStandGui").OnClientEvent:Connect(function()
 	closeAllModals("SpinStand")
 end)
 RemoteEvents:WaitForChild("OpenSellStandGui").OnClientEvent:Connect(function()
+	if TutorialController.IsActive() then return end
 	closeAllModals("Sell")
 end)
 RemoteEvents:WaitForChild("OpenUpgradeStandGui").OnClientEvent:Connect(function()
+	if TutorialController.IsActive() then return end
 	closeAllModals("Upgrade")
 end)
 RemoteEvents:WaitForChild("OpenPotionStandGui").OnClientEvent:Connect(function()
+	if TutorialController.IsActive() then return end
 	closeAllModals("Potion")
 end)
 

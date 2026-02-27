@@ -63,6 +63,10 @@ end
 -------------------------------------------------
 
 local function handleBuyPotion(player, potionType, tier)
+	if not PlayerData.IsTutorialComplete(player) then
+		BuyPotionResult:FireClient(player, { success = false, reason = "Complete the tutorial first!" })
+		return
+	end
 	-- Validate
 	if type(potionType) ~= "string" or type(tier) ~= "number" then
 		BuyPotionResult:FireClient(player, { success = false, reason = "Invalid request." })

@@ -76,6 +76,8 @@ function StorageGui.Build(parent)
 	gridLayout.CellPadding = UDim2.new(0, 6, 0, 6)
 	gridLayout.SortOrder = Enum.SortOrder.LayoutOrder
 
+	UIHelper.MakeResponsiveModal(modal, 560, 480)
+
 	local refs = {
 		modal = modal,
 		header = header,

@@ -26,6 +26,10 @@ local QuestService
 
 local function handleRebirth(player)
 	if not PlayerData then return end
+	if not PlayerData.IsTutorialComplete(player) then
+		RebirthResult:FireClient(player, { success = false, reason = "Complete the tutorial first!" })
+		return
+	end
 
 	-- SECURITY FIX: Wrap rebirth in per-player lock and verify atomically
 	PlayerData.WithLock(player, function()

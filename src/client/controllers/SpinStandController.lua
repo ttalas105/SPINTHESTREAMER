@@ -83,6 +83,14 @@ local function luckString(bonus)
 end
 
 -------------------------------------------------
+-- TUTORIAL HELPER
+-------------------------------------------------
+local function isTutorialActive()
+	local ok, TutorialController = pcall(require, script.Parent.TutorialController)
+	return ok and TutorialController.IsActive()
+end
+
+-------------------------------------------------
 -- BUILD SINGLE CASE ROW
 -------------------------------------------------
 local function buildCaseRow(crateId, parent)
@@ -271,6 +279,8 @@ local function buildCaseRow(crateId, parent)
 
 	-- Buy click handler
 	buyBtn.MouseButton1Click:Connect(function()
+		if isTutorialActive() and crateId ~= 1 then return end
+
 		local rebirthReq = Economy.GetCrateRebirthRequirement(crateId)
 		local currentRebirth = getRebirthCount()
 		if currentRebirth < rebirthReq then
@@ -319,18 +329,20 @@ end
 -------------------------------------------------
 local function updateLockStatus()
 	local currentRebirth = getRebirthCount()
+	local tutorialLock = isTutorialActive()
 	for crateId, refs in pairs(cardRefs) do
 		local rebirthReq = Economy.GetCrateRebirthRequirement(crateId)
-		if currentRebirth >= rebirthReq then
+		local locked = currentRebirth < rebirthReq or (tutorialLock and crateId ~= 1)
+		if locked then
+			refs.lockOverlay.Visible = true
+			refs.buyBtn.Text = "\u{1F512}"
+			refs.buyBtn.BackgroundColor3 = Color3.fromRGB(70, 65, 85)
+			refs.card.BackgroundColor3 = CARD_LOCKED
+		else
 			refs.lockOverlay.Visible = false
 			refs.buyBtn.Text = "SPIN"
 			refs.buyBtn.BackgroundColor3 = Color3.fromRGB(60, 200, 90)
 			refs.card.BackgroundColor3 = CARD_BG
-		else
-			refs.lockOverlay.Visible = true
-			refs.buyBtn.Text = "🔒"
-			refs.buyBtn.BackgroundColor3 = Color3.fromRGB(70, 65, 85)
-			refs.card.BackgroundColor3 = CARD_LOCKED
 		end
 	end
 end

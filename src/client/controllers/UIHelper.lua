@@ -545,8 +545,9 @@ end
 
 --[[
 	Makes a modal frame responsive to viewport size.
-	designW/designH = the intended pixel size on a ~1080p screen.
-	The modal will scale down on smaller screens so it never overflows.
+	designW/designH = the intended pixel size at the 1280x720 reference.
+	The modal will scale down on smaller screens so it never overflows,
+	covering phones (as small as ~360x640), tablets, laptops, and desktops.
 	Returns a cleanup connection to disconnect when the UI is destroyed.
 ]]
 function UIHelper.MakeResponsiveModal(modal, designW, designH)
@@ -556,16 +557,20 @@ function UIHelper.MakeResponsiveModal(modal, designW, designH)
 		local vw = camera.ViewportSize.X
 		local vh = camera.ViewportSize.Y
 		local screenScale = math.min(vw / REF_WIDTH, vh / REF_HEIGHT)
+		if screenScale <= 0 then screenScale = 1 end
 
 		local renderedW = designW * screenScale
 		local renderedH = designH * screenScale
 
+		local maxW = vw * 0.94
+		local maxH = vh * 0.88
+
 		local fitScale = 1
-		if renderedW > vw * 0.94 then
-			fitScale = math.min(fitScale, (vw * 0.94) / renderedW)
+		if renderedW > maxW then
+			fitScale = math.min(fitScale, maxW / renderedW)
 		end
-		if renderedH > vh * 0.92 then
-			fitScale = math.min(fitScale, (vh * 0.92) / renderedH)
+		if renderedH > maxH then
+			fitScale = math.min(fitScale, maxH / renderedH)
 		end
 
 		modal.Size = UDim2.new(0, math.floor(designW * fitScale), 0, math.floor(designH * fitScale))
@@ -574,6 +579,26 @@ function UIHelper.MakeResponsiveModal(modal, designW, designH)
 	fit()
 	local conn = camera:GetPropertyChangedSignal("ViewportSize"):Connect(fit)
 	return conn
+end
+
+--[[
+	Returns true when the viewport is phone-sized (narrow or short).
+	Useful for controllers that want to adjust layout on mobile.
+]]
+function UIHelper.IsMobile()
+	local camera = workspace.CurrentCamera
+	if not camera then return false end
+	local vp = camera.ViewportSize
+	return vp.X < 600 or vp.Y < 500
+end
+
+--[[
+	Returns the current viewport size in pixels.
+]]
+function UIHelper.GetViewportSize()
+	local camera = workspace.CurrentCamera
+	if not camera then return Vector2.new(REF_WIDTH, REF_HEIGHT) end
+	return camera.ViewportSize
 end
 
 return UIHelper

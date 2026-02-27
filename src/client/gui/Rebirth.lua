@@ -120,6 +120,8 @@ function RebirthGui.Build(parent)
 	Instance.new("UICorner", confirmBtn).CornerRadius = UDim.new(0, 12)
 	confirmBtn.Parent = modal
 
+	UIHelper.MakeResponsiveModal(modal, 400, 380)
+
 	local refs = {
 		modal = modal,
 		titleLabel = titleLabel,

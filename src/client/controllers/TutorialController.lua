@@ -37,6 +37,7 @@ local STATES = {
 	CELEBRATE    = 6,
 	DONE         = 7,
 }
+TutorialController.STATES = STATES
 
 local currentState = STATES.INACTIVE
 
@@ -116,6 +117,8 @@ local function createBubble()
 	bubbleFrame.BackgroundColor3 = BUBBLE_BG
 	bubbleFrame.BorderSizePixel = 0
 	bubbleFrame.Parent = screenGui
+
+	UIHelper.MakeResponsiveModal(bubbleFrame, 520, 80)
 
 	local corner = Instance.new("UICorner")
 	corner.CornerRadius = UDim.new(0, 28)
@@ -258,12 +261,17 @@ local function create3DArrow(worldPos)
 		end
 	end)
 
-	-- Glowing ring on the ground
+	-- Glowing ring on the ground — raycast down to find actual floor
+	local rayOrigin = worldPos + Vector3.new(0, 5, 0)
+	local rayResult = workspace:Raycast(rayOrigin, Vector3.new(0, -50, 0), RaycastParams.new())
+	local groundY = rayResult and rayResult.Position.Y or 0
+	local ringPos = Vector3.new(worldPos.X, groundY + 0.15, worldPos.Z)
+
 	local ring = Instance.new("Part")
 	ring.Name = "TutorialRing"
 	ring.Shape = Enum.PartType.Cylinder
 	ring.Size = Vector3.new(0.3, 10, 10)
-	ring.CFrame = CFrame.new(worldPos + Vector3.new(0, 0.2, 0)) * CFrame.Angles(0, 0, math.rad(90))
+	ring.CFrame = CFrame.new(ringPos) * CFrame.Angles(0, 0, math.rad(90))
 	ring.Anchored = true
 	ring.CanCollide = false
 	ring.CanQuery = false
@@ -361,6 +369,8 @@ local function createCelebration()
 	celebrateFrame.BorderSizePixel = 0
 	celebrateFrame.Visible = false
 	celebrateFrame.Parent = screenGui
+
+	UIHelper.MakeResponsiveModal(celebrateFrame, 500, 200)
 
 	local corner = Instance.new("UICorner")
 	corner.CornerRadius = UDim.new(0, 30)
@@ -590,6 +600,16 @@ function TutorialController.OnTabChanged(tabName)
 		removeBaseHighlight()
 		setState(STATES.PLACE_ON_PAD)
 	end
+end
+
+function TutorialController.ForceComplete()
+	if currentState == STATES.DONE or currentState == STATES.INACTIVE then return end
+	hideBubble()
+	remove3DArrow()
+	removeBaseHighlight()
+	TutorialComplete:FireServer()
+	currentState = STATES.DONE
+	cleanup()
 end
 
 return TutorialController

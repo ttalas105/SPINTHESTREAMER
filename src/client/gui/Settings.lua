@@ -63,6 +63,8 @@ function SettingsGui.Build(parent)
 	listLayout.Padding = UDim.new(0, 10)
 	listLayout.SortOrder = Enum.SortOrder.LayoutOrder
 
+	UIHelper.MakeResponsiveModal(modal, PANEL_W, PANEL_H)
+
 	local refs = {
 		modal = modal,
 		header = header,

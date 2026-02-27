@@ -271,6 +271,8 @@ function QuestController.Init()
 	modalFrame.Parent = screenGui
 	Instance.new("UICorner", modalFrame).CornerRadius = UDim.new(0, 18)
 
+	UIHelper.MakeResponsiveModal(modalFrame, MODAL_W, MODAL_H)
+
 	local stroke = Instance.new("UIStroke")
 	stroke.Color = Color3.fromRGB(80, 200, 120)
 	stroke.Thickness = 2.5

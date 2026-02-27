@@ -1139,6 +1139,8 @@ function GemShopController.Init()
 	end)
 
 	OpenGemShopGui.OnClientEvent:Connect(function()
+		local TutorialController = require(script.Parent.TutorialController)
+		if TutorialController.IsActive() then return end
 		if isOpen then GemShopController.Close() else GemShopController.Open() end
 	end)
 

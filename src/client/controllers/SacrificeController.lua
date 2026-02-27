@@ -2536,6 +2536,8 @@ function SacrificeController.Init()
 
 	-- Events
 	OpenSacrificeGui.OnClientEvent:Connect(function()
+		local TutorialController = require(script.Parent.TutorialController)
+		if TutorialController.IsActive() then return end
 		if isOpen then SacrificeController.Close() else SacrificeController.Open() end
 	end)
 

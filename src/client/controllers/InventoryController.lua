@@ -281,15 +281,34 @@ function InventoryController.Init()
 	screenGui = UIHelper.CreateScreenGui("InventoryGui", 6)
 	screenGui.Parent = playerGui
 
-	-- Bottom bar container (transparent)
+	local naturalBarW = (VISIBLE_SLOTS * 58) + ((VISIBLE_SLOTS - 1) * 8)
+
 	barContainer = Instance.new("Frame")
 	barContainer.Name = "InventoryBar"
-	barContainer.Size = UDim2.new(0, (VISIBLE_SLOTS * 58) + ((VISIBLE_SLOTS - 1) * 8), 0, 68)
+	barContainer.Size = UDim2.new(0, naturalBarW, 0, 68)
 	barContainer.Position = UDim2.new(0.5, 0, 1, -10)
 	barContainer.AnchorPoint = Vector2.new(0.5, 1)
 	barContainer.BackgroundTransparency = 1
 	barContainer.BorderSizePixel = 0
 	barContainer.Parent = screenGui
+
+	local camera = workspace.CurrentCamera
+	local function fitInventoryBar()
+		local vp = camera.ViewportSize
+		local uiScale = UIHelper.GetScale()
+		if uiScale <= 0 then uiScale = 1 end
+		local availW = (vp.X / uiScale) * 0.92
+		if naturalBarW > availW and availW > 0 then
+			local s = availW / naturalBarW
+			barContainer.Size = UDim2.new(0, math.floor(naturalBarW * s), 0, math.floor(68 * s))
+		else
+			barContainer.Size = UDim2.new(0, naturalBarW, 0, 68)
+		end
+	end
+	if camera then
+		camera:GetPropertyChangedSignal("ViewportSize"):Connect(fitInventoryBar)
+		fitInventoryBar()
+	end
 
 	-- Slots container
 	slotsFrame = Instance.new("Frame")
@@ -470,6 +489,8 @@ end
 --- Sell the selected item
 function InventoryController.SellSelected(): boolean
 	if not selectedIndex then return false end
+	local TutorialController = require(script.Parent.TutorialController)
+	if TutorialController.IsActive() then return false end
 	local item = inventory[selectedIndex]
 	local streamerId = getItemId(item)
 	if not streamerId then return false end

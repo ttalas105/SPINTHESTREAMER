@@ -52,6 +52,10 @@ end
 local function handleSell(player, streamerId: string)
 	if not PlayerData then return end
 	if typeof(streamerId) ~= "string" then return end
+	if not PlayerData.IsTutorialComplete(player) then
+		SellResult:FireClient(player, { success = false, reason = "Complete the tutorial first!" })
+		return
+	end
 
 	local streamerInfo = Streamers.ById[streamerId]
 	if not streamerInfo then
@@ -104,6 +108,10 @@ end
 local function handleSellByIndex(player, inventoryIndex: number)
 	if not PlayerData then return end
 	if typeof(inventoryIndex) ~= "number" then return end
+	if not PlayerData.IsTutorialComplete(player) then
+		SellResult:FireClient(player, { success = false, reason = "Complete the tutorial first!" })
+		return
+	end
 
 	local data = PlayerData.Get(player)
 	if not data then return end
@@ -147,6 +155,10 @@ end
 
 local function handleSellAll(player)
 	if not PlayerData then return end
+	if not PlayerData.IsTutorialComplete(player) then
+		SellResult:FireClient(player, { success = false, reason = "Complete the tutorial first!" })
+		return
+	end
 	local data = PlayerData.Get(player)
 	if not data or #data.inventory == 0 then
 		SellResult:FireClient(player, { success = false, reason = "Inventory is empty!" })
@@ -192,6 +204,10 @@ local LUCK_PER_UPGRADE = 5
 
 local function handleUpgradeLuck(player)
 	if not PlayerData then return end
+	if not PlayerData.IsTutorialComplete(player) then
+		UpgradeLuckResult:FireClient(player, { success = false, reason = "Complete the tutorial first!" })
+		return
+	end
 	local currentLuck = PlayerData.GetLuck(player)
 	local cost = Economy.GetLuckUpgradeCost(currentLuck)
 	if not PlayerData.SpendCash(player, cost) then
@@ -208,6 +224,10 @@ end
 
 local function handleUpgradeCash(player)
 	if not PlayerData then return end
+	if not PlayerData.IsTutorialComplete(player) then
+		UpgradeCashResult:FireClient(player, { success = false, reason = "Complete the tutorial first!" })
+		return
+	end
 	local currentLevel = PlayerData.GetCashUpgrade(player)
 	local cost = Economy.GetCashUpgradeCost(currentLevel)
 	if not PlayerData.SpendCash(player, cost) then

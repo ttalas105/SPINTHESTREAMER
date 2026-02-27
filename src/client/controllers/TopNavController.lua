@@ -39,12 +39,29 @@ function TopNavController.Init()
 
 	local container = Instance.new("Frame")
 	container.Name = "TopNavContainer"
-	container.Size = UDim2.new(0, 500, 0, 72)
+	container.Size = UDim2.new(0, 460, 0, 72)
 	container.Position = UDim2.new(0.5, 0, 0, 8)
 	container.AnchorPoint = Vector2.new(0.5, 0)
 	container.BackgroundTransparency = 1
 	container.BorderSizePixel = 0
 	container.Parent = screenGui
+
+	local camera = workspace.CurrentCamera
+	local function fitTopNav()
+		local uiScale = UIHelper.GetScale()
+		if uiScale <= 0 then uiScale = 1 end
+		local availW = (camera.ViewportSize.X / uiScale) * 0.5
+		local naturalW = 460
+		if naturalW > availW and availW > 0 then
+			container.Size = UDim2.new(0, math.floor(availW), 0, 72)
+		else
+			container.Size = UDim2.new(0, naturalW, 0, 72)
+		end
+	end
+	if camera then
+		camera:GetPropertyChangedSignal("ViewportSize"):Connect(fitTopNav)
+		fitTopNav()
+	end
 
 	local listLayout = Instance.new("UIListLayout")
 	listLayout.FillDirection = Enum.FillDirection.Horizontal
@@ -116,6 +133,15 @@ end
 -------------------------------------------------
 
 function TopNavController.SetActiveTab(tabName: string)
+	local ok, TutorialController = pcall(require, script.Parent.TutorialController)
+	if ok and TutorialController.IsActive() then
+		if tabName == "SHOP" then return end
+		local STATES = TutorialController.STATES
+		if STATES and tabName == "BASE" and TutorialController.GetState() ~= STATES.GO_TO_BASE then
+			return
+		end
+	end
+
 	activeTab = tabName
 	local tweenInfo = TweenInfo.new(0.15, Enum.EasingStyle.Quad)
 
