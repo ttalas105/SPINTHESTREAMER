@@ -73,11 +73,17 @@ local LOCKED_PAD_COLOR = Color3.fromRGB(180, 40, 40)
 local function isPadSlotUnlocked(player: Player, padSlot: number): boolean
 	local data = PlayerData and PlayerData.Get(player)
 	if not data then return false end
-	local totalUnlocked = SlotsConfig.GetTotalSlots(data.rebirthCount or 0, data.premiumSlotUnlocked == true)
-	return padSlot <= totalUnlocked
+	local rebirthUnlocked = SlotsConfig.GetSlotsForRebirth(data.rebirthCount or 0)
+	if padSlot == SlotsConfig.PremiumSlotIndex then
+		return data.premiumSlotUnlocked == true
+	end
+	return padSlot >= 1 and padSlot <= rebirthUnlocked
 end
 
 local function getRebirthNeededForPadSlot(padSlot: number): number
+	if padSlot == SlotsConfig.PremiumSlotIndex then
+		return -1
+	end
 	if padSlot <= SlotsConfig.StartingSlots then
 		return 0
 	end
@@ -840,7 +846,11 @@ local function updatePromptText(player: Player, padSlot: number)
 	if not isPadSlotUnlocked(player, padSlot) then
 		local rebirthNeeded = getRebirthNeededForPadSlot(padSlot)
 		displayInfo.prompt.ActionText = "Locked"
-		displayInfo.prompt.ObjectText = "Unlock at Rebirth " .. tostring(rebirthNeeded)
+		if rebirthNeeded < 0 then
+			displayInfo.prompt.ObjectText = "Premium Slot (Store)"
+		else
+			displayInfo.prompt.ObjectText = "Unlock at Rebirth " .. tostring(rebirthNeeded)
+		end
 		return
 	end
 
@@ -1241,7 +1251,11 @@ function BaseService.Init(playerDataModule, potionServiceModule)
 
 				if not isPadSlotUnlocked(player, slot) then
 					local rebirthNeeded = getRebirthNeededForPadSlot(slot)
-					EquipResult:FireClient(player, { success = false, reason = "Locked until Rebirth " .. tostring(rebirthNeeded) .. "." })
+					if rebirthNeeded < 0 then
+						EquipResult:FireClient(player, { success = false, reason = "This is a premium slot. Unlock it in Store." })
+					else
+						EquipResult:FireClient(player, { success = false, reason = "Locked until Rebirth " .. tostring(rebirthNeeded) .. "." })
+					end
 					return
 				end
 

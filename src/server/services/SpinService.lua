@@ -496,6 +496,120 @@ local function handleCrateSpin(player, crateId: number)
 end
 
 -------------------------------------------------
+-- OPEN OWNED CRATE (no cash deduction — already paid at purchase)
+-- Called by CaseStockService when player opens a crate from inventory.
+-------------------------------------------------
+
+function SpinService._handleCrateOpen(player, crateId: number)
+	if not PlayerData then return end
+	local now = os.clock()
+	local userId = player.UserId
+	if lastSpinTime[userId] and (now - lastSpinTime[userId]) < SPIN_COOLDOWN then
+		SpinResult:FireClient(player, { success = false, reason = "Too fast! Wait a moment." })
+		return
+	end
+	lastSpinTime[userId] = now
+
+	local data = PlayerData.Get(player)
+	if not data then return end
+	local hasInventorySpace = (#(data.inventory or {}) < PlayerData.HOTBAR_MAX)
+	local hasStorageSpace = (#(data.storage or {}) < PlayerData.STORAGE_MAX)
+	if not hasInventorySpace and not hasStorageSpace then
+		SpinResult:FireClient(player, { success = false, reason = "Inventory and storage are full!" })
+		return
+	end
+
+	local luckBonus = Economy.CrateLuckBonuses[crateId]
+	if not luckBonus then
+		SpinResult:FireClient(player, { success = false, reason = "Invalid crate!" })
+		return
+	end
+
+	local rebirthLuck = 1 + (data.rebirthCount * 0.02)
+	local playerLuck = data.luck or 0
+	local playerLuckPercent = (playerLuck / 100)
+	local potionLuckMult = PotionService and PotionService.GetLuckMultiplier(player) or 1
+	local vipLuck = PlayerData.HasVIP(player) and VIP_LUCK or 1
+	local x2Luck = PlayerData.HasX2Luck(player) and X2L_LUCK or 1
+	local totalLuck = SpinService.ServerLuckMultiplier * rebirthLuck * (1 + playerLuckPercent + luckBonus) * potionLuckMult * vipLuck * x2Luck
+
+	incrementPityCounters(data)
+
+	local pityRarity = checkPityGuarantee(data)
+	local streamer
+	local isPityHit = false
+
+	if pityRarity then
+		streamer = pickStreamerFromRarity(pityRarity)
+		isPityHit = true
+	else
+		streamer = pickStreamerByOdds(totalLuck)
+	end
+
+	if not streamer then
+		SpinResult:FireClient(player, { success = false, reason = "Config error." })
+		return
+	end
+
+	resetPityForRarity(data, streamer.rarity)
+
+	local effect = rollEffect()
+	local destination = PlayerData.AddToInventory(player, streamer.id, effect)
+
+	local displayName = streamer.displayName
+	if effect then
+		local effectInfo = Effects.ByName[effect]
+		if effectInfo then displayName = effectInfo.prefix .. " " .. displayName end
+	end
+
+	local effectiveOdds = streamer.odds
+	if effect then
+		local ei = Effects.ByName[effect]
+		if ei and ei.rarityMult then
+			effectiveOdds = math.floor(effectiveOdds * ei.rarityMult)
+		end
+	end
+
+	SpinResult:FireClient(player, {
+		success = true,
+		streamerId = streamer.id,
+		displayName = displayName,
+		rarity = streamer.rarity,
+		odds = effectiveOdds,
+		effect = effect,
+		destination = destination,
+		pity = isPityHit or nil,
+	})
+
+	PlayerData.IncrementStat(player, "totalSpins", 1)
+
+	if QuestService then
+		QuestService.Increment(player, "spins", 1)
+		if streamer.rarity == "Epic" or streamer.rarity == "Legendary" or streamer.rarity == "Mythic" then
+			QuestService.Increment(player, "epicPulls", 1)
+		end
+		if streamer.rarity == "Legendary" or streamer.rarity == "Mythic" then
+			QuestService.Increment(player, "legendaryPulls", 1)
+		end
+		if streamer.rarity == "Mythic" then
+			QuestService.Increment(player, "mythicPulls", 1)
+		end
+		if effect then
+			QuestService.Increment(player, "effectPulls", 1)
+		end
+	end
+
+	if streamer.rarity == "Mythic" then
+		MythicAlert:FireAllClients({
+			playerName = player.Name,
+			streamerId = streamer.id,
+			displayName = displayName,
+			effect = effect,
+		})
+	end
+end
+
+-------------------------------------------------
 -- PUBLIC
 -------------------------------------------------
 

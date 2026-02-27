@@ -65,6 +65,7 @@ local autoSpinButton = nil
 
 local spinGeneration = 0
 local onSpinResult = nil
+local isOwnedCrateOpen = false
 
 -- Carousel items
 local ITEM_WIDTH = 130
@@ -1026,7 +1027,26 @@ local function showResult(data)
 			resultFrame.Visible = false
 			spinContainer.Visible = true
 			if carouselFrame then carouselFrame.Visible = true end
-			SpinController.RequestSpin()
+			if isOwnedCrateOpen and currentCrateId then
+				local HUD = require(script.Parent.HUDController)
+				local owned = HUD.Data.ownedCrates
+				local count = owned and (owned[currentCrateId] or owned[tostring(currentCrateId)] or 0) or 0
+				if count > 0 then
+					local OpenOwnedCrate = RemoteEvents:WaitForChild("OpenOwnedCrate")
+					OpenOwnedCrate:FireServer(currentCrateId)
+					SpinController.WaitForResult()
+				else
+					autoSpinEnabled = false
+					if autoSpinButton then
+						autoSpinButton.BackgroundColor3 = Color3.fromRGB(55, 50, 80)
+						autoSpinButton.Text = "AUTO"
+						autoSpinButton.TextColor3 = Color3.fromRGB(180, 180, 210)
+					end
+					SpinController.Hide()
+				end
+			else
+				SpinController.RequestSpin()
+			end
 			return
 		end
 		task.wait(0.2)
@@ -1333,7 +1353,11 @@ function SpinController.Init()
 			animationDone = false
 			spinButton.Text = data.reason or "ERROR"
 			task.delay(1.5, function()
-				spinButton.Text = "SPIN  (" .. formatCash(currentSpinCost) .. ")"
+				if currentSpinCost <= 0 then
+					spinButton.Text = "OPEN"
+				else
+					spinButton.Text = "SPIN  (" .. formatCash(currentSpinCost) .. ")"
+				end
 				SpinController.Hide()
 			end)
 		end
@@ -1384,7 +1408,11 @@ function SpinController._startSpin(data)
 	playSpinAnimation(data, function()
 		animationDone = true
 		showResult(data)
-		spinButton.Text = "SPIN AGAIN  (" .. formatCash(currentSpinCost) .. ")"
+		if currentSpinCost <= 0 then
+			spinButton.Text = "OPEN AGAIN"
+		else
+			spinButton.Text = "SPIN AGAIN  (" .. formatCash(currentSpinCost) .. ")"
+		end
 	end)
 end
 
@@ -1409,7 +1437,10 @@ function SpinController.RequestSpin()
 
 	spinButton.Text = "SPINNING..."
 
-	if currentCrateId then
+	if isOwnedCrateOpen and currentCrateId then
+		local OpenOwnedCrate = RemoteEvents:WaitForChild("OpenOwnedCrate")
+		OpenOwnedCrate:FireServer(currentCrateId)
+	elseif currentCrateId then
 		local BuyCrateRequest = RemoteEvents:WaitForChild("BuyCrateRequest")
 		BuyCrateRequest:FireServer(currentCrateId)
 	else
@@ -1419,7 +1450,11 @@ end
 
 function SpinController.Show()
 	spinContainer.Visible = true
-	spinButton.Text = "SPIN  (" .. formatCash(currentSpinCost) .. ")"
+	if currentSpinCost <= 0 then
+		spinButton.Text = "OPEN"
+	else
+		spinButton.Text = "SPIN  (" .. formatCash(currentSpinCost) .. ")"
+	end
 	UIHelper.ScaleIn(spinContainer, 0.3)
 end
 
@@ -1429,6 +1464,7 @@ function SpinController.Hide()
 	isSpinning = false
 	animationDone = false
 	autoSpinEnabled = false
+	isOwnedCrateOpen = false
 	if autoSpinButton then
 		autoSpinButton.BackgroundColor3 = Color3.fromRGB(55, 50, 80)
 		autoSpinButton.Text = "AUTO"
@@ -1450,12 +1486,34 @@ end
 function SpinController.SetCurrentCost(cost: number)
 	currentSpinCost = cost
 	if spinButton and not isSpinning then
-		spinButton.Text = "SPIN  (" .. formatCash(currentSpinCost) .. ")"
+		if cost <= 0 then
+			spinButton.Text = "OPEN"
+		else
+			spinButton.Text = "SPIN  (" .. formatCash(currentSpinCost) .. ")"
+		end
 	end
 end
 
 function SpinController.SetCurrentCrateId(crateId)
 	currentCrateId = crateId
+end
+
+function SpinController.SetOwnedCrateMode(enabled)
+	isOwnedCrateOpen = enabled
+end
+
+function SpinController.WaitForResult()
+	isSpinning = true
+	animationDone = false
+	spinGeneration = spinGeneration + 1
+	resultFrame.Visible = false
+	spinContainer.Visible = true
+	if carouselFrame then
+		carouselFrame.Visible = true
+		carouselFrame.Size = UDim2.new(0.92, 0, 0, ITEM_HEIGHT + 30)
+	end
+	startPreSpinVisual()
+	spinButton.Text = "SPINNING..."
 end
 
 function SpinController.OnSpinResult(callback)

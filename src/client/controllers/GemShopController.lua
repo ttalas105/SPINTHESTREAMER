@@ -830,10 +830,7 @@ local function buildCaseCard(caseData, parent, order)
 		casePic.Image = caseData.pictureImageId
 	end
 
-	-- Rebirth requirement check
-	local rebirthReq = caseData.rebirthRequired or 0
-	local currentRebirth = HUDController.Data.rebirthCount or 0
-	local isLocked = rebirthReq > 0 and currentRebirth < rebirthReq
+	local isLocked = false
 
 	-- Price label
 	local priceLabel = Instance.new("TextLabel")
@@ -847,24 +844,11 @@ local function buildCaseCard(caseData, parent, order)
 	priceLabel.ZIndex = 4; priceLabel.Parent = card
 	addStroke(priceLabel, Color3.new(0, 0, 0), 1.2)
 
-	-- Rebirth requirement label
-	if rebirthReq > 0 then
-		local reqLabel = Instance.new("TextLabel")
-		reqLabel.Size = UDim2.new(1, 0, 0, 16)
-		reqLabel.Position = UDim2.new(0.5, 0, 0, 275)
-		reqLabel.AnchorPoint = Vector2.new(0.5, 0)
-		reqLabel.BackgroundTransparency = 1
-		reqLabel.Text = isLocked and ("Requires Rebirth " .. rebirthReq) or ("Rebirth " .. rebirthReq .. " ✓")
-		reqLabel.TextColor3 = isLocked and Color3.fromRGB(255, 120, 80) or Color3.fromRGB(100, 200, 120)
-		reqLabel.Font = FONT_SUB; reqLabel.TextSize = 12
-		reqLabel.ZIndex = 4; reqLabel.Parent = card
-	end
-
 	-- OPEN button (wide, element-colored)
 	local buyBtn = Instance.new("TextButton")
 	buyBtn.Name = "BuyBtn"
 	buyBtn.Size = UDim2.new(1, -24, 0, 34)
-	buyBtn.Position = UDim2.new(0.5, 0, 0, rebirthReq > 0 and 294 or 284)
+	buyBtn.Position = UDim2.new(0.5, 0, 0, 284)
 	buyBtn.AnchorPoint = Vector2.new(0.5, 0)
 	buyBtn.BackgroundColor3 = isLocked and Color3.fromRGB(70, 65, 80) or caseData.color
 	buyBtn.Text = ""; buyBtn.BorderSizePixel = 0
@@ -907,7 +891,7 @@ local function buildCaseCard(caseData, parent, order)
 	-- Drop Rate button (below OPEN)
 	local drBtn = Instance.new("TextButton")
 	drBtn.Size = UDim2.new(1, -24, 0, 28)
-	drBtn.Position = UDim2.new(0.5, 0, 0, rebirthReq > 0 and 334 or 324)
+	drBtn.Position = UDim2.new(0.5, 0, 0, 324)
 	drBtn.AnchorPoint = Vector2.new(0.5, 0)
 	drBtn.BackgroundColor3 = Color3.fromRGB(55, 50, 75)
 	drBtn.Text = ""; drBtn.BorderSizePixel = 0

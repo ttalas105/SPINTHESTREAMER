@@ -1,12 +1,15 @@
 --[[
 	SpinStandController.lua
-	Case Shop UI — dark themed, vertical list like Spin the Baddies Dice Shop.
+	Case Shop UI — dark themed, vertical list.
 	18 cases, unlocked by rebirths.
+	Each case shows: image, name, rarity, luck, cost, stock, Buy 1, Buy Max, Open (with owned count).
+	Global stock resets every 5 minutes with a countdown timer in the header.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
 
 local Economy = require(ReplicatedStorage.Shared.Config.Economy)
 local UIHelper = require(script.Parent.UIHelper)
@@ -18,8 +21,12 @@ local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
 local RemoteEvents = ReplicatedStorage:WaitForChild("RemoteEvents")
-local BuyCrateRequest = RemoteEvents:WaitForChild("BuyCrateRequest")
 local OpenSpinStandGui = RemoteEvents:WaitForChild("OpenSpinStandGui")
+local BuyCrateStock = RemoteEvents:WaitForChild("BuyCrateStock")
+local BuyCrateResult = RemoteEvents:WaitForChild("BuyCrateResult")
+local OpenOwnedCrate = RemoteEvents:WaitForChild("OpenOwnedCrate")
+local GetCaseStock = RemoteEvents:WaitForChild("GetCaseStock")
+local CaseStockUpdate = RemoteEvents:WaitForChild("CaseStockUpdate")
 
 local screenGui
 local modalFrame
@@ -35,13 +42,11 @@ local MODAL_BG    = Color3.fromRGB(28, 26, 34)
 local CARD_BG     = Color3.fromRGB(42, 38, 50)
 local CARD_HOVER  = Color3.fromRGB(55, 50, 65)
 local CARD_LOCKED = Color3.fromRGB(30, 28, 36)
-local ACCENT      = Color3.fromRGB(100, 220, 120)
-local LOCKED_TEXT = Color3.fromRGB(180, 160, 200)
 
 local ROW_H       = 130
 local IMAGE_SIZE  = 105
-local MODAL_W     = 580
-local MODAL_H     = 620
+local MODAL_W     = 620
+local MODAL_H     = 660
 
 local RARITY_COLORS = {
 	Common    = Color3.fromRGB(180, 180, 190),
@@ -54,13 +59,25 @@ local RARITY_COLORS = {
 }
 
 local cardRefs = {}
+local stockData = {}
+local restockSecondsLeft = 0
+local restockTimerLabel = nil
+local timerConn = nil
+local buyCooldownUntilByCrate = {}
+local noCashCooldownUntilByCrate = {}
+local errorFlashTokenByCrate = {}
 
 -------------------------------------------------
 -- HELPERS
 -------------------------------------------------
 local function getRebirthCount()
-	local HUDController = require(script.Parent.HUDController)
 	return HUDController.Data.rebirthCount or 0
+end
+
+local function getOwnedCount(crateId)
+	local owned = HUDController.Data.ownedCrates
+	if not owned then return 0 end
+	return owned[crateId] or owned[tostring(crateId)] or 0
 end
 
 local function formatCash(n)
@@ -82,12 +99,132 @@ local function luckString(bonus)
 	return "+" .. math.floor(bonus * 100) .. "% Luck"
 end
 
--------------------------------------------------
--- TUTORIAL HELPER
--------------------------------------------------
+local function formatTime(seconds)
+	local m = math.floor(seconds / 60)
+	local s = math.floor(seconds % 60)
+	return string.format("%d:%02d", m, s)
+end
+
 local function isTutorialActive()
 	local ok, TutorialController = pcall(require, script.Parent.TutorialController)
 	return ok and TutorialController.IsActive()
+end
+
+local function addStroke(parent, color, thickness)
+	local s = Instance.new("UIStroke")
+	s.Color = color or Color3.new(0, 0, 0)
+	s.Thickness = thickness or 1
+	s.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+	s.Parent = parent
+	return s
+end
+
+local function getCardBaseColor(crateId)
+	local rebirthReq = Economy.GetCrateRebirthRequirement(crateId)
+	local tutorialLock = isTutorialActive() and crateId ~= 1
+	local rebirthLock = getRebirthCount() < rebirthReq
+	if tutorialLock or rebirthLock then
+		return CARD_LOCKED
+	end
+	return CARD_BG
+end
+
+local function showErrorToast(message)
+	if not screenGui then return end
+	local existing = screenGui:FindFirstChild("CaseShopErrorToast")
+	if existing then
+		existing:Destroy()
+	end
+
+	local toast = Instance.new("Frame")
+	toast.Name = "CaseShopErrorToast"
+	toast.Size = UDim2.new(0, 360, 0, 44)
+	toast.Position = UDim2.new(0.5, 0, 1, -24)
+	toast.AnchorPoint = Vector2.new(0.5, 1)
+	toast.BackgroundColor3 = Color3.fromRGB(200, 60, 60)
+	toast.BorderSizePixel = 0
+	toast.ZIndex = 20
+	toast.Parent = screenGui
+	Instance.new("UICorner", toast).CornerRadius = UDim.new(0, 10)
+
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.new(1, -16, 1, 0)
+	label.Position = UDim2.new(0.5, 0, 0.5, 0)
+	label.AnchorPoint = Vector2.new(0.5, 0.5)
+	label.BackgroundTransparency = 1
+	label.Text = tostring(message or "Could not buy case.")
+	label.TextColor3 = Color3.new(1, 1, 1)
+	label.Font = FONT
+	label.TextSize = 16
+	label.TextWrapped = true
+	label.ZIndex = 21
+	label.Parent = toast
+	addStroke(label, Color3.new(0, 0, 0), 1.2)
+
+	task.delay(2, function()
+		if not toast.Parent then return end
+		TweenService:Create(toast, TweenInfo.new(0.25), { BackgroundTransparency = 1 }):Play()
+		TweenService:Create(label, TweenInfo.new(0.25), { TextTransparency = 1 }):Play()
+		task.delay(0.28, function()
+			if toast.Parent then toast:Destroy() end
+		end)
+	end)
+end
+
+-------------------------------------------------
+-- UPDATE ALL CARDS (stock, owned count, button states)
+-------------------------------------------------
+local function updateAllCards()
+	local currentRebirth = getRebirthCount()
+	local tutorialLock = isTutorialActive()
+
+	for crateId, refs in pairs(cardRefs) do
+		local rebirthReq = Economy.GetCrateRebirthRequirement(crateId)
+		local locked = currentRebirth < rebirthReq or (tutorialLock and crateId ~= 1)
+
+		-- Lock overlay
+		if locked then
+			refs.lockOverlay.Visible = true
+			refs.card.BackgroundColor3 = CARD_LOCKED
+		else
+			refs.lockOverlay.Visible = false
+			refs.card.BackgroundColor3 = CARD_BG
+		end
+
+		-- Stock label
+		local currentStock = stockData[crateId] or stockData[tostring(crateId)] or 0
+		local maxStock = Economy.CrateMaxStock[crateId] or 50
+		if refs.stockLabel then
+			refs.stockLabel.Text = "Stock: " .. currentStock .. "/" .. maxStock
+			if currentStock <= 0 then
+				refs.stockLabel.TextColor3 = Color3.fromRGB(255, 80, 80)
+			elseif currentStock <= math.floor(maxStock * 0.25) then
+				refs.stockLabel.TextColor3 = Color3.fromRGB(255, 200, 80)
+			else
+				refs.stockLabel.TextColor3 = Color3.fromRGB(140, 255, 160)
+			end
+		end
+
+		-- Owned count on open button
+		local owned = getOwnedCount(crateId)
+		if refs.openBtn then
+			refs.openBtnText.Text = "OPEN (" .. owned .. ")"
+			if owned > 0 and not locked then
+				refs.openBtn.BackgroundColor3 = Color3.fromRGB(60, 200, 90)
+			else
+				refs.openBtn.BackgroundColor3 = Color3.fromRGB(50, 45, 65)
+			end
+		end
+
+		-- Buy buttons enabled state
+		if not locked and currentStock > 0 then
+			refs.buy1Btn.BackgroundColor3 = Color3.fromRGB(80, 150, 255)
+			refs.buyMaxBtn.BackgroundColor3 = Color3.fromRGB(140, 100, 255)
+		elseif not locked then
+			refs.buy1Btn.BackgroundColor3 = Color3.fromRGB(50, 45, 65)
+			refs.buyMaxBtn.BackgroundColor3 = Color3.fromRGB(50, 45, 65)
+		end
+	end
 end
 
 -------------------------------------------------
@@ -109,23 +246,19 @@ local function buildCaseRow(crateId, parent)
 	row.LayoutOrder = crateId
 	row.Parent = parent
 
-	local rowCorner = Instance.new("UICorner")
-	rowCorner.CornerRadius = UDim.new(0, 14)
-	rowCorner.Parent = row
+	Instance.new("UICorner", row).CornerRadius = UDim.new(0, 14)
 
 	local rowStroke = Instance.new("UIStroke")
-	rowStroke.Name = "RowStroke"
 	rowStroke.Color = Color3.fromRGB(60, 55, 75)
 	rowStroke.Thickness = 1.5
 	rowStroke.Transparency = 0.3
 	rowStroke.Parent = row
 
-	-- Case image (left) — cases 13-18 use larger display to compensate for smaller source images
+	-- Case image (left)
 	local imgScale = crateId >= 13 and 1.3 or 1.0
 	local displaySize = math.floor(IMAGE_SIZE * imgScale)
 
 	local caseImage = Instance.new("ImageLabel")
-	caseImage.Name = "CaseImage"
 	caseImage.Size = UDim2.new(0, displaySize, 0, displaySize)
 	caseImage.Position = UDim2.new(0, 10 - math.floor((displaySize - IMAGE_SIZE) / 2), 0.5, 0)
 	caseImage.AnchorPoint = Vector2.new(0, 0.5)
@@ -135,106 +268,224 @@ local function buildCaseRow(crateId, parent)
 	caseImage.ClipsDescendants = false
 	caseImage.Parent = row
 
-	local textX = IMAGE_SIZE + 24
+	local textX = IMAGE_SIZE + 20
 
-	-- Name (right of image)
+	-- Name
 	local nameLabel = Instance.new("TextLabel")
-	nameLabel.Name = "NameLabel"
-	nameLabel.Size = UDim2.new(1, -(textX + 130), 0, 34)
-	nameLabel.Position = UDim2.new(0, textX, 0, 12)
+	nameLabel.Size = UDim2.new(0, 180, 0, 28)
+	nameLabel.Position = UDim2.new(0, textX, 0, 8)
 	nameLabel.BackgroundTransparency = 1
 	nameLabel.Text = name
 	nameLabel.TextColor3 = Color3.new(1, 1, 1)
 	nameLabel.Font = FONT
-	nameLabel.TextSize = 26
+	nameLabel.TextSize = 20
 	nameLabel.TextXAlignment = Enum.TextXAlignment.Left
 	nameLabel.TextTruncate = Enum.TextTruncate.AtEnd
 	nameLabel.Parent = row
-	local nameStroke = Instance.new("UIStroke")
-	nameStroke.Color = Color3.fromRGB(0, 0, 0)
-	nameStroke.Thickness = 1.5
-	nameStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
-	nameStroke.Parent = nameLabel
+	addStroke(nameLabel, Color3.new(0, 0, 0), 1.5)
 
-	-- Rarity + Luck line
+	-- Rarity + Luck
 	local infoLabel = Instance.new("TextLabel")
-	infoLabel.Name = "InfoLabel"
-	infoLabel.Size = UDim2.new(1, -(textX + 130), 0, 24)
-	infoLabel.Position = UDim2.new(0, textX, 0, 48)
+	infoLabel.Size = UDim2.new(0, 180, 0, 18)
+	infoLabel.Position = UDim2.new(0, textX, 0, 36)
 	infoLabel.BackgroundTransparency = 1
-	infoLabel.Text = rarity .. " - " .. luckString(luck)
+	infoLabel.Text = rarity .. " \u{2022} " .. luckString(luck)
 	infoLabel.TextColor3 = rarityColor
 	infoLabel.Font = FONT_SUB
-	infoLabel.TextSize = 17
+	infoLabel.TextSize = 13
 	infoLabel.TextXAlignment = Enum.TextXAlignment.Left
 	infoLabel.Parent = row
-	local infoStroke = Instance.new("UIStroke")
-	infoStroke.Color = Color3.fromRGB(0, 0, 0)
-	infoStroke.Thickness = 1.2
-	infoStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
-	infoStroke.Parent = infoLabel
+	addStroke(infoLabel, Color3.new(0, 0, 0), 1)
 
-	-- Cost label
+	-- Cost
 	local costLabel = Instance.new("TextLabel")
-	costLabel.Name = "CostLabel"
-	costLabel.Size = UDim2.new(1, -(textX + 130), 0, 24)
-	costLabel.Position = UDim2.new(0, textX, 0, 76)
+	costLabel.Size = UDim2.new(0, 180, 0, 20)
+	costLabel.Position = UDim2.new(0, textX, 0, 56)
 	costLabel.BackgroundTransparency = 1
 	costLabel.Text = formatCash(cost)
 	costLabel.TextColor3 = Color3.fromRGB(100, 255, 130)
 	costLabel.Font = FONT
-	costLabel.TextSize = 20
+	costLabel.TextSize = 16
 	costLabel.TextXAlignment = Enum.TextXAlignment.Left
 	costLabel.Parent = row
-	local costStroke = Instance.new("UIStroke")
-	costStroke.Color = Color3.fromRGB(0, 0, 0)
-	costStroke.Thickness = 1.5
-	costStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
-	costStroke.Parent = costLabel
+	addStroke(costLabel, Color3.new(0, 0, 0), 1.2)
 
-	-- BUY button (right side)
-	local buyBtn = Instance.new("TextButton")
-	buyBtn.Name = "BuyBtn"
-	buyBtn.Size = UDim2.new(0, 105, 0, 48)
-	buyBtn.Position = UDim2.new(1, -14, 0.5, 0)
-	buyBtn.AnchorPoint = Vector2.new(1, 0.5)
-	buyBtn.BackgroundColor3 = Color3.fromRGB(60, 200, 90)
-	buyBtn.Text = "SPIN"
-	buyBtn.TextColor3 = Color3.new(1, 1, 1)
-	buyBtn.Font = FONT
-	buyBtn.TextSize = 22
-	buyBtn.BorderSizePixel = 0
-	buyBtn.AutoButtonColor = false
-	buyBtn.Parent = row
+	-- Stock label
+	local stockLbl = Instance.new("TextLabel")
+	stockLbl.Name = "StockLabel"
+	stockLbl.Size = UDim2.new(0, 180, 0, 16)
+	stockLbl.Position = UDim2.new(0, textX, 0, 78)
+	stockLbl.BackgroundTransparency = 1
+	stockLbl.Text = "Stock: --/--"
+	stockLbl.TextColor3 = Color3.fromRGB(140, 255, 160)
+	stockLbl.Font = FONT_SUB
+	stockLbl.TextSize = 12
+	stockLbl.TextXAlignment = Enum.TextXAlignment.Left
+	stockLbl.Parent = row
+	addStroke(stockLbl, Color3.new(0, 0, 0), 1)
 
-	local buyCorner = Instance.new("UICorner")
-	buyCorner.CornerRadius = UDim.new(0, 12)
-	buyCorner.Parent = buyBtn
-	local buyStroke = Instance.new("UIStroke")
-	buyStroke.Color = Color3.fromRGB(30, 140, 50)
-	buyStroke.Thickness = 2
-	buyStroke.Parent = buyBtn
-	local buyTextStroke = Instance.new("UIStroke")
-	buyTextStroke.Color = Color3.fromRGB(10, 50, 20)
-	buyTextStroke.Thickness = 1.5
-	buyTextStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
-	buyTextStroke.Parent = buyBtn
+	-- Right side: button column
+	local btnX = -12
+	local bounceTI = TweenInfo.new(0.12, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 
-	-- Hover effects (row + button)
-	local bounceTI = TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
-	local idleSize = buyBtn.Size
-	local hoverSize = UDim2.new(0, 115, 0, 52)
+	-- OPEN button (top right)
+	local openBtn = Instance.new("TextButton")
+	openBtn.Name = "OpenBtn"
+	openBtn.Size = UDim2.new(0, 120, 0, 34)
+	openBtn.Position = UDim2.new(1, btnX, 0, 10)
+	openBtn.AnchorPoint = Vector2.new(1, 0)
+	openBtn.BackgroundColor3 = Color3.fromRGB(50, 45, 65)
+	openBtn.Text = ""
+	openBtn.BorderSizePixel = 0
+	openBtn.AutoButtonColor = false
+	openBtn.Parent = row
+	Instance.new("UICorner", openBtn).CornerRadius = UDim.new(0, 10)
+	local openStroke = Instance.new("UIStroke")
+	openStroke.Color = Color3.fromRGB(30, 140, 50)
+	openStroke.Thickness = 1.5
+	openStroke.Parent = openBtn
 
-	buyBtn.MouseEnter:Connect(function()
-		TweenService:Create(row, bounceTI, { BackgroundColor3 = CARD_HOVER }):Play()
-		TweenService:Create(buyBtn, bounceTI, { Size = hoverSize, BackgroundColor3 = Color3.fromRGB(80, 235, 115) }):Play()
+	local openBtnText = Instance.new("TextLabel")
+	openBtnText.Size = UDim2.new(1, 0, 1, 0)
+	openBtnText.BackgroundTransparency = 1
+	openBtnText.Text = "OPEN (0)"
+	openBtnText.TextColor3 = Color3.new(1, 1, 1)
+	openBtnText.Font = FONT
+	openBtnText.TextSize = 16
+	openBtnText.Parent = openBtn
+	addStroke(openBtnText, Color3.fromRGB(10, 50, 20), 1.5)
+
+	openBtn.MouseEnter:Connect(function()
+		TweenService:Create(openBtn, bounceTI, { Size = UDim2.new(0, 126, 0, 37) }):Play()
 	end)
-	buyBtn.MouseLeave:Connect(function()
-		TweenService:Create(row, bounceTI, { BackgroundColor3 = CARD_BG }):Play()
-		TweenService:Create(buyBtn, bounceTI, { Size = idleSize, BackgroundColor3 = Color3.fromRGB(60, 200, 90) }):Play()
+	openBtn.MouseLeave:Connect(function()
+		TweenService:Create(openBtn, bounceTI, { Size = UDim2.new(0, 120, 0, 34) }):Play()
 	end)
 
-	-- Lock overlay (for rebirth-gated cases)
+	openBtn.MouseButton1Click:Connect(function()
+		if isTutorialActive() and crateId ~= 1 then return end
+		local owned = getOwnedCount(crateId)
+		if owned <= 0 then
+			openBtnText.Text = "NONE!"
+			task.delay(1, function() updateAllCards() end)
+			return
+		end
+		SpinStandController.Close()
+		OpenOwnedCrate:FireServer(crateId)
+		local SpinController = require(script.Parent.SpinController)
+		SpinController.SetCurrentCost(0)
+		SpinController.SetCurrentCrateId(crateId)
+		SpinController.SetOwnedCrateMode(true)
+		SpinController.Show()
+		SpinController.WaitForResult()
+	end)
+
+	-- BUY 1 button (bottom-left of button area)
+	local buy1Btn = Instance.new("TextButton")
+	buy1Btn.Name = "Buy1Btn"
+	buy1Btn.Size = UDim2.new(0, 56, 0, 30)
+	buy1Btn.Position = UDim2.new(1, btnX - 64, 0, 52)
+	buy1Btn.AnchorPoint = Vector2.new(1, 0)
+	buy1Btn.BackgroundColor3 = Color3.fromRGB(80, 150, 255)
+	buy1Btn.Text = ""
+	buy1Btn.BorderSizePixel = 0
+	buy1Btn.AutoButtonColor = false
+	buy1Btn.Parent = row
+	Instance.new("UICorner", buy1Btn).CornerRadius = UDim.new(0, 8)
+	local buy1Stroke = Instance.new("UIStroke")
+	buy1Stroke.Color = Color3.fromRGB(40, 90, 180)
+	buy1Stroke.Thickness = 1.5
+	buy1Stroke.Parent = buy1Btn
+
+	local buy1Text = Instance.new("TextLabel")
+	buy1Text.Size = UDim2.new(1, 0, 1, 0)
+	buy1Text.BackgroundTransparency = 1
+	buy1Text.Text = "BUY 1"
+	buy1Text.TextColor3 = Color3.new(1, 1, 1)
+	buy1Text.Font = FONT
+	buy1Text.TextSize = 12
+	buy1Text.Parent = buy1Btn
+	addStroke(buy1Text, Color3.new(0, 0, 0), 1)
+
+	buy1Btn.MouseEnter:Connect(function()
+		TweenService:Create(buy1Btn, bounceTI, { Size = UDim2.new(0, 60, 0, 33) }):Play()
+	end)
+	buy1Btn.MouseLeave:Connect(function()
+		TweenService:Create(buy1Btn, bounceTI, { Size = UDim2.new(0, 56, 0, 30) }):Play()
+	end)
+
+	buy1Btn.MouseButton1Click:Connect(function()
+		if isTutorialActive() and crateId ~= 1 then return end
+		local now = os.clock()
+		if now < (buyCooldownUntilByCrate[crateId] or 0) then return end
+		if now < (noCashCooldownUntilByCrate[crateId] or 0) then return end
+		buyCooldownUntilByCrate[crateId] = now + 0.25
+		BuyCrateStock:FireServer(crateId, 1)
+	end)
+
+	-- BUY MAX button (bottom-right of button area)
+	local buyMaxBtn = Instance.new("TextButton")
+	buyMaxBtn.Name = "BuyMaxBtn"
+	buyMaxBtn.Size = UDim2.new(0, 56, 0, 30)
+	buyMaxBtn.Position = UDim2.new(1, btnX, 0, 52)
+	buyMaxBtn.AnchorPoint = Vector2.new(1, 0)
+	buyMaxBtn.BackgroundColor3 = Color3.fromRGB(140, 100, 255)
+	buyMaxBtn.Text = ""
+	buyMaxBtn.BorderSizePixel = 0
+	buyMaxBtn.AutoButtonColor = false
+	buyMaxBtn.Parent = row
+	Instance.new("UICorner", buyMaxBtn).CornerRadius = UDim.new(0, 8)
+	local buyMaxStroke = Instance.new("UIStroke")
+	buyMaxStroke.Color = Color3.fromRGB(90, 60, 180)
+	buyMaxStroke.Thickness = 1.5
+	buyMaxStroke.Parent = buyMaxBtn
+
+	local buyMaxText = Instance.new("TextLabel")
+	buyMaxText.Size = UDim2.new(1, 0, 1, 0)
+	buyMaxText.BackgroundTransparency = 1
+	buyMaxText.Text = "MAX"
+	buyMaxText.TextColor3 = Color3.new(1, 1, 1)
+	buyMaxText.Font = FONT
+	buyMaxText.TextSize = 12
+	buyMaxText.Parent = buyMaxBtn
+	addStroke(buyMaxText, Color3.new(0, 0, 0), 1)
+
+	buyMaxBtn.MouseEnter:Connect(function()
+		TweenService:Create(buyMaxBtn, bounceTI, { Size = UDim2.new(0, 60, 0, 33) }):Play()
+	end)
+	buyMaxBtn.MouseLeave:Connect(function()
+		TweenService:Create(buyMaxBtn, bounceTI, { Size = UDim2.new(0, 56, 0, 30) }):Play()
+	end)
+
+	buyMaxBtn.MouseButton1Click:Connect(function()
+		if isTutorialActive() and crateId ~= 1 then return end
+		local now = os.clock()
+		if now < (buyCooldownUntilByCrate[crateId] or 0) then return end
+		if now < (noCashCooldownUntilByCrate[crateId] or 0) then return end
+		buyCooldownUntilByCrate[crateId] = now + 0.25
+		local currentStock = stockData[crateId] or stockData[tostring(crateId)] or 0
+		local costPer = Economy.CrateCosts[crateId] or 1
+		local playerCash = HUDController.Data.cash or 0
+		local maxAfford = math.floor(playerCash / costPer)
+		local toBuy = math.min(currentStock, maxAfford)
+		if toBuy <= 0 then toBuy = 1 end
+		BuyCrateStock:FireServer(crateId, toBuy)
+	end)
+
+	-- Owned count label (below buttons)
+	local ownedLabel = Instance.new("TextLabel")
+	ownedLabel.Name = "OwnedLabel"
+	ownedLabel.Size = UDim2.new(0, 120, 0, 16)
+	ownedLabel.Position = UDim2.new(1, btnX, 0, 86)
+	ownedLabel.AnchorPoint = Vector2.new(1, 0)
+	ownedLabel.BackgroundTransparency = 1
+	ownedLabel.Text = ""
+	ownedLabel.TextColor3 = Color3.fromRGB(180, 180, 200)
+	ownedLabel.Font = FONT_SUB
+	ownedLabel.TextSize = 11
+	ownedLabel.Parent = row
+
+	-- Lock overlay
 	local lockOverlay = Instance.new("Frame")
 	lockOverlay.Name = "LockOverlay"
 	lockOverlay.Size = UDim2.new(1, 0, 1, 0)
@@ -244,23 +495,20 @@ local function buildCaseRow(crateId, parent)
 	lockOverlay.ZIndex = 5
 	lockOverlay.Visible = false
 	lockOverlay.Parent = row
-	local lockCorner = Instance.new("UICorner")
-	lockCorner.CornerRadius = UDim.new(0, 14)
-	lockCorner.Parent = lockOverlay
+	Instance.new("UICorner", lockOverlay).CornerRadius = UDim.new(0, 14)
 
 	local lockIcon = Instance.new("TextLabel")
 	lockIcon.Size = UDim2.new(0, 50, 0, 50)
 	lockIcon.Position = UDim2.new(0.5, -30, 0.5, 0)
 	lockIcon.AnchorPoint = Vector2.new(0.5, 0.5)
 	lockIcon.BackgroundTransparency = 1
-	lockIcon.Text = "🔒"
+	lockIcon.Text = "\u{1F512}"
 	lockIcon.TextSize = 40
 	lockIcon.Font = Enum.Font.SourceSans
 	lockIcon.ZIndex = 6
 	lockIcon.Parent = lockOverlay
 
 	local lockText = Instance.new("TextLabel")
-	lockText.Name = "LockText"
 	lockText.Size = UDim2.new(0, 220, 0, 30)
 	lockText.Position = UDim2.new(0.5, 30, 0.5, 0)
 	lockText.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -271,53 +519,15 @@ local function buildCaseRow(crateId, parent)
 	lockText.TextSize = 20
 	lockText.ZIndex = 6
 	lockText.Parent = lockOverlay
-	local ltStroke = Instance.new("UIStroke")
-	ltStroke.Color = Color3.fromRGB(0, 0, 0)
-	ltStroke.Thickness = 1.5
-	ltStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
-	ltStroke.Parent = lockText
-
-	-- Buy click handler
-	buyBtn.MouseButton1Click:Connect(function()
-		if isTutorialActive() and crateId ~= 1 then return end
-
-		local rebirthReq = Economy.GetCrateRebirthRequirement(crateId)
-		local currentRebirth = getRebirthCount()
-		if currentRebirth < rebirthReq then
-			buyBtn.Text = "LOCKED"
-			task.delay(1.2, function()
-				buyBtn.Text = "🔒"
-			end)
-			return
-		end
-
-		local playerCash = HUDController.Data and HUDController.Data.cash or 0
-		if playerCash < cost then
-			local origText = buyBtn.Text
-			local origColor = buyBtn.BackgroundColor3
-			local origScaled = buyBtn.TextScaled
-			buyBtn.Text = "NO CASH!"
-			buyBtn.TextScaled = true
-			buyBtn.BackgroundColor3 = Color3.fromRGB(180, 60, 60)
-			task.delay(1.5, function()
-				buyBtn.Text = origText
-				buyBtn.TextScaled = origScaled
-				buyBtn.BackgroundColor3 = origColor
-			end)
-			return
-		end
-
-		SpinStandController.Close()
-		local SpinController = require(script.Parent.SpinController)
-		SpinController.SetCurrentCost(cost)
-		SpinController.SetCurrentCrateId(crateId)
-		SpinController.Show()
-		SpinController.RequestSpin()
-	end)
+	addStroke(lockText, Color3.new(0, 0, 0), 1.5)
 
 	cardRefs[crateId] = {
 		card = row,
-		buyBtn = buyBtn,
+		buy1Btn = buy1Btn,
+		buyMaxBtn = buyMaxBtn,
+		openBtn = openBtn,
+		openBtnText = openBtnText,
+		stockLabel = stockLbl,
 		lockOverlay = lockOverlay,
 	}
 
@@ -325,26 +535,20 @@ local function buildCaseRow(crateId, parent)
 end
 
 -------------------------------------------------
--- UPDATE LOCK STATUS
+-- RESTOCK TIMER
 -------------------------------------------------
-local function updateLockStatus()
-	local currentRebirth = getRebirthCount()
-	local tutorialLock = isTutorialActive()
-	for crateId, refs in pairs(cardRefs) do
-		local rebirthReq = Economy.GetCrateRebirthRequirement(crateId)
-		local locked = currentRebirth < rebirthReq or (tutorialLock and crateId ~= 1)
-		if locked then
-			refs.lockOverlay.Visible = true
-			refs.buyBtn.Text = "\u{1F512}"
-			refs.buyBtn.BackgroundColor3 = Color3.fromRGB(70, 65, 85)
-			refs.card.BackgroundColor3 = CARD_LOCKED
-		else
-			refs.lockOverlay.Visible = false
-			refs.buyBtn.Text = "SPIN"
-			refs.buyBtn.BackgroundColor3 = Color3.fromRGB(60, 200, 90)
-			refs.card.BackgroundColor3 = CARD_BG
+local function startTimerLoop()
+	if timerConn then return end
+	timerConn = RunService.Heartbeat:Connect(function(dt)
+		restockSecondsLeft = math.max(0, restockSecondsLeft - dt)
+		if restockTimerLabel then
+			restockTimerLabel.Text = "\u{23F0} Restock: " .. formatTime(restockSecondsLeft)
 		end
-	end
+	end)
+end
+
+local function stopTimerLoop()
+	if timerConn then timerConn:Disconnect(); timerConn = nil end
 end
 
 -------------------------------------------------
@@ -354,7 +558,9 @@ end
 function SpinStandController.Open()
 	if isOpen then return end
 	isOpen = true
-	updateLockStatus()
+	GetCaseStock:FireServer()
+	updateAllCards()
+	startTimerLoop()
 	overlay.Visible = true
 	modalFrame.Visible = true
 	UIHelper.ScaleIn(modalFrame, 0.35)
@@ -363,6 +569,7 @@ end
 function SpinStandController.Close()
 	if not isOpen then return end
 	isOpen = false
+	stopTimerLoop()
 	overlay.Visible = false
 	modalFrame.Visible = false
 end
@@ -379,7 +586,6 @@ function SpinStandController.Init()
 	screenGui = UIHelper.CreateScreenGui("SpinStandGui", 18)
 	screenGui.Parent = playerGui
 
-	-- Dark overlay
 	overlay = Instance.new("Frame")
 	overlay.Name = "Overlay"
 	overlay.Size = UDim2.new(1, 0, 1, 0)
@@ -390,7 +596,6 @@ function SpinStandController.Init()
 	overlay.ZIndex = 1
 	overlay.Parent = screenGui
 
-	-- Modal panel (dark themed like Spin the Baddies)
 	modalFrame = Instance.new("Frame")
 	modalFrame.Name = "CaseShopModal"
 	modalFrame.Size = UDim2.new(0, MODAL_W, 0, MODAL_H)
@@ -402,9 +607,7 @@ function SpinStandController.Init()
 	modalFrame.Visible = false
 	modalFrame.Parent = screenGui
 
-	local modalCorner = Instance.new("UICorner")
-	modalCorner.CornerRadius = UDim.new(0, 20)
-	modalCorner.Parent = modalFrame
+	Instance.new("UICorner", modalFrame).CornerRadius = UDim.new(0, 20)
 
 	local modalStroke = Instance.new("UIStroke")
 	modalStroke.Color = Color3.fromRGB(70, 60, 100)
@@ -415,36 +618,42 @@ function SpinStandController.Init()
 	UIHelper.CreateShadow(modalFrame)
 	UIHelper.MakeResponsiveModal(modalFrame, MODAL_W, MODAL_H)
 
-	-- Header area
+	-- Header
 	local header = Instance.new("Frame")
-	header.Name = "Header"
 	header.Size = UDim2.new(1, 0, 0, 60)
 	header.BackgroundTransparency = 1
 	header.ZIndex = 3
 	header.Parent = modalFrame
 
-	-- Title: "Case Shop"
 	local title = Instance.new("TextLabel")
-	title.Name = "Title"
-	title.Size = UDim2.new(0.6, 0, 0, 36)
+	title.Size = UDim2.new(0, 200, 0, 36)
 	title.Position = UDim2.new(0, 20, 0, 14)
 	title.BackgroundTransparency = 1
 	title.Text = "Case Shop"
 	title.TextColor3 = Color3.new(1, 1, 1)
 	title.Font = FONT
-	title.TextSize = 36
+	title.TextSize = 32
 	title.TextXAlignment = Enum.TextXAlignment.Left
 	title.ZIndex = 3
 	title.Parent = header
-	local titleStroke = Instance.new("UIStroke")
-	titleStroke.Color = Color3.fromRGB(0, 0, 0)
-	titleStroke.Thickness = 1.5
-	titleStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
-	titleStroke.Parent = title
+	addStroke(title, Color3.new(0, 0, 0), 1.5)
 
-	-- Close button (red X, top right)
+	-- Restock timer (center of header)
+	restockTimerLabel = Instance.new("TextLabel")
+	restockTimerLabel.Size = UDim2.new(0, 200, 0, 24)
+	restockTimerLabel.Position = UDim2.new(0.5, 0, 0, 20)
+	restockTimerLabel.AnchorPoint = Vector2.new(0.5, 0)
+	restockTimerLabel.BackgroundTransparency = 1
+	restockTimerLabel.Text = "\u{23F0} Restock: --:--"
+	restockTimerLabel.TextColor3 = Color3.fromRGB(255, 220, 80)
+	restockTimerLabel.Font = FONT
+	restockTimerLabel.TextSize = 16
+	restockTimerLabel.ZIndex = 3
+	restockTimerLabel.Parent = header
+	addStroke(restockTimerLabel, Color3.new(0, 0, 0), 1.2)
+
+	-- Close button
 	local closeBtn = Instance.new("TextButton")
-	closeBtn.Name = "CloseBtn"
 	closeBtn.Size = UDim2.new(0, 42, 0, 42)
 	closeBtn.Position = UDim2.new(1, -14, 0, 10)
 	closeBtn.AnchorPoint = Vector2.new(1, 0)
@@ -457,19 +666,12 @@ function SpinStandController.Init()
 	closeBtn.AutoButtonColor = false
 	closeBtn.ZIndex = 5
 	closeBtn.Parent = modalFrame
-
-	local closeCorner = Instance.new("UICorner")
-	closeCorner.CornerRadius = UDim.new(1, 0)
-	closeCorner.Parent = closeBtn
+	Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(1, 0)
 	local closeStroke = Instance.new("UIStroke")
 	closeStroke.Color = Color3.fromRGB(160, 30, 30)
 	closeStroke.Thickness = 2
 	closeStroke.Parent = closeBtn
-	local closeTextStroke = Instance.new("UIStroke")
-	closeTextStroke.Color = Color3.fromRGB(80, 0, 0)
-	closeTextStroke.Thickness = 1.5
-	closeTextStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
-	closeTextStroke.Parent = closeBtn
+	addStroke(closeBtn, Color3.fromRGB(80, 0, 0), 1.5)
 
 	local closeBounce = TweenInfo.new(0.12, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 	closeBtn.MouseEnter:Connect(function()
@@ -482,9 +684,8 @@ function SpinStandController.Init()
 		SpinStandController.Close()
 	end)
 
-	-- Divider line under header
+	-- Divider
 	local divider = Instance.new("Frame")
-	divider.Name = "Divider"
 	divider.Size = UDim2.new(1, -30, 0, 1)
 	divider.Position = UDim2.new(0.5, 0, 0, 64)
 	divider.AnchorPoint = Vector2.new(0.5, 0)
@@ -520,12 +721,73 @@ function SpinStandController.Init()
 	topPad.PaddingBottom = UDim.new(0, 10)
 	topPad.Parent = scroll
 
-	-- Build all 18 case rows
 	for i = 1, Economy.TotalCases do
 		buildCaseRow(i, scroll)
 	end
 
-	-- Server event
+	-------------------------------------------------
+	-- EVENTS
+	-------------------------------------------------
+
+	-- Stock updates from server
+	CaseStockUpdate.OnClientEvent:Connect(function(payload)
+		if payload.stock then
+			stockData = payload.stock
+		end
+		if payload.restockIn then
+			restockSecondsLeft = payload.restockIn
+		end
+		updateAllCards()
+	end)
+
+	-- Also use GetCaseStock response (same remote, bidirectional)
+	GetCaseStock.OnClientEvent:Connect(function(payload)
+		if payload.stock then
+			stockData = payload.stock
+		end
+		if payload.restockIn then
+			restockSecondsLeft = payload.restockIn
+		end
+		updateAllCards()
+	end)
+
+	-- Buy result feedback
+	BuyCrateResult.OnClientEvent:Connect(function(result)
+		if result.success then
+			if result.crateId then
+				buyCooldownUntilByCrate[result.crateId] = 0
+				noCashCooldownUntilByCrate[result.crateId] = 0
+			end
+			updateAllCards()
+		else
+			-- Flash error on the relevant card
+			local crateId = result.crateId
+			if crateId and cardRefs[crateId] then
+				local refs = cardRefs[crateId]
+				local flashToken = (errorFlashTokenByCrate[crateId] or 0) + 1
+				errorFlashTokenByCrate[crateId] = flashToken
+				refs.card.BackgroundColor3 = Color3.fromRGB(120, 40, 40)
+				task.delay(0.8, function()
+					if errorFlashTokenByCrate[crateId] ~= flashToken then return end
+					if refs.card then refs.card.BackgroundColor3 = getCardBaseColor(crateId) end
+				end)
+				local reason = string.lower(tostring(result.reason or ""))
+				if string.find(reason, "not enough cash", 1, true) then
+					noCashCooldownUntilByCrate[crateId] = os.clock() + 1.0
+				end
+			end
+			showErrorToast(result.reason or "Could not buy case.")
+		end
+	end)
+
+	-- Data updates (owned crates change)
+	HUDController.OnDataUpdated(function()
+		if isOpen then
+			updateAllCards()
+		end
+	end)
+
+	-- Server event to open shop
 	OpenSpinStandGui.OnClientEvent:Connect(function()
 		SpinStandController.Open()
 	end)

@@ -7,6 +7,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
+local SoundService = game:GetService("SoundService")
 
 local DesignConfig = require(ReplicatedStorage.Shared.Config.DesignConfig)
 local Streamers = require(ReplicatedStorage.Shared.Config.Streamers)
@@ -44,9 +45,12 @@ local GREEN = Color3.fromRGB(80, 220, 100)
 local MODAL_W, MODAL_H = 480, 540
 
 local bounceTween = TweenInfo.new(0.12, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+local CASH_TOUCH_SOUND_ID = "rbxassetid://7112275565"
+local CASH_SOUND_START_OFFSET = 0.28
 
 local lastInventorySnapshot = ""
 local STORAGE_OFFSET = 1000
+local cachedCashTouchSound = nil
 
 -------------------------------------------------
 -- HELPERS
@@ -115,6 +119,35 @@ local function addStroke(parent, color, thickness)
 	s.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
 	s.Parent = parent
 	return s
+end
+
+local function getCashTouchSound()
+	if cachedCashTouchSound and cachedCashTouchSound.Parent then
+		return cachedCashTouchSound
+	end
+	for _, child in ipairs(SoundService:GetChildren()) do
+		if child:IsA("Sound") and child.SoundId == CASH_TOUCH_SOUND_ID then
+			cachedCashTouchSound = child
+			return child
+		end
+	end
+	return nil
+end
+
+local function playSellCashSound()
+	local sfx = getCashTouchSound()
+	if sfx then
+		local clone = sfx:Clone()
+		clone.Parent = SoundService
+		clone.TimePosition = CASH_SOUND_START_OFFSET
+		SoundService:PlayLocalSound(clone)
+		clone.Ended:Connect(function()
+			if clone and clone.Parent then clone:Destroy() end
+		end)
+		task.delay(2, function()
+			if clone and clone.Parent then clone:Destroy() end
+		end)
+	end
 end
 
 local function updateSectionButtons()
@@ -726,6 +759,7 @@ function SellStandController.Init()
 
 	SellResult.OnClientEvent:Connect(function(data)
 		if data.success and isOpen then
+			playSellCashSound()
 			task.wait(0.1)
 			lastInventorySnapshot = ""
 			buildInventoryList(true)

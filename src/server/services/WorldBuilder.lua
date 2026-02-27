@@ -914,8 +914,8 @@ end
 
 local LEADERBOARD_CATEGORIES = {
 	{ key = "Leaderboard_Spins",      title = "TOP ROLLS",      color = Color3.fromRGB(60, 140, 255),  valuePrefix = "" },
-	{ key = "Leaderboard_Cash",       title = "TOP CASH",       color = Color3.fromRGB(80, 220, 80),   valuePrefix = "$" },
 	{ key = "Leaderboard_TimePlayed", title = "TIME PLAYED",    color = Color3.fromRGB(170, 80, 230),  valuePrefix = "" },
+	{ key = "Leaderboard_Cash",       title = "TOP CASH",       color = Color3.fromRGB(80, 220, 80),   valuePrefix = "$" },
 	{ key = "Leaderboard_Robux",      title = "ROBUX SPENT",    color = Color3.fromRGB(255, 200, 50),  valuePrefix = "R$" },
 }
 

@@ -45,6 +45,7 @@ HUDController.Data = {
 	sacrificeOneTime = {},
 	sacrificeChargeState = { FiftyFifty = { count = 0, nextAt = nil }, FeelingLucky = { count = 0, nextAt = nil } },
 	tutorialComplete = nil,
+	ownedCrates = {},
 }
 
 local onDataUpdated = {}

@@ -418,11 +418,42 @@ local function buildPotionRow(potionType, potion, parent)
 	descLabel.ZIndex = 53
 	descLabel.Parent = row
 
+	-- Price label
+	local function formatCash(n)
+		if n >= 1e9 then return "$" .. string.format("%.1fB", n / 1e9) end
+		if n >= 1e6 then return "$" .. string.format("%.1fM", n / 1e6) end
+		local s = tostring(math.floor(n))
+		local out, len = "", #s
+		for i = 1, len do
+			out = out .. s:sub(i, i)
+			if (len - i) % 3 == 0 and i < len then out = out .. "," end
+		end
+		return "$" .. out
+	end
+
+	local priceLabel = Instance.new("TextLabel")
+	priceLabel.Name = "PriceLabel"
+	priceLabel.Size = UDim2.new(0, 160, 0, 20)
+	priceLabel.Position = UDim2.new(0, textX, 0, 64)
+	priceLabel.BackgroundTransparency = 1
+	priceLabel.Text = formatCash(potion.cost)
+	priceLabel.TextColor3 = Color3.fromRGB(100, 255, 130)
+	priceLabel.Font = BUBBLE_FONT
+	priceLabel.TextSize = 16
+	priceLabel.TextXAlignment = Enum.TextXAlignment.Left
+	priceLabel.ZIndex = 53
+	priceLabel.Parent = row
+	local priceStroke = Instance.new("UIStroke")
+	priceStroke.Color = Color3.fromRGB(0, 0, 0)
+	priceStroke.Thickness = 1.5
+	priceStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+	priceStroke.Parent = priceLabel
+
 	-- Rarity label
 	local rarityLabel = Instance.new("TextLabel")
 	rarityLabel.Name = "RarityLabel"
 	rarityLabel.Size = UDim2.new(0, 100, 0, 20)
-	rarityLabel.Position = UDim2.new(0, textX, 0, 64)
+	rarityLabel.Position = UDim2.new(0, textX, 0, 84)
 	rarityLabel.BackgroundTransparency = 1
 	rarityLabel.Text = potion.rarity or "Common"
 	rarityLabel.TextColor3 = rarityColor
@@ -441,7 +472,7 @@ local function buildPotionRow(potionType, potion, parent)
 		local reqLabel = Instance.new("TextLabel")
 		reqLabel.Name = "RebirthReq"
 		reqLabel.Size = UDim2.new(1, -(textX + 14), 0, 18)
-		reqLabel.Position = UDim2.new(0, textX, 0, 82)
+		reqLabel.Position = UDim2.new(0, textX, 0, 102)
 		reqLabel.BackgroundTransparency = 1
 		reqLabel.Text = "Requires Rebirth " .. rebirthRequired
 		reqLabel.TextColor3 = isLocked and Color3.fromRGB(255, 120, 80) or Color3.fromRGB(100, 200, 120)
@@ -833,13 +864,13 @@ local function buildShopModal()
 		pbStroke.Thickness = 1.5
 		pbStroke.Parent = packBtn
 
-		-- Gem icon + price
+		-- Robux label + price
 		local priceLabel = Instance.new("TextLabel")
 		priceLabel.Size = UDim2.new(0.55, 0, 1, 0)
 		priceLabel.Position = UDim2.new(0, 8, 0, 0)
 		priceLabel.BackgroundTransparency = 1
-		priceLabel.Text = "💎 " .. pack.robux
-		priceLabel.TextColor3 = Color3.fromRGB(100, 220, 255)
+		priceLabel.Text = "R$ " .. pack.robux
+		priceLabel.TextColor3 = Color3.fromRGB(120, 255, 140)
 		priceLabel.Font = BUBBLE_FONT
 		priceLabel.TextSize = 15
 		priceLabel.TextXAlignment = Enum.TextXAlignment.Left

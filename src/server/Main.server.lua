@@ -22,6 +22,7 @@ local IndexService    = require(services.IndexService)
 local GemShopService  = require(services.GemShopService)
 local SacrificeService = require(services.SacrificeService)
 local ReceiptHandler   = require(services.ReceiptHandler)
+local CaseStockService = require(services.CaseStockService)
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
@@ -313,37 +314,47 @@ do
 			StorageResult:FireClient(player, { success = false, reason = "Complete the tutorial first!" })
 			return
 		end
-		if action == "swap" then
-			local hotbarIdx = tonumber(arg1)
-			local storageIdx = tonumber(arg2)
-			if not hotbarIdx or not storageIdx then
-				StorageResult:FireClient(player, { success = false, reason = "Invalid indices." })
-				return
+		PlayerData.WithLock(player, function()
+			if action == "swap" then
+				local hotbarIdx = tonumber(arg1)
+				local storageIdx = tonumber(arg2)
+				if not hotbarIdx or not storageIdx then
+					StorageResult:FireClient(player, { success = false, reason = "Invalid indices." })
+					return
+				end
+				local ok = PlayerData.SwapHotbarStorage(player, hotbarIdx, storageIdx)
+				if ok then
+					StorageResult:FireClient(player, { success = true, action = "swap" })
+				else
+					StorageResult:FireClient(player, { success = false, action = "swap", reason = "Could not swap items." })
+				end
+			elseif action == "toHotbar" then
+				local storageIdx = tonumber(arg1)
+				local hotbarIdx = arg2 and tonumber(arg2) or nil
+				if not storageIdx then
+					StorageResult:FireClient(player, { success = false, reason = "Invalid index." })
+					return
+				end
+				local ok = PlayerData.MoveStorageToHotbar(player, storageIdx, hotbarIdx)
+				if ok then
+					StorageResult:FireClient(player, { success = true, action = "toHotbar" })
+				else
+					StorageResult:FireClient(player, { success = false, action = "toHotbar", reason = "Could not move item to hotbar." })
+				end
+			elseif action == "toStorage" then
+				local hotbarIdx = tonumber(arg1)
+				if not hotbarIdx then
+					StorageResult:FireClient(player, { success = false, reason = "Invalid index." })
+					return
+				end
+				local ok = PlayerData.MoveHotbarToStorage(player, hotbarIdx)
+				if not ok then
+					StorageResult:FireClient(player, { success = false, reason = "Storage is full!" })
+				else
+					StorageResult:FireClient(player, { success = true, action = "toStorage" })
+				end
 			end
-			local ok = PlayerData.SwapHotbarStorage(player, hotbarIdx, storageIdx)
-			StorageResult:FireClient(player, { success = ok, action = "swap" })
-		elseif action == "toHotbar" then
-			local storageIdx = tonumber(arg1)
-			local hotbarIdx = arg2 and tonumber(arg2) or nil
-			if not storageIdx then
-				StorageResult:FireClient(player, { success = false, reason = "Invalid index." })
-				return
-			end
-			local ok = PlayerData.MoveStorageToHotbar(player, storageIdx, hotbarIdx)
-			StorageResult:FireClient(player, { success = ok, action = "toHotbar" })
-		elseif action == "toStorage" then
-			local hotbarIdx = tonumber(arg1)
-			if not hotbarIdx then
-				StorageResult:FireClient(player, { success = false, reason = "Invalid index." })
-				return
-			end
-			local ok = PlayerData.MoveHotbarToStorage(player, hotbarIdx)
-			if not ok then
-				StorageResult:FireClient(player, { success = false, reason = "Storage is full!" })
-			else
-				StorageResult:FireClient(player, { success = true, action = "toStorage" })
-			end
-		end
+		end)
 	end)
 	print("[Server] Storage actions wired")
 end
@@ -365,7 +376,11 @@ end
 -- Ensure new remote events exist before services init
 do
 	local remotes = ReplicatedStorage:WaitForChild("RemoteEvents")
-	local newRemotes = { "ClaimQuestReward", "QuestUpdate", "EnhancedCaseResult" }
+	local newRemotes = {
+		"ClaimQuestReward", "QuestUpdate", "EnhancedCaseResult",
+		"BuyCrateStock", "BuyCrateResult", "OpenOwnedCrate", "OpenCrateResult",
+		"GetCaseStock", "CaseStockUpdate",
+	}
 	for _, name in ipairs(newRemotes) do
 		if not remotes:FindFirstChild(name) then
 			local re = Instance.new("RemoteEvent")
@@ -391,6 +406,7 @@ IndexService.Init(PlayerData, QuestService)
 GemShopService.Init(PlayerData, QuestService)
 SacrificeService.Init(PlayerData, PotionService, QuestService)
 ReceiptHandler.Init(PlayerData, SpinService)
+CaseStockService.Init(PlayerData, SpinService, QuestService)
 LeaderboardService.Init(PlayerData)
 PotionService.SetQuestService(QuestService)
 
@@ -441,6 +457,23 @@ do
 			))
 		end)
 		print("[Server] Debug: DebugGiveAll remote active (Studio only)")
+
+		local debugMaxRebirth = remotes:FindFirstChild("DebugMaxRebirth")
+		if not debugMaxRebirth then
+			debugMaxRebirth = Instance.new("RemoteEvent")
+			debugMaxRebirth.Name = "DebugMaxRebirth"
+			debugMaxRebirth.Parent = remotes
+		end
+		debugMaxRebirth.OnServerEvent:Connect(function(player)
+			print("[DEBUG] Setting max rebirth for " .. player.Name)
+			local data = PlayerData._cache[player.UserId]
+			if not data then return end
+			local Economy = require(ReplicatedStorage.Shared.Config.Economy)
+			data.rebirthCount = Economy.MaxRebirths
+			PlayerData.Replicate(player)
+			print("[DEBUG] " .. player.Name .. " is now Rebirth " .. Economy.MaxRebirths)
+		end)
+		print("[Server] Debug: DebugMaxRebirth remote active (Studio only)")
 	end
 end
 

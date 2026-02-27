@@ -17,8 +17,10 @@ Economy.SpinCost10 = 0        -- free 10-pack
 -- SPIN STAND CASES (18 total, buy at stall for luck bonus)
 -- Cases 1-3 have no rebirth requirement. Case N (4-18) requires Rebirth N-3.
 -- Case costs scale aggressively — the real cash sink.
+-- Each case has limited global stock that resets every RESTOCK_INTERVAL seconds.
 -------------------------------------------------
 Economy.TotalCases = 18
+Economy.RESTOCK_INTERVAL = 300 -- 5 minutes
 
 Economy.CrateCosts = {
 	200,        -- Case 1:  Scrap Case
@@ -123,6 +125,27 @@ Economy.CrateRarities = {
 	"Godly",      -- 16
 	"Godly",      -- 17
 	"Godly",      -- 18
+}
+
+Economy.CrateMaxStock = {
+	100,  -- Case 1:  Scrap Case
+	80,   -- Case 2:  Basic Case
+	70,   -- Case 3:  Lucky Case
+	60,   -- Case 4:  Polished Case
+	50,   -- Case 5:  Shiny Case
+	45,   -- Case 6:  Mystic Case
+	40,   -- Case 7:  Inferno Case
+	35,   -- Case 8:  Neon Case
+	30,   -- Case 9:  Cosmic Case
+	25,   -- Case 10: Radiant Case
+	20,   -- Case 11: Celestial Case
+	18,   -- Case 12: Abyss Case
+	15,   -- Case 13: Iridescent Case
+	12,   -- Case 14: Angelic Case
+	10,   -- Case 15: Time Case
+	8,    -- Case 16: Tidal Case
+	5,    -- Case 17: Infinity Case
+	3,    -- Case 18: Prismatic Case
 }
 
 -------------------------------------------------

@@ -127,6 +127,8 @@ local DEFAULT_DATA = {
 	-- Quests
 	questProgress = {},
 	questClaimed = {},
+	-- Owned crates: { [crateId] = count } — bought from Case Shop, opened separately
+	ownedCrates = {},
 	-- Lifetime stats (for global leaderboards)
 	totalSpins = 0,
 	totalCashEarned = 0,
@@ -275,6 +277,7 @@ local function buildFullPayload(player, data)
 				nextAt = PlayerData.GetSacrificeNextRechargeAt(player, "FeelingLucky", 1),
 			},
 		},
+		ownedCrates = data.ownedCrates or {},
 	}
 end
 
@@ -564,24 +567,22 @@ function PlayerData.MoveStorageToHotbar(player, storageIndex: number, hotbarInde
 	local data = PlayerData.Get(player)
 	if not data or not data.storage then return false end
 	if storageIndex < 1 or storageIndex > #data.storage then return false end
+	if #data.inventory >= PlayerData.HOTBAR_MAX then return false end
 	if hotbarIndex then
 		if hotbarIndex < 1 or hotbarIndex > PlayerData.HOTBAR_MAX then return false end
-		if hotbarIndex > #data.inventory then
-			-- Empty slot: just move there
-			local item = table.remove(data.storage, storageIndex)
-			table.insert(data.inventory, hotbarIndex, item)
-			-- Trim inventory to HOTBAR_MAX (shouldn't be needed but safety)
-			while #data.inventory > PlayerData.HOTBAR_MAX do
-				local overflow = table.remove(data.inventory)
-				table.insert(data.storage, overflow)
-			end
-		else
+		if hotbarIndex <= #data.inventory then
 			-- Occupied slot: swap
 			data.inventory[hotbarIndex], data.storage[storageIndex] = data.storage[storageIndex], data.inventory[hotbarIndex]
+		else
+			-- Empty target slot: append to the next valid contiguous hotbar slot.
+			-- We intentionally avoid sparse-array insertion to prevent item loss.
+			local item = data.storage[storageIndex]
+			if not item then return false end
+			table.remove(data.storage, storageIndex)
+			table.insert(data.inventory, item)
 		end
 	else
 		-- No specific slot: append to hotbar if space
-		if #data.inventory >= PlayerData.HOTBAR_MAX then return false end
 		local item = table.remove(data.storage, storageIndex)
 		table.insert(data.inventory, item)
 	end

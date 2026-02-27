@@ -9,6 +9,7 @@ local SlotPadController = {}
 local player = Players.LocalPlayer
 local DisplayInteract = nil -- resolved in Init to avoid race with server dedup
 local TOUCH_SOUND_ID = "rbxassetid://7112275565"
+local TOUCH_SOUND_START_OFFSET = 0.28
 
 local HoldController = nil
 local wiredGreenParts = {}
@@ -26,6 +27,21 @@ local function getTouchSound()
 		end
 	end
 	return nil
+end
+
+local function playCashTouchSound()
+	local sfx = getTouchSound()
+	if not sfx then return end
+	local clone = sfx:Clone()
+	clone.Parent = SoundService
+	clone.TimePosition = TOUCH_SOUND_START_OFFSET
+	SoundService:PlayLocalSound(clone)
+	clone.Ended:Connect(function()
+		if clone and clone.Parent then clone:Destroy() end
+	end)
+	task.delay(2, function()
+		if clone and clone.Parent then clone:Destroy() end
+	end)
 end
 
 local function isGreenCollectPart(part: BasePart): boolean
@@ -61,10 +77,7 @@ local function wireGreenTouch(part)
 		end
 		if isInside then return end
 		isInside = true
-		local sfx = getTouchSound()
-		if sfx then
-			SoundService:PlayLocalSound(sfx)
-		end
+		playCashTouchSound()
 	end)
 
 	part.TouchEnded:Connect(function(hit)

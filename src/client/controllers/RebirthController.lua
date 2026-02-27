@@ -25,7 +25,7 @@ local isOpen = false
 
 local titleRef, subtitleRef
 local levelBadgeRef, levelTextRef
-local bonusValueRef, caseImageRef, caseNameRef
+local bonusValueRef, caseImageRef, caseNameRef, slotValueRef
 local costRef, confirmBtnRef, confirmTextRef
 local warnRef, maxedRef
 local progressBarRef, progressFillRef, progressTextRef
@@ -88,7 +88,8 @@ local function updateDisplay()
 			bonusValueRef.Text = "+" .. Economy.GetRebirthBonusPercent(current) .. "% coins"
 		end
 		if caseImageRef then caseImageRef.Visible = false end
-		if caseNameRef then caseNameRef.Text = "All cases unlocked!" end
+		if caseNameRef then caseNameRef.Text = "Base Slot Unlock" end
+		if slotValueRef then slotValueRef.Text = "MAXED" end
 		if costRef then costRef.Visible = false end
 		if confirmBtnRef then confirmBtnRef.Visible = false end
 		if warnRef then warnRef.Visible = false end
@@ -115,19 +116,12 @@ local function updateDisplay()
 		bonusValueRef.Text = "+" .. info.coinBonus .. "% coins"
 	end
 
-	if info.unlocksCase then
-		local caseName = Economy.CrateNames[info.unlocksCase] or ("Case " .. info.unlocksCase)
-		local caseImage = Economy.CrateImageIds[info.unlocksCase]
-		if caseImageRef then
-			caseImageRef.Image = caseImage or ""
-			caseImageRef.Visible = (caseImage ~= nil and caseImage ~= "")
-		end
-		if caseNameRef then
-			caseNameRef.Text = "Unlocks: " .. caseName
-		end
-	else
-		if caseImageRef then caseImageRef.Visible = false end
-		if caseNameRef then caseNameRef.Text = "Final Rebirth Bonus!" end
+	if caseImageRef then caseImageRef.Visible = false end
+	if caseNameRef then
+		caseNameRef.Text = "Base Slot Unlock"
+	end
+	if slotValueRef then
+		slotValueRef.Text = "Next slot"
 	end
 
 	if costRef then costRef.Text = "$" .. fmtNum(info.cost) end
@@ -413,17 +407,31 @@ local function buildUI()
 	caseImageRef.Parent = rewardCard
 
 	caseNameRef = Instance.new("TextLabel")
-	caseNameRef.Size = UDim2.new(1, -60, 0, 22)
-	caseNameRef.Position = UDim2.new(0, 52, 0, 78)
+	caseNameRef.Size = UDim2.new(0, 160, 0, 22)
+	caseNameRef.Position = UDim2.new(0, 46, 0, 78)
 	caseNameRef.BackgroundTransparency = 1
-	caseNameRef.Text = "Unlocks: Basic Case"
-	caseNameRef.TextColor3 = Color3.fromRGB(120, 180, 255)
-	caseNameRef.Font = FONT
-	caseNameRef.TextSize = 16
+	caseNameRef.Text = "Base Slot Unlock"
+	caseNameRef.TextColor3 = Color3.fromRGB(160, 160, 180)
+	caseNameRef.Font = FONT_SUB
+	caseNameRef.TextSize = 13
 	caseNameRef.TextXAlignment = Enum.TextXAlignment.Left
 	caseNameRef.ZIndex = 5
 	caseNameRef.Parent = rewardCard
 	addStroke(caseNameRef, Color3.new(0, 0, 0), 1)
+
+	slotValueRef = Instance.new("TextLabel")
+	slotValueRef.Size = UDim2.new(0, 120, 0, 22)
+	slotValueRef.Position = UDim2.new(1, -12, 0, 78)
+	slotValueRef.AnchorPoint = Vector2.new(1, 0)
+	slotValueRef.BackgroundTransparency = 1
+	slotValueRef.Text = "Next slot"
+	slotValueRef.TextColor3 = GREEN
+	slotValueRef.Font = FONT
+	slotValueRef.TextSize = 18
+	slotValueRef.TextXAlignment = Enum.TextXAlignment.Right
+	slotValueRef.ZIndex = 5
+	slotValueRef.Parent = rewardCard
+	addStroke(slotValueRef, Color3.new(0, 0, 0), 1)
 
 	-- == Cost display ==
 	local costY = cardY + 132

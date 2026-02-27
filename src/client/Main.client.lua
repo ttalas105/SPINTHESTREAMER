@@ -8,6 +8,9 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local StarterGui = game:GetService("StarterGui")
+local TweenService = game:GetService("TweenService")
+local SoundService = game:GetService("SoundService")
+local Economy = require(ReplicatedStorage.Shared.Config.Economy)
 
 -- Wait for shared modules
 ReplicatedStorage:WaitForChild("Shared")
@@ -40,9 +43,36 @@ local QuestController        = require(controllers.QuestController)
 local UIHelper               = require(controllers.UIHelper)
 
 local RemoteEvents = ReplicatedStorage:WaitForChild("RemoteEvents")
+local CaseStockUpdate = RemoteEvents:WaitForChild("CaseStockUpdate")
+local GetCaseStock = RemoteEvents:WaitForChild("GetCaseStock")
+local RESTOCK_SOUND_ID = "rbxassetid://137402801272072"
 local centerToastGui = nil
 local centerToastLabel = nil
+local centerToastStroke = nil
 local centerToastToken = 0
+local hasSeenCaseStockSnapshot = false
+local lastCaseRestockIn = nil
+local cachedRestockSound = nil
+
+local function playRestockSound()
+	if not cachedRestockSound or not cachedRestockSound.Parent then
+		cachedRestockSound = Instance.new("Sound")
+		cachedRestockSound.Name = "CaseRestockSFX"
+		cachedRestockSound.SoundId = RESTOCK_SOUND_ID
+		cachedRestockSound.Volume = 0.9
+		cachedRestockSound.Parent = SoundService
+	end
+
+	local clone = cachedRestockSound:Clone()
+	clone.Parent = SoundService
+	SoundService:PlayLocalSound(clone)
+	clone.Ended:Connect(function()
+		if clone and clone.Parent then clone:Destroy() end
+	end)
+	task.delay(4, function()
+		if clone and clone.Parent then clone:Destroy() end
+	end)
+end
 
 local function showSystemToast(titleText, bodyText)
 	pcall(function()
@@ -67,36 +97,55 @@ local function showCenterToast(messageText)
 	if not centerToastLabel or not centerToastLabel.Parent then
 		centerToastLabel = Instance.new("TextLabel")
 		centerToastLabel.Name = "CenterToastLabel"
-		centerToastLabel.Size = UDim2.new(0, 420, 0, 50)
-		-- Place just above the bottom hotbar so it doesn't block center gameplay.
-		centerToastLabel.Position = UDim2.new(0.5, 0, 1, -92)
-		centerToastLabel.AnchorPoint = Vector2.new(0.5, 1)
-		centerToastLabel.BackgroundColor3 = Color3.fromRGB(30, 25, 50)
-		centerToastLabel.BackgroundTransparency = 0.15
+		centerToastLabel.Size = UDim2.new(0, 560, 0, 82)
+		-- Place near the top nav, left of the SHOP area.
+		centerToastLabel.Position = UDim2.new(0.5, -380, 0, 24)
+		centerToastLabel.AnchorPoint = Vector2.new(0, 0)
+		centerToastLabel.BackgroundColor3 = Color3.fromRGB(6, 22, 56)
+		centerToastLabel.BackgroundTransparency = 0.12
 		centerToastLabel.BorderSizePixel = 0
-		centerToastLabel.TextColor3 = Color3.new(1, 1, 1)
+		centerToastLabel.TextColor3 = Color3.fromRGB(235, 250, 255)
 		centerToastLabel.Font = Enum.Font.FredokaOne
-		centerToastLabel.TextSize = 22
+		centerToastLabel.TextSize = 40
 		centerToastLabel.TextWrapped = true
+		centerToastLabel.TextStrokeColor3 = Color3.fromRGB(0, 145, 255)
+		centerToastLabel.TextStrokeTransparency = 0.35
 		centerToastLabel.Visible = false
 		centerToastLabel.Parent = centerToastGui
 		Instance.new("UICorner", centerToastLabel).CornerRadius = UDim.new(0, 12)
 		local stroke = Instance.new("UIStroke")
-		stroke.Color = Color3.fromRGB(120, 180, 255)
+		stroke.Color = Color3.fromRGB(35, 180, 255)
 		stroke.Thickness = 2
-		stroke.Transparency = 0.2
+		stroke.Transparency = 0.05
 		stroke.Parent = centerToastLabel
+		centerToastStroke = stroke
 	end
 
 	centerToastToken += 1
 	local token = centerToastToken
 	centerToastLabel.Text = messageText or ""
+	centerToastLabel.BackgroundTransparency = 0.12
 	centerToastLabel.TextTransparency = 0
+	if centerToastStroke then
+		centerToastStroke.Transparency = 0
+	end
 	centerToastLabel.Visible = true
 
-	task.delay(1.8, function()
+	task.delay(3.6, function()
 		if token ~= centerToastToken or not centerToastLabel then return end
-		centerToastLabel.Visible = false
+		TweenService:Create(centerToastLabel, TweenInfo.new(0.45, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+			BackgroundTransparency = 1,
+			TextTransparency = 1,
+		}):Play()
+		if centerToastStroke then
+			TweenService:Create(centerToastStroke, TweenInfo.new(0.45, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+				Transparency = 1,
+			}):Play()
+		end
+		task.delay(0.5, function()
+			if token ~= centerToastToken or not centerToastLabel then return end
+			centerToastLabel.Visible = false
+		end)
 	end)
 end
 
@@ -106,6 +155,22 @@ local function shouldShowBaseSlotErrorToast(reasonText)
 	if string.find(r, "select a streamer first", 1, true) then return false end
 	if string.find(r, "too fast", 1, true) then return false end
 	return true
+end
+
+local function handleCaseStockPayload(payload)
+	if type(payload) ~= "table" then return end
+	local restockIn = payload.restockIn
+	if type(restockIn) ~= "number" then return end
+
+	if payload.restocked == true then
+		playRestockSound()
+		showCenterToast("Case stock has been restocked!")
+	end
+
+	local previousRestockIn = lastCaseRestockIn
+	lastCaseRestockIn = restockIn
+
+	hasSeenCaseStockSnapshot = true
 end
 
 -------------------------------------------------
@@ -177,6 +242,27 @@ if RunService:IsStudio() then
 				task.wait(0.5)
 				skipBtn.Text = "Done!"
 			end)
+
+			local rebirthRemote = RemoteEvents:FindFirstChild("DebugMaxRebirth")
+			if not rebirthRemote then
+				rebirthRemote = RemoteEvents:WaitForChild("DebugMaxRebirth", 5)
+			end
+			if rebirthRemote then
+				local rebirthBtn = Instance.new("TextButton")
+				rebirthBtn.Size = UDim2.new(0, 160, 0, 36)
+				rebirthBtn.Position = UDim2.new(0, 10, 0, 94)
+				rebirthBtn.BackgroundColor3 = Color3.fromRGB(140, 50, 200)
+				rebirthBtn.Text = "DEBUG: Max Rebirth"; rebirthBtn.TextColor3 = Color3.new(1, 1, 1)
+				rebirthBtn.Font = Enum.Font.FredokaOne; rebirthBtn.TextSize = 14; rebirthBtn.BorderSizePixel = 0
+				rebirthBtn.Parent = sg
+				Instance.new("UICorner", rebirthBtn).CornerRadius = UDim.new(0, 8)
+				rebirthBtn.MouseButton1Click:Connect(function()
+					rebirthBtn.Text = "Setting..."
+					rebirthRemote:FireServer()
+					task.wait(1)
+					rebirthBtn.Text = "DEBUG: Max Rebirth"
+				end)
+			end
 		end
 	end)
 end
@@ -482,6 +568,12 @@ SellResult.OnClientEvent:Connect(function(data)
 	else
 		print("[Client] Sell failed: " .. (data.reason or "unknown"))
 	end
+end)
+
+CaseStockUpdate.OnClientEvent:Connect(handleCaseStockPayload)
+GetCaseStock.OnClientEvent:Connect(handleCaseStockPayload)
+task.defer(function()
+	GetCaseStock:FireServer()
 end)
 
 -------------------------------------------------
