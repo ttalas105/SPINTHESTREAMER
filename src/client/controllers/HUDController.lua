@@ -49,6 +49,35 @@ HUDController.Data = {
 
 local onDataUpdated = {}
 
+local function formatCompactBalance(value)
+	local n = tonumber(value) or 0
+	local absN = math.abs(n)
+	if absN < 1e6 then
+		return tostring(math.floor(n + 0.5))
+	end
+
+	local suffixes = {
+		{ v = 1e15, s = "q" },
+		{ v = 1e12, s = "t" },
+		{ v = 1e9,  s = "b" },
+		{ v = 1e6,  s = "m" },
+	}
+
+	for _, entry in ipairs(suffixes) do
+		if absN >= entry.v then
+			local scaled = n / entry.v
+			local rounded = math.floor(scaled * 10 + (scaled >= 0 and 0.5 or -0.5)) / 10
+			local whole = math.floor(rounded)
+			if math.abs(rounded - whole) < 1e-9 then
+				return tostring(whole) .. entry.s
+			end
+			return string.format("%.1f%s", rounded, entry.s)
+		end
+	end
+
+	return tostring(math.floor(n + 0.5))
+end
+
 -------------------------------------------------
 -- BUILD UI
 -------------------------------------------------
@@ -153,7 +182,7 @@ function HUDController.UpdateData(payload)
 
 	-- Update cash display
 	if cashLabel then
-		cashLabel.Text = "$" .. tostring(HUDController.Data.cash)
+		cashLabel.Text = "$" .. formatCompactBalance(HUDController.Data.cash)
 
 		if HUDController.Data.cash ~= previousCash then
 			local flashColor = HUDController.Data.cash > previousCash
@@ -185,7 +214,7 @@ function HUDController.UpdateData(payload)
 
 	-- Update gems display
 	if gemsLabel then
-		gemsLabel.Text = "\u{1F48E} " .. tostring(HUDController.Data.gems or 0) .. " Gems"
+		gemsLabel.Text = "\u{1F48E} " .. formatCompactBalance(HUDController.Data.gems or 0) .. " Gems"
 	end
 
 	-- Update luck display (1 luck = +1%) with potion boost shown

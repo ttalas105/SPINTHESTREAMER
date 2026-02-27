@@ -401,6 +401,7 @@ do
 	local RunService = game:GetService("RunService")
 	if RunService:IsStudio() then
 		local Streamers = require(ReplicatedStorage.Shared.Config.Streamers)
+		local Effects = require(ReplicatedStorage.Shared.Config.Effects)
 		local remotes = ReplicatedStorage:WaitForChild("RemoteEvents")
 		local debugRemote = remotes:FindFirstChild("DebugGiveAll")
 		if not debugRemote then
@@ -409,12 +410,35 @@ do
 			debugRemote.Parent = remotes
 		end
 		debugRemote.OnServerEvent:Connect(function(player)
-			print("[DEBUG] Giving all streamers to " .. player.Name)
+			print("[DEBUG] Giving all streamers + effects to " .. player.Name)
+			local grantedCount = 0
+			local fullCount = 0
 			for _, s in ipairs(Streamers.List) do
-				PlayerData.AddToInventory(player, s.id)
+				-- Base variant (no effect)
+				local dest = PlayerData.AddToInventory(player, s.id)
+				if dest == "full" then
+					fullCount += 1
+				else
+					grantedCount += 1
+				end
+
+				-- Every special effect variant (Acid, Snow, etc.)
+				for _, effect in ipairs(Effects.List) do
+					local effDest = PlayerData.AddToInventory(player, s.id, effect.name)
+					if effDest == "full" then
+						fullCount += 1
+					else
+						grantedCount += 1
+					end
+				end
 			end
 			PlayerData.Replicate(player)
-			print("[DEBUG] Done — gave " .. #Streamers.List .. " streamers")
+			print(string.format(
+				"[DEBUG] Done — attempted %d variants, granted %d, full %d",
+				#Streamers.List * (#Effects.List + 1),
+				grantedCount,
+				fullCount
+			))
 		end)
 		print("[Server] Debug: DebugGiveAll remote active (Studio only)")
 	end

@@ -102,6 +102,20 @@ local function getClaimableEntriesForTab(tabEffect)
 	return entries
 end
 
+local function getClaimableEntriesAllTabs()
+	local all = {}
+	for _, tab in ipairs(TABS) do
+		local tabEntries = getClaimableEntriesForTab(tab.effect)
+		for _, info in ipairs(tabEntries) do
+			table.insert(all, {
+				id = info.id,
+				effect = tab.effect,
+			})
+		end
+	end
+	return all
+end
+
 -- Count total unclaimed across ALL tabs
 local function countTotalUnclaimed()
 	local total = 0
@@ -120,8 +134,7 @@ end
 local function updateClaimAllButton()
 	if not claimAllBtn then return end
 
-	local unclaimed = countUnclaimedForTab(activeTab)
-	local tabName = getTabNameByEffect(activeTab)
+	local unclaimed = countTotalUnclaimed()
 	local enabled = (unclaimed > 0) and (not isClaimAllRunning)
 
 	claimAllBtn.AutoButtonColor = enabled
@@ -132,7 +145,7 @@ local function updateClaimAllButton()
 	if isClaimAllRunning then
 		claimAllBtn.Text = "Claiming..."
 	elseif unclaimed > 0 then
-		claimAllBtn.Text = "Claim All " .. tabName .. " (" .. unclaimed .. ")"
+		claimAllBtn.Text = "Claim All (" .. unclaimed .. ")"
 	else
 		claimAllBtn.Text = "No Claims Available"
 	end
@@ -749,7 +762,7 @@ function IndexController.Init()
 	claimAllBtn.MouseButton1Click:Connect(function()
 		if isClaimAllRunning then return end
 
-		local toClaim = getClaimableEntriesForTab(activeTab)
+		local toClaim = getClaimableEntriesAllTabs()
 		if #toClaim <= 0 then
 			updateClaimAllButton()
 			return
@@ -760,8 +773,8 @@ function IndexController.Init()
 		updateClaimAllButton()
 
 		task.spawn(function()
-			for _, info in ipairs(toClaim) do
-				ClaimIndexGems:FireServer(info.id, activeTab)
+			for _, entry in ipairs(toClaim) do
+				ClaimIndexGems:FireServer(entry.id, entry.effect)
 				task.wait(0.06)
 			end
 

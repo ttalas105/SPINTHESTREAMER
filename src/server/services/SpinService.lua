@@ -246,6 +246,12 @@ local function handleSpin(player)
 
 	local data = PlayerData.Get(player)
 	if not data then return end
+	local hasInventorySpace = (#(data.inventory or {}) < PlayerData.HOTBAR_MAX)
+	local hasStorageSpace = (#(data.storage or {}) < PlayerData.STORAGE_MAX)
+	if not hasInventorySpace and not hasStorageSpace then
+		SpinResult:FireClient(player, { success = false, reason = "Inventory and storage are full!" })
+		return
+	end
 
 	-- Check cost: use spin credit first, then cash
 	local usedCredit = PlayerData.UseSpinCredit(player)
@@ -369,6 +375,12 @@ local function handleCrateSpin(player, crateId: number)
 
 	local data = PlayerData.Get(player)
 	if not data then return end
+	local hasInventorySpace = (#(data.inventory or {}) < PlayerData.HOTBAR_MAX)
+	local hasStorageSpace = (#(data.storage or {}) < PlayerData.STORAGE_MAX)
+	if not hasInventorySpace and not hasStorageSpace then
+		SpinResult:FireClient(player, { success = false, reason = "Inventory and storage are full!" })
+		return
+	end
 
 	-- Check rebirth requirement
 	local rebirthReq = Economy.GetCrateRebirthRequirement(crateId)

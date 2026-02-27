@@ -7,7 +7,6 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
-local RunService = game:GetService("RunService")
 
 local DesignConfig = require(ReplicatedStorage.Shared.Config.DesignConfig)
 local Streamers = require(ReplicatedStorage.Shared.Config.Streamers)
@@ -32,6 +31,9 @@ local SellResult = RemoteEvents:WaitForChild("SellResult")
 local screenGui, overlay, modalFrame
 local isOpen = false
 local scrollFrame, sellAllBtn, totalLabel, countLabel, emptyLabel
+local listLayoutRef
+local hotbarTabBtn, storageTabBtn
+local activeSection = "hotbar" -- "hotbar" | "storage"
 
 local FONT = Enum.Font.FredokaOne
 local FONT_SUB = Enum.Font.GothamBold
@@ -43,8 +45,8 @@ local MODAL_W, MODAL_H = 480, 540
 
 local bounceTween = TweenInfo.new(0.12, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 
-local viewportConns = {}
 local lastInventorySnapshot = ""
+local STORAGE_OFFSET = 1000
 
 -------------------------------------------------
 -- HELPERS
@@ -91,13 +93,17 @@ local function formatOdds(odds)
 	return "1/" .. fmtNum(odds)
 end
 
-local function buildInventorySnapshot(inventory)
-	if not inventory or #inventory == 0 then return "" end
+local function buildInventorySnapshot(inventory, storage)
 	local parts = {}
-	for i, item in ipairs(inventory) do
+	for i, item in ipairs(inventory or {}) do
 		local id = getItemId(item) or "?"
 		local eff = getItemEffect(item) or ""
-		parts[i] = id .. ":" .. eff
+		parts[#parts + 1] = "i:" .. i .. ":" .. id .. ":" .. eff
+	end
+	for i, item in ipairs(storage or {}) do
+		local id = getItemId(item) or "?"
+		local eff = getItemEffect(item) or ""
+		parts[#parts + 1] = "s:" .. i .. ":" .. id .. ":" .. eff
 	end
 	return table.concat(parts, "|")
 end
@@ -111,22 +117,19 @@ local function addStroke(parent, color, thickness)
 	return s
 end
 
--------------------------------------------------
--- VIEWPORT CLEANUP
--------------------------------------------------
-
-local function cleanViewportConns()
-	for _, conn in ipairs(viewportConns) do
-		pcall(function() conn:Disconnect() end)
-	end
-	viewportConns = {}
+local function updateSectionButtons()
+	if not hotbarTabBtn or not storageTabBtn then return end
+	local hotbarActive = activeSection == "hotbar"
+	hotbarTabBtn.BackgroundColor3 = hotbarActive and Color3.fromRGB(80, 210, 120) or Color3.fromRGB(55, 50, 80)
+	hotbarTabBtn.TextColor3 = hotbarActive and Color3.new(1, 1, 1) or Color3.fromRGB(180, 180, 210)
+	storageTabBtn.BackgroundColor3 = (not hotbarActive) and Color3.fromRGB(80, 210, 120) or Color3.fromRGB(55, 50, 80)
+	storageTabBtn.TextColor3 = (not hotbarActive) and Color3.new(1, 1, 1) or Color3.fromRGB(180, 180, 210)
 end
 
--------------------------------------------------
 -- BUILD ITEM CARD
 -------------------------------------------------
 
-local function buildItemCard(item, originalIndex, parent)
+local function buildItemCard(item, originalIndex, source, parent)
 	local streamerId = getItemId(item)
 	local effect = getItemEffect(item)
 	local info = Streamers.ById[streamerId]
@@ -137,6 +140,8 @@ local function buildItemCard(item, originalIndex, parent)
 	local rarityInfo = Rarities.ByName[info.rarity]
 	local rarityColor = rarityInfo and rarityInfo.color or Color3.fromRGB(170, 170, 170)
 	local displayColor = effectInfo and effectInfo.color or rarityColor
+	local displayName = info.displayName
+	if effectInfo then displayName = effectInfo.prefix .. " " .. displayName end
 
 	local cardHeight = effectInfo and 130 or 110
 	local card = Instance.new("Frame")
@@ -153,70 +158,38 @@ local function buildItemCard(item, originalIndex, parent)
 	cardStroke.Transparency = 0.5
 	cardStroke.Parent = card
 
-	-- 3D model viewport (left)
-	local vpSize = 90
-	local modelsFolder = ReplicatedStorage:FindFirstChild("StreamerModels")
-	local modelTemplate = modelsFolder and modelsFolder:FindFirstChild(streamerId)
+	-- Lightweight preview badge (replaces expensive 3D viewport)
+	local previewSize = 72
+	local preview = Instance.new("Frame")
+	preview.Name = "PreviewBadge"
+	preview.Size = UDim2.new(0, previewSize, 0, previewSize)
+	preview.Position = UDim2.new(0, 10, 0.5, 0)
+	preview.AnchorPoint = Vector2.new(0, 0.5)
+	preview.BackgroundColor3 = Color3.fromRGB(25, 22, 42)
+	preview.BackgroundTransparency = 0.15
+	preview.BorderSizePixel = 0
+	preview.Parent = card
+	Instance.new("UICorner", preview).CornerRadius = UDim.new(0, 10)
+	local pStroke = Instance.new("UIStroke")
+	pStroke.Color = displayColor
+	pStroke.Thickness = 1.5
+	pStroke.Transparency = 0.35
+	pStroke.Parent = preview
 
-	local viewport = Instance.new("ViewportFrame")
-	viewport.Name = "ModelVP"
-	viewport.Size = UDim2.new(0, vpSize, 0, vpSize)
-	viewport.Position = UDim2.new(0, 10, 0.5, 0)
-	viewport.AnchorPoint = Vector2.new(0, 0.5)
-	viewport.BackgroundColor3 = Color3.fromRGB(25, 22, 42)
-	viewport.BackgroundTransparency = 0.2
-	viewport.BorderSizePixel = 0
-	viewport.Parent = card
-	Instance.new("UICorner", viewport).CornerRadius = UDim.new(0, 10)
-
-	if modelTemplate then
-		local vpModel = modelTemplate:Clone()
-		vpModel.Parent = viewport
-		local vpCamera = Instance.new("Camera")
-		vpCamera.Parent = viewport
-		viewport.CurrentCamera = vpCamera
-
-		local ok, cf, size = pcall(function() return vpModel:GetBoundingBox() end)
-		if ok and cf and size then
-			local maxDim = math.max(size.X, size.Y, size.Z)
-			local dist = maxDim * 1.8
-			local target = cf.Position
-			local camYOffset = size.Y * 0.15
-			local angle = { value = 0 }
-
-			vpCamera.CFrame = CFrame.new(target + Vector3.new(0, camYOffset, dist), target)
-
-			local alive = true
-			local conn
-			conn = RunService.Heartbeat:Connect(function(dt)
-				if not alive then conn:Disconnect(); return end
-				if not viewport.Parent or not vpCamera.Parent then
-					alive = false; conn:Disconnect(); return
-				end
-				angle.value = angle.value + dt * 0.8
-				local a = angle.value
-				vpCamera.CFrame = CFrame.new(
-					target + Vector3.new(math.sin(a) * dist, camYOffset, math.cos(a) * dist),
-					target
-				)
-			end)
-			table.insert(viewportConns, conn)
-		else
-			vpCamera.CFrame = CFrame.new(Vector3.new(0, 2, 5), Vector3.new(0, 1, 0))
-		end
-	else
-		local placeholder = Instance.new("TextLabel")
-		placeholder.Size = UDim2.new(1, 0, 1, 0)
-		placeholder.BackgroundTransparency = 1
-		placeholder.Text = "?"
-		placeholder.TextSize = 28
-		placeholder.TextColor3 = Color3.fromRGB(100, 100, 120)
-		placeholder.Font = FONT
-		placeholder.Parent = viewport
-	end
+	local previewText = Instance.new("TextLabel")
+	previewText.Size = UDim2.new(1, -8, 1, -8)
+	previewText.Position = UDim2.new(0.5, 0, 0.5, 0)
+	previewText.AnchorPoint = Vector2.new(0.5, 0.5)
+	previewText.BackgroundTransparency = 1
+	previewText.Text = string.upper(string.sub(displayName, 1, 2))
+	previewText.TextColor3 = displayColor
+	previewText.Font = FONT
+	previewText.TextSize = 28
+	previewText.Parent = preview
+	addStroke(previewText, Color3.new(0, 0, 0), 1.2)
 
 	-- Info area (middle)
-	local textX = vpSize + 18
+	local textX = previewSize + 18
 
 	-- Effect badge
 	if effectInfo then
@@ -240,8 +213,6 @@ local function buildItemCard(item, originalIndex, parent)
 	end
 
 	-- Name
-	local displayName = info.displayName
-	if effectInfo then displayName = effectInfo.prefix .. " " .. displayName end
 	local nameY = effectInfo and 26 or 12
 	local nameLabel = Instance.new("TextLabel")
 	nameLabel.Size = UDim2.new(0, 240, 0, 28)
@@ -325,7 +296,7 @@ local function buildItemCard(item, originalIndex, parent)
 		}):Play()
 	end)
 	sellBtn.MouseButton1Click:Connect(function()
-		SellByIndexRequest:FireServer(originalIndex)
+		SellByIndexRequest:FireServer(originalIndex, source)
 	end)
 
 	return card, sellPrice
@@ -337,27 +308,50 @@ end
 
 local function clearScrollFrame()
 	if not scrollFrame then return end
-	cleanViewportConns()
 	for _, child in ipairs(scrollFrame:GetChildren()) do
 		if child:IsA("Frame") then child:Destroy() end
+	end
+end
+
+local function clampSellScrollBounds()
+	if not scrollFrame or not listLayoutRef then return end
+	local contentH = listLayoutRef.AbsoluteContentSize.Y + 6
+	local viewH = scrollFrame.AbsoluteSize.Y
+	local canvasH = math.max(contentH, viewH)
+	scrollFrame.CanvasSize = UDim2.new(0, 0, 0, canvasH)
+	local maxY = math.max(0, contentH - viewH)
+	local y = math.clamp(scrollFrame.CanvasPosition.Y, 0, maxY)
+	if y ~= scrollFrame.CanvasPosition.Y then
+		scrollFrame.CanvasPosition = Vector2.new(scrollFrame.CanvasPosition.X, y)
 	end
 end
 
 local function buildInventoryList(force)
 	if not scrollFrame then return end
 	local inventory = HUDController.Data.inventory or {}
-	local snapshot = buildInventorySnapshot(inventory)
+	local storage = HUDController.Data.storage or {}
+	local snapshot = activeSection .. "|" .. buildInventorySnapshot(inventory, storage)
 	if not force and snapshot == lastInventorySnapshot then return end
 	lastInventorySnapshot = snapshot
 
 	clearScrollFrame()
 	local totalValue = 0
 
-	if #inventory == 0 then
+	local visibleCount = activeSection == "hotbar" and #inventory or #storage
+	if visibleCount == 0 then
 		if emptyLabel then emptyLabel.Visible = true end
-		if sellAllBtn then sellAllBtn.Visible = false end
+		if sellAllBtn then
+			sellAllBtn.Visible = (#inventory + #storage) > 0
+		end
 		if totalLabel then totalLabel.Text = "Total: $0" end
 		if countLabel then countLabel.Text = "0 streamers" end
+		if emptyLabel then
+			if activeSection == "hotbar" then
+				emptyLabel.Text = "Your hotbar is empty!"
+			else
+				emptyLabel.Text = "Your storage is empty!"
+			end
+		end
 		return
 	end
 
@@ -370,30 +364,58 @@ local function buildInventoryList(force)
 	end
 	local queuedSet = SacrificeController and SacrificeController.GetQueuedIndices and SacrificeController.GetQueuedIndices() or {}
 
-	local sortedIndices = {}
-	for i = 1, #inventory do
-		if not queuedSet[i] then
-			table.insert(sortedIndices, i)
+	local sortedEntries = {}
+	if activeSection == "hotbar" then
+		for i = 1, #inventory do
+			if not queuedSet[i] then
+				table.insert(sortedEntries, {
+					item = inventory[i],
+					index = i,
+					source = "inventory",
+				})
+			end
+		end
+	else
+		for i = 1, #storage do
+			local vi = STORAGE_OFFSET + i
+			if not queuedSet[vi] then
+				table.insert(sortedEntries, {
+					item = storage[i],
+					index = i,
+					source = "storage",
+				})
+			end
 		end
 	end
-	table.sort(sortedIndices, function(a, b)
-		return calcSellPrice(inventory[a]) > calcSellPrice(inventory[b])
+	table.sort(sortedEntries, function(a, b)
+		return calcSellPrice(a.item) > calcSellPrice(b.item)
 	end)
 
-	for _, origIdx in ipairs(sortedIndices) do
-		local _, price = buildItemCard(inventory[origIdx], origIdx, scrollFrame)
+	for _, entry in ipairs(sortedEntries) do
+		local _, price = buildItemCard(entry.item, entry.index, entry.source, scrollFrame)
 		totalValue = totalValue + (price or 0)
 	end
 
+	-- Spacer so the last card can scroll above the fixed SELL ALL button.
+	local bottomSpacer = Instance.new("Frame")
+	bottomSpacer.Name = "BottomSpacer"
+	bottomSpacer.Size = UDim2.new(1, -12, 0, 72)
+	bottomSpacer.BackgroundTransparency = 1
+	bottomSpacer.BorderSizePixel = 0
+	bottomSpacer.Parent = scrollFrame
+
 	if totalLabel then totalLabel.Text = "Total: $" .. fmtNum(totalValue) end
-	if countLabel then countLabel.Text = #inventory .. " streamer" .. (#inventory ~= 1 and "s" or "") end
+	if countLabel then
+		local totalCount = #sortedEntries
+		countLabel.Text = totalCount .. " streamer" .. (totalCount ~= 1 and "s" or "")
+	end
 	if sellAllBtn then
-		sellAllBtn.Visible = #inventory > 0
+		sellAllBtn.Visible = #sortedEntries > 0
 	end
 
 	local listLayout = scrollFrame:FindFirstChildOfClass("UIListLayout")
 	if listLayout then
-		scrollFrame.CanvasSize = UDim2.new(0, 0, 0, listLayout.AbsoluteContentSize.Y + 10)
+		clampSellScrollBounds()
 	end
 end
 
@@ -404,7 +426,9 @@ end
 function SellStandController.Open()
 	if isOpen then return end
 	isOpen = true
+	activeSection = "hotbar"
 	lastInventorySnapshot = ""
+	updateSectionButtons()
 	if modalFrame then
 		overlay.Visible = true
 		modalFrame.Visible = true
@@ -421,7 +445,6 @@ function SellStandController.Close()
 	if not isOpen then return end
 	isOpen = false
 	lastInventorySnapshot = ""
-	cleanViewportConns()
 	if overlay then overlay.Visible = false end
 	if modalFrame then UIHelper.ScaleOut(modalFrame, 0.2) end
 end
@@ -531,7 +554,7 @@ function SellStandController.Init()
 	-- ===== INFO ROW =====
 	local infoRow = Instance.new("Frame")
 	infoRow.Size = UDim2.new(1, -30, 0, 24)
-	infoRow.Position = UDim2.new(0.5, 0, 0, 68)
+	infoRow.Position = UDim2.new(0.5, 0, 0, 102)
 	infoRow.AnchorPoint = Vector2.new(0.5, 0)
 	infoRow.BackgroundTransparency = 1
 	infoRow.ZIndex = 3
@@ -551,11 +574,55 @@ function SellStandController.Init()
 
 	countLabel = nil
 
+	-- ===== SECTION TABS =====
+	hotbarTabBtn = Instance.new("TextButton")
+	hotbarTabBtn.Name = "HotbarTabBtn"
+	hotbarTabBtn.Size = UDim2.new(0, 120, 0, 30)
+	hotbarTabBtn.Position = UDim2.new(0, 20, 0, 70)
+	hotbarTabBtn.BackgroundColor3 = Color3.fromRGB(80, 210, 120)
+	hotbarTabBtn.Text = "Hotbar"
+	hotbarTabBtn.TextColor3 = Color3.new(1, 1, 1)
+	hotbarTabBtn.Font = FONT
+	hotbarTabBtn.TextSize = 16
+	hotbarTabBtn.BorderSizePixel = 0
+	hotbarTabBtn.ZIndex = 4
+	hotbarTabBtn.Parent = modalFrame
+	Instance.new("UICorner", hotbarTabBtn).CornerRadius = UDim.new(0, 8)
+
+	storageTabBtn = Instance.new("TextButton")
+	storageTabBtn.Name = "StorageTabBtn"
+	storageTabBtn.Size = UDim2.new(0, 120, 0, 30)
+	storageTabBtn.Position = UDim2.new(0, 146, 0, 70)
+	storageTabBtn.BackgroundColor3 = Color3.fromRGB(55, 50, 80)
+	storageTabBtn.Text = "Storage"
+	storageTabBtn.TextColor3 = Color3.fromRGB(180, 180, 210)
+	storageTabBtn.Font = FONT
+	storageTabBtn.TextSize = 16
+	storageTabBtn.BorderSizePixel = 0
+	storageTabBtn.ZIndex = 4
+	storageTabBtn.Parent = modalFrame
+	Instance.new("UICorner", storageTabBtn).CornerRadius = UDim.new(0, 8)
+
+	hotbarTabBtn.MouseButton1Click:Connect(function()
+		if activeSection == "hotbar" then return end
+		activeSection = "hotbar"
+		updateSectionButtons()
+		lastInventorySnapshot = ""
+		buildInventoryList(true)
+	end)
+	storageTabBtn.MouseButton1Click:Connect(function()
+		if activeSection == "storage" then return end
+		activeSection = "storage"
+		updateSectionButtons()
+		lastInventorySnapshot = ""
+		buildInventoryList(true)
+	end)
+
 	-- ===== SCROLL LIST =====
 	scrollFrame = Instance.new("ScrollingFrame")
 	scrollFrame.Name = "ItemList"
-	scrollFrame.Size = UDim2.new(1, -20, 1, -170)
-	scrollFrame.Position = UDim2.new(0.5, 0, 0, 100)
+	scrollFrame.Size = UDim2.new(1, -20, 1, -220)
+	scrollFrame.Position = UDim2.new(0.5, 0, 0, 134)
 	scrollFrame.AnchorPoint = Vector2.new(0.5, 0)
 	scrollFrame.BackgroundTransparency = 1
 	scrollFrame.BorderSizePixel = 0
@@ -563,6 +630,8 @@ function SellStandController.Init()
 	scrollFrame.ScrollBarImageColor3 = Color3.fromRGB(100, 80, 150)
 	scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
 	scrollFrame.AutomaticCanvasSize = Enum.AutomaticSize.None
+	scrollFrame.ScrollingDirection = Enum.ScrollingDirection.Y
+	scrollFrame.ElasticBehavior = Enum.ElasticBehavior.Never
 	scrollFrame.ZIndex = 3
 	scrollFrame.Parent = modalFrame
 
@@ -571,6 +640,12 @@ function SellStandController.Init()
 	layout.Padding = UDim.new(0, 6)
 	layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 	layout.Parent = scrollFrame
+	listLayoutRef = layout
+
+	-- Keep scroll bounds clamped at all times (mouse wheel momentum, resize, etc.).
+	scrollFrame:GetPropertyChangedSignal("CanvasPosition"):Connect(clampSellScrollBounds)
+	scrollFrame:GetPropertyChangedSignal("AbsoluteSize"):Connect(clampSellScrollBounds)
+	layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(clampSellScrollBounds)
 
 	local scrollPad = Instance.new("UIPadding")
 	scrollPad.PaddingTop = UDim.new(0, 6)
@@ -582,7 +657,7 @@ function SellStandController.Init()
 	emptyLabel.Position = UDim2.new(0.5, 0, 0.3, 0)
 	emptyLabel.AnchorPoint = Vector2.new(0.5, 0.5)
 	emptyLabel.BackgroundTransparency = 1
-	emptyLabel.Text = "Your inventory is empty!\nSpin some cases first."
+	emptyLabel.Text = "Your hotbar is empty!"
 	emptyLabel.TextColor3 = Color3.fromRGB(120, 115, 140)
 	emptyLabel.Font = FONT
 	emptyLabel.TextSize = 16
@@ -637,7 +712,8 @@ function SellStandController.Init()
 		TweenService:Create(sellAllBtn, bounceTween, { Size = saIdle, BackgroundColor3 = RED }):Play()
 	end)
 	sellAllBtn.MouseButton1Click:Connect(function()
-		SellAllRequest:FireServer()
+		local source = activeSection == "storage" and "storage" or "hotbar"
+		SellAllRequest:FireServer(source)
 	end)
 
 	-------------------------------------------------

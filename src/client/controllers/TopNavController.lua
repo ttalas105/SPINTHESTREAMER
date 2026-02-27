@@ -135,9 +135,13 @@ end
 function TopNavController.SetActiveTab(tabName: string)
 	local ok, TutorialController = pcall(require, script.Parent.TutorialController)
 	if ok and TutorialController.IsActive() then
-		if tabName == "SHOP" then return end
+		if tabName == "SHOP" then
+			TutorialController.OnBlockedMainInput()
+			return
+		end
 		local STATES = TutorialController.STATES
 		if STATES and tabName == "BASE" and TutorialController.GetState() ~= STATES.GO_TO_BASE then
+			TutorialController.OnBlockedMainInput()
 			return
 		end
 	end

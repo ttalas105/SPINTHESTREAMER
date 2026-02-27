@@ -15,13 +15,13 @@ Economy.SpinCost10 = 0        -- free 10-pack
 
 -------------------------------------------------
 -- SPIN STAND CASES (18 total, buy at stall for luck bonus)
--- Cases 1-3 are free (no rebirth). Case N (4-18) requires Rebirth N-3.
+-- Cases 1-3 have no rebirth requirement. Case N (4-18) requires Rebirth N-3.
 -- Case costs scale aggressively — the real cash sink.
 -------------------------------------------------
 Economy.TotalCases = 18
 
 Economy.CrateCosts = {
-	0,          -- Case 1:  Free
+	200,        -- Case 1:  Scrap Case
 	500,        -- Case 2
 	1500,       -- Case 3
 	5000,       -- Case 4

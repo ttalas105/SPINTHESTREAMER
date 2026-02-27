@@ -102,12 +102,13 @@ local function handleSell(player, streamerId: string)
 end
 
 -------------------------------------------------
--- SELL BY INDEX (sell a specific item at a given inventory index)
+-- SELL BY INDEX (sell a specific item from inventory or storage)
 -------------------------------------------------
 
-local function handleSellByIndex(player, inventoryIndex: number)
+local function handleSellByIndex(player, itemIndex: number, source: string?)
 	if not PlayerData then return end
-	if typeof(inventoryIndex) ~= "number" then return end
+	if typeof(itemIndex) ~= "number" then return end
+	if source ~= nil and typeof(source) ~= "string" then return end
 	if not PlayerData.IsTutorialComplete(player) then
 		SellResult:FireClient(player, { success = false, reason = "Complete the tutorial first!" })
 		return
@@ -115,17 +116,28 @@ local function handleSellByIndex(player, inventoryIndex: number)
 
 	local data = PlayerData.Get(player)
 	if not data then return end
-	if inventoryIndex < 1 or inventoryIndex > #data.inventory then
-		SellResult:FireClient(player, { success = false, reason = "Invalid index." })
-		return
+	local fromStorage = source == "storage"
+	local item
+	local removed
+	if fromStorage then
+		if itemIndex < 1 or itemIndex > #data.storage then
+			SellResult:FireClient(player, { success = false, reason = "Invalid index." })
+			return
+		end
+		item = data.storage[itemIndex]
+		removed = PlayerData.RemoveFromStorage(player, itemIndex)
+	else
+		if itemIndex < 1 or itemIndex > #data.inventory then
+			SellResult:FireClient(player, { success = false, reason = "Invalid index." })
+			return
+		end
+		item = data.inventory[itemIndex]
+		removed = PlayerData.RemoveFromInventory(player, itemIndex)
 	end
-
-	local item = data.inventory[inventoryIndex]
 	local price = getSellPrice(item)
 
-	local removed = PlayerData.RemoveFromInventory(player, inventoryIndex)
 	if not removed then
-		SellResult:FireClient(player, { success = false, reason = "Not in your inventory!" })
+		SellResult:FireClient(player, { success = false, reason = "Could not sell item." })
 		return
 	end
 
@@ -150,25 +162,44 @@ local function handleSellByIndex(player, inventoryIndex: number)
 end
 
 -------------------------------------------------
--- SELL ALL (sell every item in inventory)
+-- SELL ALL (sell every item in the selected section)
 -------------------------------------------------
 
-local function handleSellAll(player)
+local function handleSellAll(player, source: string?)
 	if not PlayerData then return end
+	if source ~= nil and typeof(source) ~= "string" then
+		SellResult:FireClient(player, { success = false, reason = "Invalid request." })
+		return
+	end
 	if not PlayerData.IsTutorialComplete(player) then
 		SellResult:FireClient(player, { success = false, reason = "Complete the tutorial first!" })
 		return
 	end
 	local data = PlayerData.Get(player)
-	if not data or #data.inventory == 0 then
-		SellResult:FireClient(player, { success = false, reason = "Inventory is empty!" })
-		return
-	end
+	if not data then return end
+	local section = (source == "storage") and "storage" or "hotbar"
 
 	local totalCash = 0
-	local count = #data.inventory
-	for _, item in ipairs(data.inventory) do
-		totalCash = totalCash + getSellPrice(item)
+	local count = 0
+
+	if section == "storage" then
+		count = #data.storage
+		if count == 0 then
+			SellResult:FireClient(player, { success = false, reason = "Storage is empty!" })
+			return
+		end
+		for _, item in ipairs(data.storage) do
+			totalCash = totalCash + getSellPrice(item)
+		end
+	else
+		count = #data.inventory
+		if count == 0 then
+			SellResult:FireClient(player, { success = false, reason = "Hotbar is empty!" })
+			return
+		end
+		for _, item in ipairs(data.inventory) do
+			totalCash = totalCash + getSellPrice(item)
+		end
 	end
 
 	if PlayerData.HasDoubleCash(player) then
@@ -178,8 +209,12 @@ local function handleSellAll(player)
 		totalCash = math.floor(totalCash * (Economy.VIPCashMultiplier or 1.5))
 	end
 
-	-- Clear inventory
-	data.inventory = {}
+	-- Clear only the requested section
+	if section == "storage" then
+		data.storage = {}
+	else
+		data.inventory = {}
+	end
 	PlayerData.AddCash(player, math.floor(totalCash))
 	PlayerData.IncrementStat(player, "totalCashEarned", math.floor(totalCash))
 	PlayerData.Replicate(player)
@@ -189,6 +224,7 @@ local function handleSellAll(player)
 		cashEarned = math.floor(totalCash),
 		soldCount = count,
 		sellAll = true,
+		source = section,
 	})
 	if QuestService then
 		QuestService.Increment(player, "sells", count)
@@ -285,12 +321,12 @@ function EconomyService.Init(playerDataModule, potionServiceModule, questService
 		PlayerData.WithLock(player, function() handleSell(player, streamerId) end)
 	end)
 
-	SellByIndexRequest.OnServerEvent:Connect(function(player, inventoryIndex)
-		PlayerData.WithLock(player, function() handleSellByIndex(player, inventoryIndex) end)
+	SellByIndexRequest.OnServerEvent:Connect(function(player, itemIndex, source)
+		PlayerData.WithLock(player, function() handleSellByIndex(player, itemIndex, source) end)
 	end)
 
-	SellAllRequest.OnServerEvent:Connect(function(player)
-		PlayerData.WithLock(player, function() handleSellAll(player) end)
+	SellAllRequest.OnServerEvent:Connect(function(player, source)
+		PlayerData.WithLock(player, function() handleSellAll(player, source) end)
 	end)
 
 	UpgradeLuckRequest.OnServerEvent:Connect(function(player)

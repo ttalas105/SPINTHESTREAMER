@@ -57,6 +57,8 @@ local arrowAnchor = nil
 -- BASE button highlight state
 local baseHighlightStroke = nil
 local baseHighlightTween = nil
+local blockedFlashTween = nil
+local lastBlockedFlashAt = 0
 
 -- Forward declarations
 local setState
@@ -77,6 +79,7 @@ local BUBBLE_BG    = Color3.fromRGB(255, 245, 100)
 local BUBBLE_TEXT  = Color3.fromRGB(40, 10, 80)
 
 local RAINBOW = { NEON_GREEN, NEON_YELLOW, NEON_ORANGE, NEON_PINK, Color3.fromRGB(180, 100, 255), NEON_BLUE }
+local BLOCKED_FLASH_COOLDOWN = 0.22
 
 -------------------------------------------------
 -- HELPERS
@@ -625,6 +628,67 @@ function TutorialController.ForceComplete()
 	TutorialComplete:FireServer()
 	currentState = STATES.DONE
 	cleanup()
+end
+
+function TutorialController.OnBlockedMainInput()
+	if not TutorialController.IsActive() then return end
+	local now = os.clock()
+	if (now - lastBlockedFlashAt) < BLOCKED_FLASH_COOLDOWN then return end
+	lastBlockedFlashAt = now
+
+	if blockedFlashTween then
+		blockedFlashTween:Cancel()
+		blockedFlashTween = nil
+	end
+
+	if bubbleFrame and bubbleFrame.Visible then
+		local originalColor = bubbleFrame.BackgroundColor3
+		local originalRotation = bubbleFrame.Rotation
+		local originalSize = bubbleFrame.Size
+
+		blockedFlashTween = TweenService:Create(bubbleFrame, TweenInfo.new(0.09, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+			BackgroundColor3 = Color3.fromRGB(255, 255, 170),
+			Rotation = 2,
+			Size = UDim2.new(originalSize.X.Scale, originalSize.X.Offset + 14, originalSize.Y.Scale, originalSize.Y.Offset + 4),
+		})
+		blockedFlashTween:Play()
+		blockedFlashTween.Completed:Connect(function()
+			TweenService:Create(bubbleFrame, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+				BackgroundColor3 = originalColor,
+				Rotation = -2,
+				Size = originalSize,
+			}):Play()
+			task.delay(0.12, function()
+				if bubbleFrame then
+					TweenService:Create(bubbleFrame, TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+						Rotation = originalRotation,
+					}):Play()
+				end
+			end)
+		end)
+	elseif baseHighlightStroke and baseHighlightStroke.Parent then
+		local btn = baseHighlightStroke.Parent
+		TweenService:Create(baseHighlightStroke, TweenInfo.new(0.08, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), {
+			Thickness = 8,
+			Transparency = 0,
+		}):Play()
+		TweenService:Create(btn, TweenInfo.new(0.08, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+			Rotation = 2,
+		}):Play()
+		task.delay(0.1, function()
+			if baseHighlightStroke and baseHighlightStroke.Parent then
+				TweenService:Create(baseHighlightStroke, TweenInfo.new(0.15, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), {
+					Thickness = 5,
+					Transparency = 0.2,
+				}):Play()
+			end
+			if btn and btn.Parent then
+				TweenService:Create(btn, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+					Rotation = 0,
+				}):Play()
+			end
+		end)
+	end
 end
 
 return TutorialController

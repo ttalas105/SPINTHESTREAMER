@@ -8,12 +8,15 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players           = game:GetService("Players")
 local TweenService      = game:GetService("TweenService")
+local UserInputService  = game:GetService("UserInputService")
+local GuiService        = game:GetService("GuiService")
 
 local Streamers    = require(ReplicatedStorage.Shared.Config.Streamers)
 local Effects      = require(ReplicatedStorage.Shared.Config.Effects)
 local DesignConfig = require(ReplicatedStorage.Shared.Config.DesignConfig)
 local UIHelper     = require(script.Parent.UIHelper)
 local HUDController = require(script.Parent.HUDController)
+local InventoryController = require(script.Parent.InventoryController)
 
 local StorageController = {}
 
@@ -29,9 +32,17 @@ local StorageResult  = RemoteEvents:WaitForChild("StorageResult")
 
 local screenGui, modalFrame
 local gridFrame, headerLabel
+local gridLayoutRef
 local isOpen = false
 local sortMode = "rarity"
 local selectedStorageIdx = nil
+local hotbarPreviewFrame = nil
+local hotbarSlotButtons = {}
+local pendingDragStorageIdx = nil
+local pendingDragStartPos = nil
+local activeDragStorageIdx = nil
+local dragGhost = nil
+local suppressNextClickStorageIdx = nil
 
 local FONT   = Enum.Font.FredokaOne
 local FONT2  = Enum.Font.GothamBold
@@ -227,6 +238,10 @@ local function buildGrid()
 		-- Click to select/deselect
 		local capSI = si
 		card.MouseButton1Click:Connect(function()
+			if suppressNextClickStorageIdx == capSI then
+				suppressNextClickStorageIdx = nil
+				return
+			end
 			if selectedStorageIdx == capSI then
 				selectedStorageIdx = nil
 			else
@@ -234,14 +249,127 @@ local function buildGrid()
 			end
 			buildGrid()
 		end)
+
+		card.InputBegan:Connect(function(input)
+			if input.UserInputType == Enum.UserInputType.MouseButton1 then
+				pendingDragStorageIdx = capSI
+				pendingDragStartPos = UserInputService:GetMouseLocation()
+			end
+		end)
 	end
+
+	-- Hard clamp scroll bounds so you can't scroll below the last card.
+	task.defer(function()
+		if not gridFrame or not gridLayoutRef then return end
+		local contentH = gridLayoutRef.AbsoluteContentSize.Y + 8
+		local viewH = gridFrame.AbsoluteSize.Y
+		local canvasH = math.max(contentH, viewH)
+		gridFrame.CanvasSize = UDim2.new(0, 0, 0, canvasH)
+		local maxY = math.max(0, contentH - viewH)
+		gridFrame.CanvasPosition = Vector2.new(
+			gridFrame.CanvasPosition.X,
+			math.clamp(gridFrame.CanvasPosition.Y, 0, maxY)
+		)
+	end)
 end
 
 -------------------------------------------------
 -- BUILD HOTBAR PREVIEW (for drop targets)
 -------------------------------------------------
 
-local hotbarPreviewFrame = nil
+local function clearDragGhost()
+	if dragGhost then
+		dragGhost:Destroy()
+		dragGhost = nil
+	end
+	activeDragStorageIdx = nil
+end
+
+local function createDragGhost(si)
+	clearDragGhost()
+	local storage = HUDController.Data.storage or {}
+	local item = storage[si]
+	local id, effect, info = getItemInfo(item)
+	if not info then return end
+	local effectInfo = effect and Effects.ByName[effect] or nil
+	local rarityColor = DesignConfig.RarityColors[info.rarity] or Color3.fromRGB(170, 170, 170)
+	local displayColor = effectInfo and effectInfo.color or rarityColor
+
+	local ghost = Instance.new("Frame")
+	ghost.Name = "StorageDragGhost"
+	ghost.Size = UDim2.new(0, 92, 0, 54)
+	ghost.AnchorPoint = Vector2.new(0.5, 0.5)
+	ghost.BackgroundColor3 = Color3.fromRGB(24, 22, 42)
+	ghost.BorderSizePixel = 0
+	ghost.ZIndex = 50
+	ghost.Parent = screenGui
+	Instance.new("UICorner", ghost).CornerRadius = UDim.new(0, 10)
+
+	local ghostStroke = Instance.new("UIStroke", ghost)
+	ghostStroke.Color = displayColor
+	ghostStroke.Thickness = 2
+
+	local text = Instance.new("TextLabel")
+	text.Size = UDim2.new(1, -8, 1, -8)
+	text.Position = UDim2.new(0.5, 0, 0.5, 0)
+	text.AnchorPoint = Vector2.new(0.5, 0.5)
+	text.BackgroundTransparency = 1
+	text.Text = (effectInfo and (effectInfo.prefix .. " ") or "") .. (info.displayName or id)
+	text.TextColor3 = displayColor
+	text.TextWrapped = true
+	text.TextScaled = true
+	text.Font = FONT
+	text.ZIndex = 51
+	text.Parent = ghost
+
+	dragGhost = ghost
+	activeDragStorageIdx = si
+end
+
+local function updateDragGhostPosition()
+	if not dragGhost then return end
+	local m = UserInputService:GetMouseLocation()
+	local inset = GuiService:GetGuiInset()
+	-- ScreenGui uses a responsive UIScale; convert screen pixels into
+	-- unscaled GUI-space pixels so the ghost follows the cursor precisely.
+	local scale = UIHelper.GetScale()
+	if scale <= 0 then scale = 1 end
+	local px = (m.X - inset.X) / scale
+	local py = (m.Y - inset.Y) / scale
+	dragGhost.Position = UDim2.fromOffset(px, py )
+end
+
+local function getHoveredHotbarSlotIndex()
+	local m = UserInputService:GetMouseLocation()
+	local inset = GuiService:GetGuiInset()
+	local px = m.X - inset.X
+	local py = m.Y - inset.Y
+
+	local objects = playerGui:GetGuiObjectsAtPosition(px, py)
+	for _, obj in ipairs(objects) do
+		local current = obj
+		while current and current ~= hotbarPreviewFrame do
+			if current:IsA("GuiObject") then
+				local name = current.Name
+				local idx = string.match(name, "^HotbarSlot_(%d+)$")
+				if idx then
+					return tonumber(idx)
+				end
+			end
+			current = current.Parent
+		end
+	end
+	return nil
+end
+
+local function moveStorageItemToHotbar(storageIdx, hotbarIdx)
+	local inv = HUDController.Data.inventory or {}
+	if inv[hotbarIdx] then
+		StorageAction:FireServer("swap", hotbarIdx, storageIdx)
+	else
+		StorageAction:FireServer("toHotbar", storageIdx, hotbarIdx)
+	end
+end
 
 local function buildHotbarPreview()
 	if hotbarPreviewFrame then
@@ -253,6 +381,7 @@ local function buildHotbarPreview()
 
 	local inv = HUDController.Data.inventory or {}
 	local HOTBAR_MAX = 9
+	hotbarSlotButtons = {}
 
 	for i = 1, HOTBAR_MAX do
 		local item = inv[i]
@@ -268,6 +397,7 @@ local function buildHotbarPreview()
 		slot.BackgroundColor3 = item and Color3.fromRGB(24, 22, 42) or Color3.fromRGB(18, 16, 34)
 		slot.BorderSizePixel = 0; slot.Text = ""; slot.AutoButtonColor = false
 		slot.Parent = hotbarPreviewFrame
+		hotbarSlotButtons[i] = slot
 		Instance.new("UICorner", slot).CornerRadius = UDim.new(0, 8)
 		local sStroke = Instance.new("UIStroke", slot)
 		sStroke.Color = item and displayColor or Color3.fromRGB(50, 50, 70)
@@ -331,16 +461,17 @@ local function buildHotbarPreview()
 		-- Click: if a storage item is selected, swap/move it here
 		local capI = i
 		slot.MouseButton1Click:Connect(function()
+			if activeDragStorageIdx then return end
 			if selectedStorageIdx then
 				local capSI = selectedStorageIdx
 				selectedStorageIdx = nil
-				if item then
-					StorageAction:FireServer("swap", capI, capSI)
-				else
-					StorageAction:FireServer("toHotbar", capSI, capI)
-				end
+				moveStorageItemToHotbar(capSI, capI)
+			elseif item then
+				-- Quick store: click occupied hotbar slot to move it to storage
+				StorageAction:FireServer("toStorage", capI)
 			end
 		end)
+
 	end
 end
 
@@ -426,7 +557,7 @@ function StorageController.Init()
 	local infoLabel = Instance.new("TextLabel")
 	infoLabel.Size = UDim2.new(0, 400, 0, 30)
 	infoLabel.BackgroundTransparency = 1
-	infoLabel.Text = "Click a storage item, then click a hotbar slot to swap"
+	infoLabel.Text = "Drag to hotbar, click item+slot, or click hotbar to quick-store"
 	infoLabel.TextColor3 = Color3.fromRGB(100, 100, 130)
 	infoLabel.Font = FONT2; infoLabel.TextSize = 12; infoLabel.TextWrapped = true
 	infoLabel.Parent = sortRow
@@ -470,7 +601,9 @@ function StorageController.Init()
 	gridFrame.BackgroundTransparency = 1; gridFrame.BorderSizePixel = 0
 	gridFrame.ScrollBarThickness = 6; gridFrame.ScrollBarImageColor3 = ACCENT
 	gridFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
-	gridFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
+	gridFrame.AutomaticCanvasSize = Enum.AutomaticSize.None
+	gridFrame.ScrollingDirection = Enum.ScrollingDirection.Y
+	gridFrame.ElasticBehavior = Enum.ElasticBehavior.Never
 	gridFrame.Parent = modalFrame
 
 	local gl = Instance.new("UIGridLayout", gridFrame)
@@ -478,6 +611,7 @@ function StorageController.Init()
 	gl.CellPadding = UDim2.new(0, 6, 0, 6)
 	gl.SortOrder = Enum.SortOrder.LayoutOrder
 	gl.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	gridLayoutRef = gl
 	Instance.new("UIPadding", gridFrame).PaddingTop = UDim.new(0, 4)
 
 	-- Listen for storage results (toast on error)
@@ -498,6 +632,46 @@ function StorageController.Init()
 			end)
 		end
 	end)
+
+	UserInputService.InputChanged:Connect(function(input)
+		if not isOpen then return end
+		if input.UserInputType ~= Enum.UserInputType.MouseMovement then return end
+
+		if pendingDragStorageIdx and pendingDragStartPos and not activeDragStorageIdx then
+			local nowPos = UserInputService:GetMouseLocation()
+			if (nowPos - pendingDragStartPos).Magnitude >= 10 then
+				createDragGhost(pendingDragStorageIdx)
+			end
+		end
+
+		if activeDragStorageIdx then
+			updateDragGhostPosition()
+		end
+	end)
+
+	UserInputService.InputEnded:Connect(function(input)
+		if input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
+		if not isOpen then
+			pendingDragStorageIdx = nil
+			pendingDragStartPos = nil
+			clearDragGhost()
+			return
+		end
+
+		if activeDragStorageIdx then
+			local sourceSI = activeDragStorageIdx
+			local dropSlot = getHoveredHotbarSlotIndex()
+			if dropSlot then
+				moveStorageItemToHotbar(sourceSI, dropSlot)
+				selectedStorageIdx = nil
+				suppressNextClickStorageIdx = sourceSI
+			end
+			clearDragGhost()
+		end
+
+		pendingDragStorageIdx = nil
+		pendingDragStartPos = nil
+	end)
 end
 
 function StorageController.IsOpen()
@@ -508,6 +682,7 @@ function StorageController.Open()
 	if isOpen then StorageController.Close(); return end
 	isOpen = true
 	selectedStorageIdx = nil
+	InventoryController.SetBarVisible(false)
 	if modalFrame then
 		modalFrame.Visible = true
 		StorageController.Refresh()
@@ -519,6 +694,10 @@ function StorageController.Close()
 	if not isOpen then return end
 	isOpen = false
 	selectedStorageIdx = nil
+	pendingDragStorageIdx = nil
+	pendingDragStartPos = nil
+	clearDragGhost()
+	InventoryController.SetBarVisible(true)
 	if modalFrame then UIHelper.ScaleOut(modalFrame, 0.2) end
 end
 

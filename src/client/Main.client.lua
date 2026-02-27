@@ -51,6 +51,14 @@ local function showSystemToast(titleText, bodyText)
 	end)
 end
 
+local function shouldShowBaseSlotErrorToast(reasonText)
+	if type(reasonText) ~= "string" then return false end
+	local r = string.lower(reasonText)
+	if string.find(r, "select a streamer first", 1, true) then return false end
+	if string.find(r, "too fast", 1, true) then return false end
+	return true
+end
+
 -------------------------------------------------
 -- INITIALIZE ALL CONTROLLERS
 -------------------------------------------------
@@ -184,6 +192,14 @@ local function closeAllModals(except)
 	SpinController.Hide()
 end
 
+local function isTutorialInputBlocked()
+	if not TutorialController.IsActive() then
+		return false
+	end
+	TutorialController.OnBlockedMainInput()
+	return true
+end
+
 -------------------------------------------------
 -- WIRE TOP NAV TABS (BASE / SHOP) — TELEPORT
 -------------------------------------------------
@@ -216,7 +232,7 @@ end)
 -------------------------------------------------
 
 LeftSideNavController.OnClick("Index", function()
-	if TutorialController.IsActive() then return end
+	if isTutorialInputBlocked() then return end
 	if IndexController.IsOpen() then
 		IndexController.Close()
 	else
@@ -226,7 +242,7 @@ LeftSideNavController.OnClick("Index", function()
 end)
 
 LeftSideNavController.OnClick("Storage", function()
-	if TutorialController.IsActive() then return end
+	if isTutorialInputBlocked() then return end
 	if StorageController.IsOpen() then
 		StorageController.Close()
 	else
@@ -236,7 +252,7 @@ LeftSideNavController.OnClick("Storage", function()
 end)
 
 LeftSideNavController.OnClick("Store", function()
-	if TutorialController.IsActive() then return end
+	if isTutorialInputBlocked() then return end
 	if StoreController.IsOpen() then
 		StoreController.Close()
 	else
@@ -250,7 +266,7 @@ end)
 -------------------------------------------------
 
 RightSideNavController.OnClick("Rebirth", function()
-	if TutorialController.IsActive() then return end
+	if isTutorialInputBlocked() then return end
 	if RebirthController.IsOpen() then
 		RebirthController.Close()
 	else
@@ -260,7 +276,7 @@ RightSideNavController.OnClick("Rebirth", function()
 end)
 
 RightSideNavController.OnClick("Settings", function()
-	if TutorialController.IsActive() then return end
+	if isTutorialInputBlocked() then return end
 	if SettingsController.IsOpen() then
 		SettingsController.Close()
 	else
@@ -270,7 +286,7 @@ RightSideNavController.OnClick("Settings", function()
 end)
 
 RightSideNavController.OnClick("Quests", function()
-	if TutorialController.IsActive() then return end
+	if isTutorialInputBlocked() then return end
 	if QuestController.IsOpen() then
 		QuestController.Close()
 	else
@@ -374,7 +390,9 @@ EquipResult.OnClientEvent:Connect(function(data)
 		HoldController.Drop()
 	elseif data and data.reason then
 		warn("[Client] Place failed: " .. tostring(data.reason))
-		showSystemToast("Base Slot", tostring(data.reason))
+		if shouldShowBaseSlotErrorToast(data.reason) then
+			showSystemToast("Base Slot", tostring(data.reason))
+		end
 	end
 	if TutorialController.IsActive() then
 		TutorialController.OnEquipResult(data)
@@ -442,15 +460,15 @@ RemoteEvents:WaitForChild("OpenSpinStandGui").OnClientEvent:Connect(function()
 	closeAllModals("SpinStand")
 end)
 RemoteEvents:WaitForChild("OpenSellStandGui").OnClientEvent:Connect(function()
-	if TutorialController.IsActive() then return end
+	if isTutorialInputBlocked() then return end
 	closeAllModals("Sell")
 end)
 RemoteEvents:WaitForChild("OpenUpgradeStandGui").OnClientEvent:Connect(function()
-	if TutorialController.IsActive() then return end
+	if isTutorialInputBlocked() then return end
 	closeAllModals("Upgrade")
 end)
 RemoteEvents:WaitForChild("OpenPotionStandGui").OnClientEvent:Connect(function()
-	if TutorialController.IsActive() then return end
+	if isTutorialInputBlocked() then return end
 	closeAllModals("Potion")
 end)
 

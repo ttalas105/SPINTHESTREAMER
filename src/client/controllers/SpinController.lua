@@ -57,6 +57,7 @@ local currentCrateId = nil
 
 local skipRequested = false
 local currentAnimConnection = nil
+local preSpinConnection = nil
 
 local autoSpinEnabled = false
 local autoSpinButton = nil
@@ -239,15 +240,6 @@ local function buildCarousel(parent)
 		})
 		cardGrad.Rotation = 90
 		cardGrad.Parent = card
-
-		-- Bottom rarity strip
-		local bottomStrip = Instance.new("Frame")
-		bottomStrip.Name = "BottomStrip"
-		bottomStrip.Size = UDim2.new(1, 0, 0, 5)
-		bottomStrip.Position = UDim2.new(0, 0, 1, -5)
-		bottomStrip.BackgroundColor3 = rarityColor
-		bottomStrip.BorderSizePixel = 0
-		bottomStrip.Parent = card
 
 		-- Effect badge
 		if eff then
@@ -474,6 +466,41 @@ local function easeOutQuint(t)
 	return 1 - t1 * t1 * t1 * t1 * t1
 end
 
+local function stopPreSpinVisual()
+	if preSpinConnection then
+		pcall(function() preSpinConnection:Disconnect() end)
+		preSpinConnection = nil
+	end
+end
+
+local function startPreSpinVisual()
+	if not carouselFrame or not carouselContainer or #items <= 0 then return end
+	stopPreSpinVisual()
+
+	carouselFrame.Visible = true
+
+	local frameWidthScreen = carouselFrame.AbsoluteSize.X
+	if frameWidthScreen == 0 then frameWidthScreen = 700 end
+	local uiScale = UIHelper.GetScale()
+	if uiScale <= 0 then uiScale = 1 end
+	local frameWidth = frameWidthScreen / uiScale
+	local halfFrame = frameWidth / 2
+
+	local centerIndex = math.max(1, math.floor(#items * 0.35))
+	local centerX = (centerIndex - 1) * ITEM_STEP + ITEM_WIDTH / 2
+	local baseX = halfFrame - centerX
+	local stripLength = math.max(1, #items * ITEM_STEP)
+	local offset = 0
+	local PRESPIN_SPEED = 560
+
+	carouselContainer.Position = UDim2.new(0, baseX, 0, 0)
+
+	preSpinConnection = RunService.RenderStepped:Connect(function(dt)
+		offset = (offset + PRESPIN_SPEED * dt) % stripLength
+		carouselContainer.Position = UDim2.new(0, baseX - offset, 0, 0)
+	end)
+end
+
 local function applyEffectToCard(cardIndex, effectName)
 	local entry = items[cardIndex]
 	if not entry then return end
@@ -557,6 +584,7 @@ end
 
 local function playSpinAnimation(resultData, callback)
 	if not carouselContainer or not carouselFrame then return end
+	stopPreSpinVisual()
 
 	local targetStreamerId = resultData.streamerId or resultData.id
 	local occurrences = {}
@@ -602,7 +630,6 @@ local function playSpinAnimation(resultData, callback)
 					local adjCard = items[adjIdx].frame
 					local adjName = adjCard and adjCard:FindFirstChild("StreamerName")
 					local adjRar = adjCard and adjCard:FindFirstChild("RarityTag")
-					local adjStrip = adjCard and adjCard:FindFirstChild("BottomStrip")
 					local swapColor = Rarities.ByName[swapTo.rarity] and Rarities.ByName[swapTo.rarity].color or Color3.new(1,1,1)
 					if adjName then
 						local existEff = items[adjIdx].effect
@@ -616,7 +643,6 @@ local function playSpinAnimation(resultData, callback)
 						adjRar.Text = swapTo.rarity:upper()
 						adjRar.TextColor3 = swapColor
 					end
-					if adjStrip then adjStrip.BackgroundColor3 = swapColor end
 					items[adjIdx].streamer = swapTo
 				end
 			end
@@ -635,14 +661,28 @@ local function playSpinAnimation(resultData, callback)
 	local endX = halfFrame - targetCenterX
 
 	local setWidth = #Streamers.List * ITEM_STEP
-	local startX = endX + setWidth * 3
+	if setWidth <= 0 then setWidth = ITEM_STEP end
 
-	local DURATION = 5.5
+	-- Start from the currently visible offset, but never outside the
+	-- container's valid on-screen range (prevents black sections at start).
+	local containerWidth = math.max(1, #items * ITEM_STEP)
+	local minVisibleX = frameWidth - containerWidth
+	local maxVisibleX = 0
+	local startX = math.clamp(carouselContainer.Position.X.Offset, minVisibleX, maxVisibleX)
+
+	-- Keep enough travel distance for a satisfying spin while staying visible.
+	local minTravel = setWidth * 2.8
+	while (startX - endX) < minTravel and (startX + setWidth) <= maxVisibleX do
+		startX = startX + setWidth
+	end
+
+	local totalDist = startX - endX
+	local BASE_AVG_SPEED = 650 -- px/sec; keeps spin start speed consistent
+	local DURATION = math.clamp(totalDist / BASE_AVG_SPEED, 1.8, 5.5)
 	local startTime = tick()
 
 	carouselContainer.Position = UDim2.new(0, startX, 0, 0)
 
-	local totalDist = startX - endX
 	local done = false
 	skipRequested = false
 
@@ -655,6 +695,32 @@ local function playSpinAnimation(resultData, callback)
 
 	local function finishAnimation()
 		carouselContainer.Position = UDim2.new(0, endX, 0, 0)
+
+		-- Pixel-perfect snap: align the actual winning card center to the selector line
+		-- to avoid rare sub-pixel drift where the line looks between two cards.
+		local selectorLine = carouselFrame and carouselFrame:FindFirstChild("SelectorLine")
+		local winEntry = items[targetIndex]
+		if selectorLine and winEntry and winEntry.frame then
+			RunService.RenderStepped:Wait()
+			for _ = 1, 2 do
+				local selectorCenterX = selectorLine.AbsolutePosition.X + (selectorLine.AbsoluteSize.X * 0.5)
+				local cardCenterX = winEntry.frame.AbsolutePosition.X + (winEntry.frame.AbsoluteSize.X * 0.5)
+				local deltaScreenPx = selectorCenterX - cardCenterX
+				if math.abs(deltaScreenPx) < 0.2 then
+					break
+				end
+				local uiScale = UIHelper.GetScale()
+				if uiScale <= 0 then uiScale = 1 end
+				carouselContainer.Position = UDim2.new(
+					0,
+					carouselContainer.Position.X.Offset + (deltaScreenPx / uiScale),
+					0,
+					0
+				)
+				RunService.RenderStepped:Wait()
+			end
+		end
+
 		if skipButton then skipButton.Visible = false end
 
 		local winCard = items[targetIndex] and items[targetIndex].frame
@@ -1288,6 +1354,7 @@ function SpinController.Init()
 				autoSpinEnabled = false
 				updateAutoSpinVisual()
 			end
+			stopPreSpinVisual()
 			isSpinning = false
 			animationDone = false
 			spinButton.Text = data.reason or "ERROR"
@@ -1312,6 +1379,7 @@ function SpinController._startSpin(data)
 	animationDone = false
 	spinGeneration = spinGeneration + 1
 	resultFrame.Visible = false
+	stopPreSpinVisual()
 
 	local existingMsg = screenGui:FindFirstChild("ReceivedMessage")
 	if existingMsg then existingMsg:Destroy() end
@@ -1320,9 +1388,6 @@ function SpinController._startSpin(data)
 	if carouselFrame then
 		carouselFrame.Visible = true
 		carouselFrame.Size = UDim2.new(0.92, 0, 0, ITEM_HEIGHT + 30)
-	end
-	if carouselContainer then
-		carouselContainer.Position = UDim2.new(0, -99999, 0, 0)
 	end
 	for _, item in ipairs(items) do
 		if item.frame then
@@ -1366,6 +1431,7 @@ function SpinController.RequestSpin()
 		carouselFrame.Visible = true
 		carouselFrame.Size = UDim2.new(0.92, 0, 0, ITEM_HEIGHT + 30)
 	end
+	startPreSpinVisual()
 
 	spinButton.Text = "SPINNING..."
 
@@ -1384,6 +1450,7 @@ function SpinController.Show()
 end
 
 function SpinController.Hide()
+	stopPreSpinVisual()
 	UIHelper.ScaleOut(spinContainer, 0.2)
 	isSpinning = false
 	animationDone = false

@@ -8,6 +8,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
 
 local DesignConfig = require(ReplicatedStorage.Shared.Config.DesignConfig)
 local Streamers = require(ReplicatedStorage.Shared.Config.Streamers)
@@ -48,6 +49,7 @@ local slotsFrame
 local slots = {}               -- index -> { frame, iconLabel, rarityLabel, numberLabel }
 local backpackButton
 local selectedLabel
+local isBarVisible = true
 
 -- How many slots visible in hotbar
 local VISIBLE_SLOTS = 9
@@ -343,6 +345,29 @@ function InventoryController.Init()
 	selectedLabel.Text = ""
 	selectedLabel.Visible = false
 	selectedLabel.Parent = barContainer
+
+	-- Hotbar number key shortcuts (1-9)
+	UserInputService.InputBegan:Connect(function(input, gameProcessedEvent)
+		if gameProcessedEvent then return end
+		if UserInputService:GetFocusedTextBox() then return end
+
+		local keyToSlot = {
+			[Enum.KeyCode.One] = 1,
+			[Enum.KeyCode.Two] = 2,
+			[Enum.KeyCode.Three] = 3,
+			[Enum.KeyCode.Four] = 4,
+			[Enum.KeyCode.Five] = 5,
+			[Enum.KeyCode.Six] = 6,
+			[Enum.KeyCode.Seven] = 7,
+			[Enum.KeyCode.Eight] = 8,
+			[Enum.KeyCode.Nine] = 9,
+		}
+
+		local slot = keyToSlot[input.KeyCode]
+		if slot then
+			InventoryController.SelectSlot(slot)
+		end
+	end)
 end
 
 -------------------------------------------------
@@ -422,6 +447,13 @@ end
 
 function InventoryController.RefreshVisuals()
 	updateSlotVisuals()
+end
+
+function InventoryController.SetBarVisible(visible: boolean)
+	isBarVisible = visible ~= false
+	if barContainer then
+		barContainer.Visible = isBarVisible
+	end
 end
 
 -------------------------------------------------
