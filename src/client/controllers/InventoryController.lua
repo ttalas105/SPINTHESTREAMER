@@ -479,16 +479,17 @@ function InventoryController.UpdateInventory(newInventory, newStorage)
 end
 
 --- Called when a new item is added to inventory (for animation)
-function InventoryController.FlashNewItem(streamerId: string)
+function InventoryController.FlashNewItem(streamerId: string, effect: string?)
 	-- Find the slot with this item (usually the last one)
 	for i = #inventory, 1, -1 do
-		local itemId = getItemId(inventory[i])
-		if itemId == streamerId and i <= VISIBLE_SLOTS then
+		local item = inventory[i]
+		local itemId = getItemId(item)
+		local itemEffect = getItemEffect(item)
+		if itemId == streamerId and (effect == nil or itemEffect == effect) and i <= VISIBLE_SLOTS then
 			local slotData = slots[i]
 			if slotData then
 				-- Flash animation
-				local effect = getItemEffect(inventory[i])
-				local effectInfo = effect and Effects.ByName[effect] or nil
+				local effectInfo = itemEffect and Effects.ByName[itemEffect] or nil
 				local info = Streamers.ById[streamerId]
 				local color = effectInfo and effectInfo.color
 					or DesignConfig.RarityColors[info and info.rarity or "Common"]

@@ -40,6 +40,9 @@ local QuestController        = require(controllers.QuestController)
 local UIHelper               = require(controllers.UIHelper)
 
 local RemoteEvents = ReplicatedStorage:WaitForChild("RemoteEvents")
+local centerToastGui = nil
+local centerToastLabel = nil
+local centerToastToken = 0
 
 local function showSystemToast(titleText, bodyText)
 	pcall(function()
@@ -48,6 +51,52 @@ local function showSystemToast(titleText, bodyText)
 			Text = bodyText or "",
 			Duration = 3,
 		})
+	end)
+end
+
+local function showCenterToast(messageText)
+	local playerGui = Players.LocalPlayer:WaitForChild("PlayerGui")
+	if not centerToastGui or not centerToastGui.Parent then
+		centerToastGui = Instance.new("ScreenGui")
+		centerToastGui.Name = "CenterToastGui"
+		centerToastGui.ResetOnSpawn = false
+		centerToastGui.DisplayOrder = 60
+		centerToastGui.IgnoreGuiInset = true
+		centerToastGui.Parent = playerGui
+	end
+	if not centerToastLabel or not centerToastLabel.Parent then
+		centerToastLabel = Instance.new("TextLabel")
+		centerToastLabel.Name = "CenterToastLabel"
+		centerToastLabel.Size = UDim2.new(0, 420, 0, 50)
+		-- Place just above the bottom hotbar so it doesn't block center gameplay.
+		centerToastLabel.Position = UDim2.new(0.5, 0, 1, -92)
+		centerToastLabel.AnchorPoint = Vector2.new(0.5, 1)
+		centerToastLabel.BackgroundColor3 = Color3.fromRGB(30, 25, 50)
+		centerToastLabel.BackgroundTransparency = 0.15
+		centerToastLabel.BorderSizePixel = 0
+		centerToastLabel.TextColor3 = Color3.new(1, 1, 1)
+		centerToastLabel.Font = Enum.Font.FredokaOne
+		centerToastLabel.TextSize = 22
+		centerToastLabel.TextWrapped = true
+		centerToastLabel.Visible = false
+		centerToastLabel.Parent = centerToastGui
+		Instance.new("UICorner", centerToastLabel).CornerRadius = UDim.new(0, 12)
+		local stroke = Instance.new("UIStroke")
+		stroke.Color = Color3.fromRGB(120, 180, 255)
+		stroke.Thickness = 2
+		stroke.Transparency = 0.2
+		stroke.Parent = centerToastLabel
+	end
+
+	centerToastToken += 1
+	local token = centerToastToken
+	centerToastLabel.Text = messageText or ""
+	centerToastLabel.TextTransparency = 0
+	centerToastLabel.Visible = true
+
+	task.delay(1.8, function()
+		if token ~= centerToastToken or not centerToastLabel then return end
+		centerToastLabel.Visible = false
 	end)
 end
 
@@ -374,8 +423,11 @@ SpinController.OnSpinResult(function(data)
 		StorageController.Refresh()
 		pendingInventoryData = nil
 	end
-	if data.streamerId then
-		InventoryController.FlashNewItem(data.streamerId)
+	if data and data.destination == "storage" then
+		showCenterToast("Hotbar is full... adding to storage")
+	end
+	if data.streamerId and data.destination ~= "storage" then
+		InventoryController.FlashNewItem(data.streamerId, data.effect)
 	end
 	if TutorialController.IsActive() then
 		TutorialController.OnSpinResult(data)

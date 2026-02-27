@@ -10,6 +10,7 @@ local RunService = game:GetService("RunService")
 
 local DesignConfig = require(ReplicatedStorage.Shared.Config.DesignConfig)
 local UIHelper = require(script.Parent.UIHelper)
+local UISounds = require(script.Parent.UISounds)
 
 local RightSideNavController = {}
 
@@ -120,7 +121,11 @@ function RightSideNavController.Init()
 		buttons[item.name] = iconBtn
 		table.insert(btnFrames, iconBtn)
 
+		clickZone.MouseEnter:Connect(function()
+			UISounds.PlayHover()
+		end)
 		clickZone.MouseButton1Click:Connect(function()
+			UISounds.PlayClick()
 			if onButtonClicked[item.name] then
 				onButtonClicked[item.name]()
 			end

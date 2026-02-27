@@ -16,6 +16,7 @@ local Economy = require(ReplicatedStorage.Shared.Config.Economy)
 local Effects = require(ReplicatedStorage.Shared.Config.Effects)
 local UIHelper = require(script.Parent.UIHelper)
 local HUDController = require(script.Parent.HUDController)
+local UISounds = require(script.Parent.UISounds)
 
 local SpinController = {}
 
@@ -178,7 +179,7 @@ local function buildCarousel(parent)
 
 	-- Build shuffled item strip
 	local allStreamers = {}
-	for _ = 1, 5 do
+	for _ = 1, 12 do
 		for _, streamer in ipairs(Streamers.List) do
 			table.insert(allStreamers, streamer)
 		end
@@ -602,10 +603,21 @@ local function playSpinAnimation(resultData, callback)
 	end
 
 	local targetIndex
-	if #occurrences >= 3 then targetIndex = occurrences[3]
-	elseif #occurrences >= 2 then targetIndex = occurrences[2]
-	elseif #occurrences >= 1 then targetIndex = occurrences[1]
-	else targetIndex = 1 end
+	if #occurrences >= 1 then
+		-- Keep enough cards to the right of the winner so the reel never
+		-- reaches end-of-strip black space during the stop.
+		local rightSafetyCards = 10
+		local maxSafeIndex = math.max(1, #items - rightSafetyCards)
+		for i = #occurrences, 1, -1 do
+			if occurrences[i] <= maxSafeIndex then
+				targetIndex = occurrences[i]
+				break
+			end
+		end
+		targetIndex = targetIndex or occurrences[1]
+	else
+		targetIndex = 1
+	end
 	currentTargetIndex = targetIndex
 
 	applyEffectToCard(targetIndex, resultData.effect)
@@ -618,34 +630,6 @@ local function playSpinAnimation(resultData, callback)
 				local randEff = Effects.List[math.random(1, #Effects.List)]
 				applyEffectToCard(adjIdx, randEff.name)
 			end
-			if math.random() < 0.25 then
-				local rareStreamers = {}
-				for _, s in ipairs(Streamers.List) do
-					if s.rarity == "Legendary" or s.rarity == "Mythic" or s.rarity == "Epic" then
-						table.insert(rareStreamers, s)
-					end
-				end
-				if #rareStreamers > 0 then
-					local swapTo = rareStreamers[math.random(1, #rareStreamers)]
-					local adjCard = items[adjIdx].frame
-					local adjName = adjCard and adjCard:FindFirstChild("StreamerName")
-					local adjRar = adjCard and adjCard:FindFirstChild("RarityTag")
-					local swapColor = Rarities.ByName[swapTo.rarity] and Rarities.ByName[swapTo.rarity].color or Color3.new(1,1,1)
-					if adjName then
-						local existEff = items[adjIdx].effect
-						if existEff then
-							adjName.Text = existEff.prefix .. " " .. swapTo.displayName
-						else
-							adjName.Text = swapTo.displayName
-						end
-					end
-					if adjRar then
-						adjRar.Text = swapTo.rarity:upper()
-						adjRar.TextColor3 = swapColor
-					end
-					items[adjIdx].streamer = swapTo
-				end
-			end
 		end
 	end
 
@@ -655,8 +639,8 @@ local function playSpinAnimation(resultData, callback)
 	local uiScale = UIHelper.GetScale()
 	if uiScale <= 0 then uiScale = 1 end
 	local frameWidth = frameWidthScreen / uiScale
-	local halfFrame = frameWidth / 2
 
+	local halfFrame = frameWidth / 2
 	local targetCenterX = (targetIndex - 1) * ITEM_STEP + ITEM_WIDTH / 2
 	local endX = halfFrame - targetCenterX
 
@@ -668,7 +652,7 @@ local function playSpinAnimation(resultData, callback)
 	local containerWidth = math.max(1, #items * ITEM_STEP)
 	local minVisibleX = frameWidth - containerWidth
 	local maxVisibleX = 0
-	local startX = math.clamp(carouselContainer.Position.X.Offset, minVisibleX, maxVisibleX)
+	local startX = maxVisibleX
 
 	-- Keep enough travel distance for a satisfying spin while staying visible.
 	local minTravel = setWidth * 2.8
@@ -677,14 +661,14 @@ local function playSpinAnimation(resultData, callback)
 	end
 
 	local totalDist = startX - endX
-	local BASE_AVG_SPEED = 650 -- px/sec; keeps spin start speed consistent
-	local DURATION = math.clamp(totalDist / BASE_AVG_SPEED, 1.8, 5.5)
+	local DURATION = 5.5
 	local startTime = tick()
 
 	carouselContainer.Position = UDim2.new(0, startX, 0, 0)
 
 	local done = false
 	skipRequested = false
+	local lastTickIndex = -1
 
 	if skipButton then skipButton.Visible = true end
 
@@ -693,35 +677,17 @@ local function playSpinAnimation(resultData, callback)
 		currentAnimConnection = nil
 	end
 
+	local function getCardUnderSelector(containerX)
+		local selectorWorldX = halfFrame - containerX
+		local idx = math.floor(selectorWorldX / ITEM_STEP) + 1
+		return math.clamp(idx, 1, #items)
+	end
+
 	local function finishAnimation()
 		carouselContainer.Position = UDim2.new(0, endX, 0, 0)
-
-		-- Pixel-perfect snap: align the actual winning card center to the selector line
-		-- to avoid rare sub-pixel drift where the line looks between two cards.
-		local selectorLine = carouselFrame and carouselFrame:FindFirstChild("SelectorLine")
-		local winEntry = items[targetIndex]
-		if selectorLine and winEntry and winEntry.frame then
-			RunService.RenderStepped:Wait()
-			for _ = 1, 2 do
-				local selectorCenterX = selectorLine.AbsolutePosition.X + (selectorLine.AbsoluteSize.X * 0.5)
-				local cardCenterX = winEntry.frame.AbsolutePosition.X + (winEntry.frame.AbsoluteSize.X * 0.5)
-				local deltaScreenPx = selectorCenterX - cardCenterX
-				if math.abs(deltaScreenPx) < 0.2 then
-					break
-				end
-				local uiScale = UIHelper.GetScale()
-				if uiScale <= 0 then uiScale = 1 end
-				carouselContainer.Position = UDim2.new(
-					0,
-					carouselContainer.Position.X.Offset + (deltaScreenPx / uiScale),
-					0,
-					0
-				)
-				RunService.RenderStepped:Wait()
-			end
-		end
-
 		if skipButton then skipButton.Visible = false end
+
+		UISounds.PlaySpinWin()
 
 		local winCard = items[targetIndex] and items[targetIndex].frame
 		if winCard then
@@ -752,12 +718,13 @@ local function playSpinAnimation(resultData, callback)
 			done = true
 			currentAnimConnection:Disconnect()
 			currentAnimConnection = nil
-			local tweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-			local tween = TweenService:Create(carouselContainer, tweenInfo, {
+			local settleTween = TweenService:Create(carouselContainer, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 				Position = UDim2.new(0, endX, 0, 0),
 			})
-			tween:Play()
-			tween.Completed:Connect(function() finishAnimation() end)
+			settleTween:Play()
+			settleTween.Completed:Connect(function()
+				finishAnimation()
+			end)
 			return
 		end
 
@@ -766,6 +733,13 @@ local function playSpinAnimation(resultData, callback)
 		local eased = easeOutQuint(t)
 		local currentX = startX - totalDist * eased
 		carouselContainer.Position = UDim2.new(0, currentX, 0, 0)
+
+		local cardIdx = getCardUnderSelector(currentX)
+		if cardIdx ~= lastTickIndex then
+			lastTickIndex = cardIdx
+			local pitch = 0.85 + 0.35 * t
+			UISounds.PlaySpinTick(pitch)
+		end
 
 		if t >= 1 and not done then
 			done = true

@@ -1,7 +1,7 @@
 --[[
 	SettingsController.lua
 	Bubbly, kid-friendly settings panel.
-	Toggles: Main Music, Sacrifice Music.
+	Toggles: Main Music, Sacrifice Music, Sound Effects.
 	Matches the game's responsive UIScale system.
 ]]
 
@@ -10,6 +10,7 @@ local Players = game:GetService("Players")
 
 local UIHelper = require(script.Parent.UIHelper)
 local MusicController = require(script.Parent.MusicController)
+local UISounds = require(script.Parent.UISounds)
 
 local SettingsController = {}
 
@@ -24,7 +25,7 @@ local FONT = Enum.Font.FredokaOne
 local FONT2 = Enum.Font.GothamBold
 local BG = Color3.fromRGB(22, 18, 42)
 local PANEL_W = 420
-local PANEL_H = 360
+local PANEL_H = 430
 
 local SETTINGS_GEAR_ASSET_ID = "rbxassetid://136970465147454"
 
@@ -230,12 +231,33 @@ function SettingsController.Init()
 	end)
 	t2.LayoutOrder = 3
 
+	-- Section label: Sound
+	local soundSection = Instance.new("TextLabel")
+	soundSection.Size = UDim2.new(1, -40, 0, 28)
+	soundSection.BackgroundTransparency = 1
+	soundSection.Text = "\u{1F50A}  Sound"
+	soundSection.TextColor3 = Color3.fromRGB(180, 160, 255)
+	soundSection.Font = FONT; soundSection.TextSize = 20
+	soundSection.TextXAlignment = Enum.TextXAlignment.Left
+	soundSection.LayoutOrder = 4
+	soundSection.Parent = content
+
+	local soundPad = Instance.new("UIPadding")
+	soundPad.PaddingLeft = UDim.new(0, 20)
+	soundPad.Parent = soundSection
+
+	-- Toggle: Sound Effects
+	local t3 = createToggle(content, "\u{1F514}  Sound Effects", UISounds.IsEnabled(), function(on)
+		UISounds.SetEnabled(on)
+	end)
+	t3.LayoutOrder = 5
+
 	-- Spacer
 	local spacer = Instance.new("Frame")
 	spacer.Size = UDim2.new(0.75, 0, 0, 2)
 	spacer.BackgroundColor3 = Color3.fromRGB(60, 50, 90)
 	spacer.BorderSizePixel = 0
-	spacer.LayoutOrder = 4
+	spacer.LayoutOrder = 6
 	spacer.Parent = content
 	Instance.new("UICorner", spacer).CornerRadius = UDim.new(1, 0)
 
@@ -246,7 +268,7 @@ function SettingsController.Init()
 	footer.Text = "More settings coming soon!"
 	footer.TextColor3 = Color3.fromRGB(120, 110, 160)
 	footer.Font = FONT2; footer.TextSize = 14
-	footer.LayoutOrder = 5
+	footer.LayoutOrder = 7
 	footer.Parent = content
 
 	screenGui.Enabled = false

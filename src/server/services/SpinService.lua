@@ -295,7 +295,7 @@ local function handleSpin(player)
 	resetPityForRarity(data, streamer.rarity)
 
 	local effect = rollEffect()
-	PlayerData.AddToInventory(player, streamer.id, effect)
+	local destination = PlayerData.AddToInventory(player, streamer.id, effect)
 
 	local displayName = streamer.displayName
 	if effect then
@@ -320,6 +320,7 @@ local function handleSpin(player)
 		rarity = streamer.rarity,
 		odds = effectiveOdds,
 		effect = effect,
+		destination = destination,
 		pity = isPityHit or nil,
 	})
 
@@ -438,7 +439,7 @@ local function handleCrateSpin(player, crateId: number)
 	resetPityForRarity(data, streamer.rarity)
 
 	local effect = rollEffect()
-	PlayerData.AddToInventory(player, streamer.id, effect)
+	local destination = PlayerData.AddToInventory(player, streamer.id, effect)
 
 	local displayName = streamer.displayName
 	if effect then
@@ -461,6 +462,7 @@ local function handleCrateSpin(player, crateId: number)
 		rarity = streamer.rarity,
 		odds = effectiveOdds2,
 		effect = effect,
+		destination = destination,
 		pity = isPityHit or nil,
 	})
 
