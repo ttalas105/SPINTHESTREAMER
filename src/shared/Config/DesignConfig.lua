@@ -30,7 +30,7 @@ DesignConfig.Colors = {
 	StallYellow      = Color3.fromRGB(255, 210, 50),
 
 	-- World
-	Baseplate        = Color3.fromRGB(120, 220, 155),   -- bright mint green
+	Baseplate        = Color3.fromRGB(55, 255, 102),     -- green
 	Water            = Color3.fromRGB(80, 180, 255),
 	PathColor        = Color3.fromRGB(105, 205, 145),
 
