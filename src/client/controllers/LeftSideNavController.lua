@@ -121,6 +121,15 @@ function LeftSideNavController.Init()
 		buttons[item.name] = iconBtn
 		table.insert(btnFrames, iconBtn)
 
+		-- Keep Index notification bubble outside the icon box (top-right corner)
+		if item.name == "Index" then
+			local badge = iconBtn:FindFirstChild("Badge")
+			if badge then
+				badge.Position = UDim2.new(1, 8, 0, -10)
+				badge.AnchorPoint = Vector2.new(1, 0)
+			end
+		end
+
 		clickZone.MouseEnter:Connect(function()
 			UISounds.PlayHover()
 		end)

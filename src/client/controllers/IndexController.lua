@@ -34,7 +34,12 @@ local contentGrid
 local sidebarBtns = {}
 local activeTab = nil
 local counterLabel
+local claimAllBtn
 local lastSnapshot = ""
+local isClaimAllRunning = false
+local needsGridRefreshAfterClaimAll = false
+local skipNextDataRebuild = false
+local currentBuildToken = 0
 
 -- Single shared Heartbeat for ALL viewport rotations (performance)
 local viewportData = {} -- { {camera, target, dist, camY, angle} }
@@ -75,6 +80,28 @@ local function countUnclaimedForTab(tabEffect)
 	return count
 end
 
+local function getTabNameByEffect(tabEffect)
+	for _, tab in ipairs(TABS) do
+		if tab.effect == tabEffect then
+			return tab.name
+		end
+	end
+	return "Default"
+end
+
+local function getClaimableEntriesForTab(tabEffect)
+	local indexCol = HUDController.Data.indexCollection or {}
+	local entries = {}
+	for _, info in ipairs(Streamers.List) do
+		local key = getIndexKey(info.id, tabEffect)
+		local value = indexCol[key]
+		if value ~= nil and value ~= "claimed" then
+			table.insert(entries, info)
+		end
+	end
+	return entries
+end
+
 -- Count total unclaimed across ALL tabs
 local function countTotalUnclaimed()
 	local total = 0
@@ -88,6 +115,57 @@ end
 local function updateNavBadge()
 	local count = countTotalUnclaimed()
 	LeftSideNavController.SetBadge("Index", count)
+end
+
+local function updateClaimAllButton()
+	if not claimAllBtn then return end
+
+	local unclaimed = countUnclaimedForTab(activeTab)
+	local tabName = getTabNameByEffect(activeTab)
+	local enabled = (unclaimed > 0) and (not isClaimAllRunning)
+
+	claimAllBtn.AutoButtonColor = enabled
+	claimAllBtn.Active = enabled
+	claimAllBtn.BackgroundColor3 = enabled and Color3.fromRGB(90, 170, 255) or Color3.fromRGB(75, 75, 90)
+	claimAllBtn.TextTransparency = enabled and 0 or 0.2
+
+	if isClaimAllRunning then
+		claimAllBtn.Text = "Claiming..."
+	elseif unclaimed > 0 then
+		claimAllBtn.Text = "Claim All " .. tabName .. " (" .. unclaimed .. ")"
+	else
+		claimAllBtn.Text = "No Claims Available"
+	end
+end
+
+local function setCardClaimedVisual(card)
+	if not card then return end
+
+	local claimBtn = card:FindFirstChild("ClaimBtn")
+	if claimBtn then claimBtn:Destroy() end
+
+	local exclBadge = card:FindFirstChild("ExclBadge")
+	if exclBadge then exclBadge:Destroy() end
+
+	local existing = card:FindFirstChild("ClaimedLabel")
+	if existing then return end
+
+	local cl = Instance.new("TextLabel")
+	cl.Name = "ClaimedLabel"
+	cl.Size = UDim2.new(1, -16, 0, 28)
+	cl.Position = UDim2.new(0.5, 0, 1, -8)
+	cl.AnchorPoint = Vector2.new(0.5, 1)
+	cl.BackgroundTransparency = 1
+	cl.Text = "\u{2705} Claimed"
+	cl.TextColor3 = Color3.fromRGB(120, 230, 120)
+	cl.Font = FONT
+	cl.TextSize = 16
+	cl.Parent = card
+	local clStroke = Instance.new("UIStroke")
+	clStroke.Color = Color3.fromRGB(0, 0, 0)
+	clStroke.Thickness = 1
+	clStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+	clStroke.Parent = cl
 end
 
 local function buildSnapshot()
@@ -155,6 +233,7 @@ local function buildStreamerCard(info, effect, parent, cardIndex)
 	card.BackgroundColor3 = isUnlocked and Color3.fromRGB(50, 40, 80) or Color3.fromRGB(35, 28, 58)
 	card.BorderSizePixel = 0
 	card.LayoutOrder = cardIndex
+	card:SetAttribute("IndexKey", key)
 	card.Parent = parent
 
 	local cCorner = Instance.new("UICorner")
@@ -456,6 +535,8 @@ local function buildGrid(force)
 	local snap = buildSnapshot()
 	if not force and snap == lastSnapshot then return end
 	lastSnapshot = snap
+	currentBuildToken = currentBuildToken + 1
+	local buildToken = currentBuildToken
 
 	stopRotations()
 	for _, child in ipairs(contentGrid:GetChildren()) do
@@ -470,7 +551,6 @@ local function buildGrid(force)
 		totalCount = totalCount + 1
 		local key = getIndexKey(info.id, tabEffect)
 		if indexCol[key] then unlockedCount = unlockedCount + 1 end
-		buildStreamerCard(info, tabEffect, contentGrid, i)
 	end
 
 	if counterLabel then
@@ -480,6 +560,19 @@ local function buildGrid(force)
 
 	updateSidebarBadges()
 	updateNavBadge()
+	updateClaimAllButton()
+
+	task.spawn(function()
+		for i, info in ipairs(Streamers.List) do
+			if buildToken ~= currentBuildToken then
+				return
+			end
+			buildStreamerCard(info, tabEffect, contentGrid, i)
+			if i % 4 == 0 then
+				task.wait()
+			end
+		end
+	end)
 end
 
 -------------------------------------------------
@@ -503,6 +596,7 @@ function IndexController.Close()
 	if not isOpen then return end
 	isOpen = false
 	lastSnapshot = ""
+	currentBuildToken = currentBuildToken + 1
 	stopRotations()
 	if modalFrame then UIHelper.ScaleOut(modalFrame, 0.2) end
 end
@@ -631,6 +725,57 @@ function IndexController.Init()
 	cntStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
 	cntStroke.Parent = counterLabel
 
+	claimAllBtn = Instance.new("TextButton")
+	claimAllBtn.Name = "ClaimAllBtn"
+	claimAllBtn.Size = UDim2.new(0, 170, 0, 30)
+	claimAllBtn.Position = UDim2.new(0, 88, 0, 58)
+	claimAllBtn.AnchorPoint = Vector2.new(0.5, 0)
+	claimAllBtn.BackgroundColor3 = Color3.fromRGB(90, 170, 255)
+	claimAllBtn.BorderSizePixel = 0
+	claimAllBtn.TextColor3 = Color3.new(1, 1, 1)
+	claimAllBtn.Font = FONT
+	claimAllBtn.TextSize = 13
+	claimAllBtn.Text = "Claim All"
+	claimAllBtn.ZIndex = 3
+	claimAllBtn.Parent = modalFrame
+	local caCorner = Instance.new("UICorner")
+	caCorner.CornerRadius = UDim.new(0, 10)
+	caCorner.Parent = claimAllBtn
+	local caStroke = Instance.new("UIStroke")
+	caStroke.Color = Color3.fromRGB(65, 120, 200)
+	caStroke.Thickness = 1.5
+	caStroke.Parent = claimAllBtn
+
+	claimAllBtn.MouseButton1Click:Connect(function()
+		if isClaimAllRunning then return end
+
+		local toClaim = getClaimableEntriesForTab(activeTab)
+		if #toClaim <= 0 then
+			updateClaimAllButton()
+			return
+		end
+
+		isClaimAllRunning = true
+		needsGridRefreshAfterClaimAll = false
+		updateClaimAllButton()
+
+		task.spawn(function()
+			for _, info in ipairs(toClaim) do
+				ClaimIndexGems:FireServer(info.id, activeTab)
+				task.wait(0.06)
+			end
+
+			task.wait(0.15)
+			isClaimAllRunning = false
+			if isOpen and needsGridRefreshAfterClaimAll then
+				lastSnapshot = ""
+				buildGrid(true)
+			end
+			needsGridRefreshAfterClaimAll = false
+			updateClaimAllButton()
+		end)
+	end)
+
 	-------------------------------------------------
 	-- SIDEBAR
 	-------------------------------------------------
@@ -750,24 +895,60 @@ function IndexController.Init()
 	HUDController.OnDataUpdated(function()
 		updateNavBadge()
 		if isOpen then
-			buildGrid(false)
-			updateSidebarBadges()
+			if isClaimAllRunning then
+				needsGridRefreshAfterClaimAll = true
+				updateSidebarBadges()
+			elseif skipNextDataRebuild then
+				skipNextDataRebuild = false
+				updateSidebarBadges()
+			else
+				buildGrid(false)
+				updateSidebarBadges()
+			end
 		end
+		updateClaimAllButton()
 	end)
 
 	ClaimIndexResult.OnClientEvent:Connect(function(result)
 		if result.success then
 			updateNavBadge()
 			if isOpen then
-				task.wait(0.1)
-				lastSnapshot = ""
-				buildGrid(true)
+				if isClaimAllRunning then
+					needsGridRefreshAfterClaimAll = true
+				else
+					local key = getIndexKey(result.streamerId, result.effect)
+					local indexCol = HUDController.Data.indexCollection
+					if indexCol then
+						indexCol[key] = "claimed"
+					end
+
+					local appliedToVisibleCard = false
+					for _, child in ipairs(contentGrid:GetChildren()) do
+						if child:IsA("Frame") and child:GetAttribute("IndexKey") == key then
+							setCardClaimedVisual(child)
+							appliedToVisibleCard = true
+							break
+						end
+					end
+
+					if appliedToVisibleCard then
+						skipNextDataRebuild = true
+						updateSidebarBadges()
+						updateClaimAllButton()
+					else
+						task.wait(0.1)
+						lastSnapshot = ""
+						buildGrid(true)
+					end
+				end
 			end
 		end
+		updateClaimAllButton()
 	end)
 
 	-- Set initial badge count
 	updateNavBadge()
+	updateClaimAllButton()
 
 	modalFrame.Visible = false
 end

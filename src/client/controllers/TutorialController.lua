@@ -261,11 +261,26 @@ local function create3DArrow(worldPos)
 		end
 	end)
 
-	-- Glowing ring on the ground — raycast down to find actual floor
-	local rayOrigin = worldPos + Vector3.new(0, 5, 0)
-	local rayResult = workspace:Raycast(rayOrigin, Vector3.new(0, -50, 0), RaycastParams.new())
-	local groundY = rayResult and rayResult.Position.Y or 0
-	local ringPos = Vector3.new(worldPos.X, groundY + 0.15, worldPos.Z)
+	-- Glowing ring on the ground — raycast down to floor while ignoring tutorial/shop helpers
+	local rayParams = RaycastParams.new()
+	rayParams.FilterType = Enum.RaycastFilterType.Exclude
+	rayParams.IgnoreWater = true
+	local ignore = { part }
+	local hub = workspace:FindFirstChild("Hub")
+	if hub then
+		local spinAnchor = hub:FindFirstChild("SpinPromptAnchor")
+		local spinStall = hub:FindFirstChild("Stall_Spin")
+		local spinSign = hub:FindFirstChild("Sign_Spin")
+		if spinAnchor then table.insert(ignore, spinAnchor) end
+		if spinStall then table.insert(ignore, spinStall) end
+		if spinSign then table.insert(ignore, spinSign) end
+	end
+	rayParams.FilterDescendantsInstances = ignore
+
+	local rayOrigin = Vector3.new(worldPos.X, math.max(worldPos.Y + 80, 120), worldPos.Z)
+	local rayResult = workspace:Raycast(rayOrigin, Vector3.new(0, -300, 0), rayParams)
+	local groundY = rayResult and rayResult.Position.Y or (worldPos.Y - 1)
+	local ringPos = Vector3.new(worldPos.X, groundY + 0.08, worldPos.Z)
 
 	local ring = Instance.new("Part")
 	ring.Name = "TutorialRing"
