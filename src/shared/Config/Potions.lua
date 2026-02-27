@@ -3,21 +3,23 @@
 	Potion definitions: Luck potions, Cash (Gold) potions, and Divine (premium).
 	Each has 3 tiers with increasing multipliers (Luck/Cash).
 	Divine is a single-tier premium potion (Robux) that boosts both luck AND cash x5.
-	Duration: 5 minutes per use. Time stacks up to 3 hours. Multiplier does NOT stack.
+	Duration: Luck/Cash = 5 minutes per use, Divine = 15 minutes per use.
+	Time stacks up to 3 hours. Multiplier does NOT stack.
 ]]
 
 local Potions = {}
 
 -- Duration in seconds
-Potions.DURATION_PER_USE = 5 * 60  -- 5 minutes
-Potions.MAX_DURATION = 3 * 60 * 60 -- 3 hours
+Potions.DURATION_PER_USE = 5 * 60            -- Luck/Cash: 5 minutes
+Potions.DIVINE_DURATION_PER_USE = 15 * 60    -- Divine: 15 minutes
+Potions.MAX_DURATION = 3 * 60 * 60           -- 3 hours
 
 -- Luck3 and Divine imageIds = pending (no decal yet).
 Potions.Types = {
 	Luck = {
 		{ tier = 1, name = "Luck Potion 1",  multiplier = 1.2, cost = 10000,    rarity = "Common",   color = Color3.fromRGB(80, 255, 100),  imageId = "rbxassetid://117397968445761", desc = "+1.2x luck multiplier for 5m" },
 		{ tier = 2, name = "Luck Potion 2",  multiplier = 2,   cost = 100000,   rarity = "Rare",     color = Color3.fromRGB(50, 220, 80),   imageId = "rbxassetid://79599948950862",  desc = "+2x luck multiplier for 5m", rebirthRequired = 3 },
-		{ tier = 3, name = "Luck Potion 3",  multiplier = 4,   cost = 1000000,  rarity = "Epic",     color = Color3.fromRGB(30, 180, 60),   imageId = "", desc = "+4x luck multiplier for 5m", rebirthRequired = 8 },
+		{ tier = 3, name = "Luck Potion 3",  multiplier = 4,   cost = 1000000,  rarity = "Epic",     color = Color3.fromRGB(30, 180, 60),   imageId = "rbxassetid://113073248321752", desc = "+4x luck multiplier for 5m", rebirthRequired = 8 },
 	},
 	Cash = {
 		{ tier = 1, name = "Money Potion 1", multiplier = 1.2, cost = 10000,    rarity = "Common",   color = Color3.fromRGB(255, 220, 60),  imageId = "rbxassetid://77682596035149",  desc = "+1.2x money multiplier for 5m" },

@@ -110,6 +110,10 @@ local DEFAULT_DATA = {
 	hasVIP = false,
 	hasX2Luck = false,
 	spinCredits = 0,
+	-- Potion persistence (server-authoritative state restored by PotionService on join)
+	activePotionEffects = {},
+	divinePotionCount = 0,
+	potionInventory = { Luck = {}, Cash = {} },
 	-- Sacrifice: one-time completed, charge slots (rechargeAt times)
 	sacrificeOneTime = {},
 	sacrificeCharges = { FiftyFifty = {}, FeelingLucky = {} },

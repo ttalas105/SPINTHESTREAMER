@@ -230,19 +230,24 @@ function HUDController.UpdateData(payload)
 		local potionMult = 1
 		local potionSource = ""
 		if PotionController and PotionController.ActivePotions then
-			-- Divine covers both luck and cash
-			if PotionController.ActivePotions.Divine and PotionController.ActivePotions.Divine.multiplier then
-				potionMult = PotionController.ActivePotions.Divine.multiplier
-				potionSource = "Divine"
-			elseif PotionController.ActivePotions.Luck and PotionController.ActivePotions.Luck.multiplier then
-				potionMult = PotionController.ActivePotions.Luck.multiplier
-				potionSource = "Luck"
+			local divineMult = (PotionController.ActivePotions.Divine and PotionController.ActivePotions.Divine.multiplier) or 0
+			local luckMult = (PotionController.ActivePotions.Luck and PotionController.ActivePotions.Luck.multiplier) or 0
+			if divineMult > 0 or luckMult > 0 then
+				potionMult = divineMult + luckMult
+				if divineMult > 0 and luckMult > 0 then
+					potionSource = "Divine+Luck"
+				elseif divineMult > 0 then
+					potionSource = "Divine"
+				else
+					potionSource = "Luck"
+				end
 			end
 		end
 		if potionMult > 1 then
-			local potionLabel = potionSource == "Divine" and "Divine" or "Potion"
+			local potionLabel = (potionSource == "Divine+Luck") and "Potions" or potionSource
 			luckLabel.Text = ("Luck: %d (+%d%%)  |  %s: x%.1f"):format(luck, percent, potionLabel, potionMult)
-			luckLabel.TextColor3 = potionSource == "Divine" and Color3.fromRGB(255, 150, 255) or Color3.fromRGB(80, 255, 100)
+			luckLabel.TextColor3 = (potionSource == "Divine" or potionSource == "Divine+Luck")
+				and Color3.fromRGB(255, 150, 255) or Color3.fromRGB(80, 255, 100)
 		else
 			luckLabel.Text = ("Luck: %d (+%d%%)"):format(luck, percent)
 			luckLabel.TextColor3 = Color3.fromRGB(200, 180, 255) -- default purple

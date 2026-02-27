@@ -45,6 +45,8 @@ local UIHelper               = require(controllers.UIHelper)
 local RemoteEvents = ReplicatedStorage:WaitForChild("RemoteEvents")
 local CaseStockUpdate = RemoteEvents:WaitForChild("CaseStockUpdate")
 local GetCaseStock = RemoteEvents:WaitForChild("GetCaseStock")
+local PotionStockUpdate = RemoteEvents:WaitForChild("PotionStockUpdate")
+local GetPotionStock = RemoteEvents:WaitForChild("GetPotionStock")
 local RESTOCK_SOUND_ID = "rbxassetid://137402801272072"
 local centerToastGui = nil
 local centerToastLabel = nil
@@ -84,7 +86,7 @@ local function showSystemToast(titleText, bodyText)
 	end)
 end
 
-local function showCenterToast(messageText)
+local function showCenterToast(messageText, options)
 	local playerGui = Players.LocalPlayer:WaitForChild("PlayerGui")
 	if not centerToastGui or not centerToastGui.Parent then
 		centerToastGui = Instance.new("ScreenGui")
@@ -98,9 +100,9 @@ local function showCenterToast(messageText)
 		centerToastLabel = Instance.new("TextLabel")
 		centerToastLabel.Name = "CenterToastLabel"
 		centerToastLabel.Size = UDim2.new(0, 560, 0, 82)
-		-- Place near the top nav, left of the SHOP area.
-		centerToastLabel.Position = UDim2.new(0.5, -380, 0, 24)
-		centerToastLabel.AnchorPoint = Vector2.new(0, 0)
+		-- Default placement near top nav.
+		centerToastLabel.Position = UDim2.new(0.5, 0, 0, 24)
+		centerToastLabel.AnchorPoint = Vector2.new(0.5, 0)
 		centerToastLabel.BackgroundColor3 = Color3.fromRGB(6, 22, 56)
 		centerToastLabel.BackgroundTransparency = 0.12
 		centerToastLabel.BorderSizePixel = 0
@@ -123,6 +125,15 @@ local function showCenterToast(messageText)
 
 	centerToastToken += 1
 	local token = centerToastToken
+	local isCentered = type(options) == "table" and options.centered == true
+	if isCentered then
+		centerToastLabel.Position = UDim2.new(0.5, 0, 0, 24)
+		centerToastLabel.AnchorPoint = Vector2.new(0.5, 0)
+	else
+		-- Place near the top nav, left of the SHOP area.
+		centerToastLabel.Position = UDim2.new(0.5, -380, 0, 24)
+		centerToastLabel.AnchorPoint = Vector2.new(0, 0)
+	end
 	centerToastLabel.Text = messageText or ""
 	centerToastLabel.BackgroundTransparency = 0.12
 	centerToastLabel.TextTransparency = 0
@@ -164,13 +175,23 @@ local function handleCaseStockPayload(payload)
 
 	if payload.restocked == true then
 		playRestockSound()
-		showCenterToast("Case stock has been restocked!")
+		showCenterToast("Cases have been restocked")
 	end
 
 	local previousRestockIn = lastCaseRestockIn
 	lastCaseRestockIn = restockIn
 
 	hasSeenCaseStockSnapshot = true
+end
+
+local function handlePotionStockPayload(payload)
+	if type(payload) ~= "table" then return end
+	local restockIn = payload.restockIn
+	if type(restockIn) ~= "number" then return end
+	if payload.restocked == true then
+		playRestockSound()
+		showCenterToast("Potion stock has been restocked!")
+	end
 end
 
 -------------------------------------------------
@@ -273,6 +294,7 @@ end
 
 local DEFAULT_WALKSPEED = 16
 local WALKSPEED_MULTIPLIER = 1.30  -- 30% faster
+local MIN_CAMERA_ZOOM_DISTANCE = 8
 
 local function setupCharacter(character)
 	local humanoid = character:FindFirstChildOfClass("Humanoid")
@@ -282,11 +304,21 @@ local function setupCharacter(character)
 	end
 end
 
+local function enforceThirdPersonZoom(player)
+	player.CameraMode = Enum.CameraMode.Classic
+	player.CameraMinZoomDistance = MIN_CAMERA_ZOOM_DISTANCE
+	if player.CameraMaxZoomDistance < MIN_CAMERA_ZOOM_DISTANCE then
+		player.CameraMaxZoomDistance = MIN_CAMERA_ZOOM_DISTANCE
+	end
+end
+
 local localPlayer = Players.LocalPlayer
+enforceThirdPersonZoom(localPlayer)
 if localPlayer.Character then
 	setupCharacter(localPlayer.Character)
 end
 localPlayer.CharacterAdded:Connect(function(char)
+	enforceThirdPersonZoom(localPlayer)
 	setupCharacter(char)
 end)
 
@@ -510,7 +542,7 @@ SpinController.OnSpinResult(function(data)
 		pendingInventoryData = nil
 	end
 	if data and data.destination == "storage" then
-		showCenterToast("Hotbar is full... adding to storage")
+		showCenterToast("Hotbar is full... adding to storage", { centered = true })
 	end
 	if data.streamerId and data.destination ~= "storage" then
 		InventoryController.FlashNewItem(data.streamerId, data.effect)
@@ -572,8 +604,11 @@ end)
 
 CaseStockUpdate.OnClientEvent:Connect(handleCaseStockPayload)
 GetCaseStock.OnClientEvent:Connect(handleCaseStockPayload)
+PotionStockUpdate.OnClientEvent:Connect(handlePotionStockPayload)
+GetPotionStock.OnClientEvent:Connect(handlePotionStockPayload)
 task.defer(function()
 	GetCaseStock:FireServer()
+	GetPotionStock:FireServer()
 end)
 
 -------------------------------------------------

@@ -14,6 +14,7 @@ local Rarities = require(ReplicatedStorage.Shared.Config.Rarities)
 local Streamers = require(ReplicatedStorage.Shared.Config.Streamers)
 local Economy = require(ReplicatedStorage.Shared.Config.Economy)
 local Effects = require(ReplicatedStorage.Shared.Config.Effects)
+local GemCases = require(ReplicatedStorage.Shared.Config.GemCases)
 local UIHelper = require(script.Parent.UIHelper)
 local HUDController = require(script.Parent.HUDController)
 local UISounds = require(script.Parent.UISounds)
@@ -66,6 +67,7 @@ local autoSpinButton = nil
 local spinGeneration = 0
 local onSpinResult = nil
 local isOwnedCrateOpen = false
+local currentGemCaseId = nil
 
 -- Carousel items
 local ITEM_WIDTH = 130
@@ -582,6 +584,12 @@ local function applyEffectToCard(cardIndex, effectName)
 			nameLabel.Position = UDim2.new(0.5, 0, 0.10, 0)
 		end
 	end
+end
+
+local function getForcedGemCaseEffect()
+	if not currentGemCaseId then return nil end
+	local caseData = GemCases.ById[currentGemCaseId]
+	return caseData and caseData.effect or nil
 end
 
 local function playSpinAnimation(resultData, callback)
@@ -1394,13 +1402,23 @@ function SpinController._startSpin(data)
 		end
 	end
 
+	local forcedEffect = getForcedGemCaseEffect()
+	if not forcedEffect and data and data.caseId then
+		local caseData = GemCases.ById[data.caseId]
+		forcedEffect = caseData and caseData.effect or nil
+	end
+
 	local COSMETIC_CHANCE = 0.15
-	for idx, item in ipairs(items) do
-		local newEff = nil
-		if math.random() < COSMETIC_CHANCE then
-			newEff = Effects.List[math.random(1, #Effects.List)]
+	for idx, _item in ipairs(items) do
+		if forcedEffect then
+			applyEffectToCard(idx, forcedEffect)
+		else
+			local newEff = nil
+			if math.random() < COSMETIC_CHANCE then
+				newEff = Effects.List[math.random(1, #Effects.List)]
+			end
+			applyEffectToCard(idx, newEff and newEff.name or nil)
 		end
-		applyEffectToCard(idx, newEff and newEff.name or nil)
 	end
 
 	spinButton.Text = "SPINNING..."
@@ -1465,6 +1483,7 @@ function SpinController.Hide()
 	animationDone = false
 	autoSpinEnabled = false
 	isOwnedCrateOpen = false
+	currentGemCaseId = nil
 	if autoSpinButton then
 		autoSpinButton.BackgroundColor3 = Color3.fromRGB(55, 50, 80)
 		autoSpinButton.Text = "AUTO"
@@ -1496,10 +1515,17 @@ end
 
 function SpinController.SetCurrentCrateId(crateId)
 	currentCrateId = crateId
+	if crateId ~= nil then
+		currentGemCaseId = nil
+	end
 end
 
 function SpinController.SetOwnedCrateMode(enabled)
 	isOwnedCrateOpen = enabled
+end
+
+function SpinController.SetGemCaseVisual(caseId)
+	currentGemCaseId = caseId
 end
 
 function SpinController.WaitForResult()
@@ -1511,6 +1537,12 @@ function SpinController.WaitForResult()
 	if carouselFrame then
 		carouselFrame.Visible = true
 		carouselFrame.Size = UDim2.new(0.92, 0, 0, ITEM_HEIGHT + 30)
+	end
+	local forcedEffect = getForcedGemCaseEffect()
+	if forcedEffect then
+		for idx, _item in ipairs(items) do
+			applyEffectToCard(idx, forcedEffect)
+		end
 	end
 	startPreSpinVisual()
 	spinButton.Text = "SPINNING..."

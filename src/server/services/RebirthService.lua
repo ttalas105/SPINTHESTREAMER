@@ -63,9 +63,9 @@ local function handleRebirth(player)
 		-- Note: ResetForRebirth sets cash=0 which is fine since we already deducted
 		PlayerData.ResetForRebirth(player)
 
-		-- Clear active potions
+		-- Clear non-Robux potion effects; preserve Divine (Robux) state.
 		if PotionService then
-			PotionService.ClearPotions(player)
+			PotionService.ClearPotionsForRebirth(player)
 		end
 
 		-- Increment rebirth

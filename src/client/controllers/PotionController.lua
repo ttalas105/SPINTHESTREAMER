@@ -9,6 +9,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local MarketplaceService = game:GetService("MarketplaceService")
+local RunService = game:GetService("RunService")
 
 local Potions = require(ReplicatedStorage.Shared.Config.Potions)
 local DesignConfig = require(ReplicatedStorage.Shared.Config.DesignConfig)
@@ -25,6 +26,10 @@ local BuyPotionRequest = RemoteEvents:WaitForChild("BuyPotionRequest")
 local BuyPotionResult = RemoteEvents:WaitForChild("BuyPotionResult")
 local PotionUpdate = RemoteEvents:WaitForChild("PotionUpdate")
 local OpenPotionStandGui = RemoteEvents:WaitForChild("OpenPotionStandGui")
+local GetPotionStock = RemoteEvents:WaitForChild("GetPotionStock")
+local PotionStockUpdate = RemoteEvents:WaitForChild("PotionStockUpdate")
+local BuyPotionStock = RemoteEvents:WaitForChild("BuyPotionStock")
+local UseOwnedPotion = RemoteEvents:WaitForChild("UseOwnedPotion")
 
 local screenGui
 local shopModal
@@ -34,6 +39,16 @@ local cashIndicator
 local divineIndicator
 local isShopOpen = false
 local divineCountLabel -- shows how many divine potions player owns
+local refreshShopRows
+local lastKnownRebirth = 0
+local DIVINE_ICON_IMAGE = "rbxassetid://97334379969080"
+local INDICATOR_MARGIN = 10
+local INDICATOR_TOP_MARGIN = 8
+local potionStockData = {}
+local ownedPotionData = { Luck = {}, Cash = {} }
+local potionRestockSecondsLeft = 0
+local potionRestockTimerLabel
+local MAX_POTION_STOCK = 8
 
 -- Exposed active potion data so other controllers (HUD) can read it
 PotionController.ActivePotions = {} -- { Luck = {multiplier, tier, remaining}, Cash = ..., Divine = ... }
@@ -59,6 +74,16 @@ local function formatTime(seconds)
 	local m = math.floor(seconds / 60)
 	local s = seconds % 60
 	return string.format("%d:%02d", m, s)
+end
+
+local function getOwnedCount(potionType, tier)
+	local bucket = ownedPotionData[potionType]
+	if type(bucket) ~= "table" then return 0 end
+	return bucket[tier] or bucket[tostring(tier)] or 0
+end
+
+local function getStockCount(potionType, tier)
+	return potionStockData[potionType .. "_" .. tostring(tier)] or 0
 end
 
 -------------------------------------------------
@@ -230,9 +255,23 @@ local function createIndicator(potionType, liquidColor, isRainbow)
 	timerStroke.Parent = timerLabel
 
 	-- Potion icon
-	local icon = createPotionIcon(frame, liquidColor, 40, isRainbow)
-	icon.Position = UDim2.new(0.5, 0, 0.45, 0)
-	icon.AnchorPoint = Vector2.new(0.5, 0.5)
+	if potionType == "Divine" then
+		local divineShopImage = (Potions.Divine and Potions.Divine.imageId) or ""
+		local divineImageToUse = divineShopImage ~= "" and divineShopImage or DIVINE_ICON_IMAGE
+		local icon = Instance.new("ImageLabel")
+		icon.Name = "DivineIcon"
+		icon.Size = UDim2.new(0, 40, 0, 40)
+		icon.Position = UDim2.new(0.5, 0, 0.45, 0)
+		icon.AnchorPoint = Vector2.new(0.5, 0.5)
+		icon.BackgroundTransparency = 1
+		icon.Image = divineImageToUse
+		icon.ScaleType = Enum.ScaleType.Fit
+		icon.Parent = frame
+	else
+		local icon = createPotionIcon(frame, liquidColor, 40, isRainbow)
+		icon.Position = UDim2.new(0.5, 0, 0.45, 0)
+		icon.AnchorPoint = Vector2.new(0.5, 0.5)
+	end
 
 	-- Tier / type label
 	local tierLabel = Instance.new("TextLabel")
@@ -241,7 +280,7 @@ local function createIndicator(potionType, liquidColor, isRainbow)
 	tierLabel.Position = UDim2.new(0.5, 0, 1, -4)
 	tierLabel.AnchorPoint = Vector2.new(0.5, 1)
 	tierLabel.BackgroundTransparency = 1
-	tierLabel.Text = isRainbow and "\u{1F308}" or "1"
+	tierLabel.Text = (potionType == "Divine") and "" or (isRainbow and "\u{1F308}" or "1")
 	tierLabel.TextColor3 = liquidColor
 	tierLabel.Font = BUBBLE_FONT
 	tierLabel.TextSize = 16
@@ -283,7 +322,34 @@ local function updateIndicator(indicator, data, isRainbow)
 	if timerLabel then timerLabel.Text = formatTime(data.remaining) end
 	local tierLabel = indicator:FindFirstChild("Tier")
 	if tierLabel then
-		tierLabel.Text = isRainbow and "\u{1F308}" or tostring(data.tier or 1)
+		if indicator.Name == "DivineIndicator" then
+			tierLabel.Text = ""
+		else
+			tierLabel.Text = isRainbow and "\u{1F308}" or tostring(data.tier or 1)
+		end
+	end
+end
+
+local function applyIndicatorContainerPlacement(moveToLeftHud)
+	if not indicatorContainer then return end
+	local uiScale = UIHelper.GetScale()
+	if uiScale <= 0 then uiScale = 1 end
+
+	if moveToLeftHud then
+		local camera = workspace.CurrentCamera
+		local viewportW = (camera and camera.ViewportSize and camera.ViewportSize.X) or 1920
+		local designW = viewportW / uiScale
+		-- Keep active indicators near the left HUD area, scaled by resolution.
+		local leftDesignX = math.clamp(designW * 0.21, 240, 430)
+		indicatorContainer.AnchorPoint = Vector2.new(0, 0)
+		indicatorContainer.Position = UDim2.new(
+			0, math.floor(leftDesignX * uiScale),
+			0, math.floor(INDICATOR_TOP_MARGIN * uiScale)
+		)
+	else
+		local marginPx = math.floor(INDICATOR_MARGIN * uiScale)
+		indicatorContainer.AnchorPoint = Vector2.new(1, 1)
+		indicatorContainer.Position = UDim2.new(1, -marginPx, 1, -marginPx)
 	end
 end
 
@@ -306,7 +372,7 @@ local RARITY_COLORS = {
 	Epic    = Color3.fromRGB(180, 80, 255),
 }
 
-local function buildPotionRow(potionType, potion, parent)
+local function buildPotionRow(potionType, potion, parent, ownedCount, stockCount)
 	local rarityColor = RARITY_COLORS[potion.rarity] or RARITY_COLORS.Common
 
 	local row = Instance.new("Frame")
@@ -463,6 +529,32 @@ local function buildPotionRow(potionType, potion, parent)
 	rarityLabel.ZIndex = 53
 	rarityLabel.Parent = row
 
+	local stockLabel = Instance.new("TextLabel")
+	stockLabel.Name = "StockLabel"
+	stockLabel.Size = UDim2.new(0, 180, 0, 18)
+	stockLabel.Position = UDim2.new(0, textX, 0, 102)
+	stockLabel.BackgroundTransparency = 1
+	stockLabel.Text = ("Stock: %d/%d"):format(stockCount or 0, MAX_POTION_STOCK)
+	stockLabel.TextColor3 = (stockCount or 0) <= 0 and Color3.fromRGB(255, 110, 110) or Color3.fromRGB(255, 220, 100)
+	stockLabel.Font = FONT_SUB
+	stockLabel.TextSize = 12
+	stockLabel.TextXAlignment = Enum.TextXAlignment.Left
+	stockLabel.ZIndex = 53
+	stockLabel.Parent = row
+
+	local ownedLabel = Instance.new("TextLabel")
+	ownedLabel.Name = "OwnedLabel"
+	ownedLabel.Size = UDim2.new(0, 180, 0, 18)
+	ownedLabel.Position = UDim2.new(0, textX, 0, 118)
+	ownedLabel.BackgroundTransparency = 1
+	ownedLabel.Text = ""
+	ownedLabel.TextColor3 = Color3.fromRGB(200, 180, 230)
+	ownedLabel.Font = FONT_SUB
+	ownedLabel.TextSize = 12
+	ownedLabel.TextXAlignment = Enum.TextXAlignment.Left
+	ownedLabel.ZIndex = 53
+	ownedLabel.Parent = row
+
 	-- Rebirth requirement (if any)
 	local rebirthRequired = potion.rebirthRequired or 0
 	local currentRebirth = HUDController.Data.rebirthCount or 0
@@ -472,7 +564,7 @@ local function buildPotionRow(potionType, potion, parent)
 		local reqLabel = Instance.new("TextLabel")
 		reqLabel.Name = "RebirthReq"
 		reqLabel.Size = UDim2.new(1, -(textX + 14), 0, 18)
-		reqLabel.Position = UDim2.new(0, textX, 0, 102)
+		reqLabel.Position = UDim2.new(0, textX, 0, 84)
 		reqLabel.BackgroundTransparency = 1
 		reqLabel.Text = "Requires Rebirth " .. rebirthRequired
 		reqLabel.TextColor3 = isLocked and Color3.fromRGB(255, 120, 80) or Color3.fromRGB(100, 200, 120)
@@ -483,52 +575,91 @@ local function buildPotionRow(potionType, potion, parent)
 		reqLabel.Parent = row
 	end
 
-	-- Buy button (bottom right of row)
-	local buyBtn = Instance.new("TextButton")
-	buyBtn.Name = "BuyBtn"
-	buyBtn.Size = UDim2.new(0, 80, 0, 34)
-	buyBtn.Position = UDim2.new(1, -14, 1, -14)
-	buyBtn.AnchorPoint = Vector2.new(1, 1)
-	buyBtn.BackgroundColor3 = isLocked and Color3.fromRGB(70, 65, 80) or Color3.fromRGB(60, 200, 90)
-	buyBtn.Text = isLocked and "LOCKED" or "BUY"
-	buyBtn.TextColor3 = isLocked and Color3.fromRGB(120, 115, 130) or Color3.new(1, 1, 1)
-	buyBtn.Font = BUBBLE_FONT
-	buyBtn.TextSize = 16
-	buyBtn.BorderSizePixel = 0
-	buyBtn.AutoButtonColor = false
-	buyBtn.ZIndex = 53
-	buyBtn.Parent = row
-	local buyCorner = Instance.new("UICorner")
-	buyCorner.CornerRadius = UDim.new(0, 10)
-	buyCorner.Parent = buyBtn
-	local buyStroke = Instance.new("UIStroke")
-	buyStroke.Color = isLocked and Color3.fromRGB(50, 48, 60) or Color3.fromRGB(30, 140, 50)
-	buyStroke.Thickness = 2
-	buyStroke.Parent = buyBtn
-	local buyTextStroke = Instance.new("UIStroke")
-	buyTextStroke.Color = Color3.fromRGB(10, 50, 20)
-	buyTextStroke.Thickness = 1.5
-	buyTextStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
-	buyTextStroke.Parent = buyBtn
+	local function makeBtn(name, text, xOffset, bg)
+		local btn = Instance.new("TextButton")
+		btn.Name = name
+		btn.Size = UDim2.new(0, 64, 0, 30)
+		btn.Position = UDim2.new(1, xOffset, 1, -12)
+		btn.AnchorPoint = Vector2.new(1, 1)
+		btn.BackgroundColor3 = bg
+		btn.Text = text
+		btn.TextColor3 = Color3.new(1, 1, 1)
+		btn.Font = BUBBLE_FONT
+		btn.TextSize = 12
+		btn.BorderSizePixel = 0
+		btn.AutoButtonColor = false
+		btn.ZIndex = 53
+		btn.Parent = row
+		Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
+		local s = Instance.new("UIStroke")
+		s.Color = Color3.fromRGB(0, 0, 0)
+		s.Thickness = 1.2
+		s.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+		s.Parent = btn
+		return btn
+	end
 
-	local bounceTI = TweenInfo.new(0.12, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
-	if not isLocked then
-		buyBtn.MouseEnter:Connect(function()
-			TweenService:Create(row, bounceTI, { BackgroundColor3 = CARD_HOVER }):Play()
-			TweenService:Create(buyBtn, bounceTI, { BackgroundColor3 = Color3.fromRGB(80, 235, 115) }):Play()
+	local canBuy = (not isLocked) and (stockCount or 0) > 0
+	local canUse = (ownedCount or 0) > 0 and not isLocked
+	local buy1Btn = makeBtn("Buy1Btn", isLocked and "LOCKED" or "BUY 1", -154, canBuy and Color3.fromRGB(60, 200, 90) or Color3.fromRGB(70, 65, 80))
+	local buyMaxBtn = makeBtn("BuyMaxBtn", "BUY MAX", -84, canBuy and Color3.fromRGB(50, 170, 85) or Color3.fromRGB(70, 65, 80))
+	local useBtn = makeBtn("UseBtn", "USE (" .. tostring(ownedCount or 0) .. ")", -14, canUse and Color3.fromRGB(180, 80, 220) or Color3.fromRGB(70, 65, 80))
+
+	if canBuy then
+		buy1Btn.MouseButton1Click:Connect(function()
+			BuyPotionStock:FireServer(potionType, potion.tier, 1)
 		end)
-		buyBtn.MouseLeave:Connect(function()
-			TweenService:Create(row, bounceTI, { BackgroundColor3 = CARD_BG }):Play()
-			TweenService:Create(buyBtn, bounceTI, { BackgroundColor3 = Color3.fromRGB(60, 200, 90) }):Play()
-		end)
-		buyBtn.MouseButton1Click:Connect(function()
-			BuyPotionRequest:FireServer(potionType, potion.tier)
-		end)
-	else
-		buyBtn.MouseButton1Click:Connect(function()
-			-- Optional: could show a toast "Reach Rebirth X to unlock"
+		buyMaxBtn.MouseButton1Click:Connect(function()
+			BuyPotionStock:FireServer(potionType, potion.tier, 999)
 		end)
 	end
+	if canUse then
+		useBtn.MouseButton1Click:Connect(function()
+			UseOwnedPotion:FireServer(potionType, potion.tier)
+		end)
+	end
+
+	-- Match case-shop lock style for rebirth-locked potion rows.
+	local lockOverlay = Instance.new("Frame")
+	lockOverlay.Name = "LockOverlay"
+	lockOverlay.Size = UDim2.new(1, 0, 1, 0)
+	lockOverlay.BackgroundColor3 = Color3.fromRGB(15, 12, 25)
+	lockOverlay.BackgroundTransparency = 0.3
+	lockOverlay.BorderSizePixel = 0
+	lockOverlay.ZIndex = 60
+	lockOverlay.Visible = isLocked
+	lockOverlay.Parent = row
+	Instance.new("UICorner", lockOverlay).CornerRadius = UDim.new(0, 14)
+
+	local lockIcon = Instance.new("TextLabel")
+	lockIcon.Size = UDim2.new(0, 48, 0, 48)
+	lockIcon.Position = UDim2.new(0.5, -32, 0.5, -4)
+	lockIcon.AnchorPoint = Vector2.new(0.5, 0.5)
+	lockIcon.BackgroundTransparency = 1
+	lockIcon.Text = "\u{1F512}"
+	lockIcon.TextColor3 = Color3.new(1, 1, 1)
+	lockIcon.TextSize = 36
+	lockIcon.Font = Enum.Font.SourceSans
+	lockIcon.ZIndex = 61
+	lockIcon.Parent = lockOverlay
+
+	local lockText = Instance.new("TextLabel")
+	lockText.Size = UDim2.new(0, 230, 0, 30)
+	lockText.Position = UDim2.new(0.5, 34, 0.5, -4)
+	lockText.AnchorPoint = Vector2.new(0.5, 0.5)
+	lockText.BackgroundTransparency = 1
+	lockText.Text = "Rebirth " .. tostring(rebirthRequired) .. " Required"
+	lockText.TextColor3 = Color3.fromRGB(255, 180, 80)
+	lockText.Font = BUBBLE_FONT
+	lockText.TextSize = 20
+	lockText.TextXAlignment = Enum.TextXAlignment.Left
+	lockText.ZIndex = 61
+	lockText.Parent = lockOverlay
+	local lockStroke = Instance.new("UIStroke")
+	lockStroke.Color = Color3.new(0, 0, 0)
+	lockStroke.Thickness = 1.5
+	lockStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+	lockStroke.Parent = lockText
 
 	return row
 end
@@ -584,19 +715,6 @@ local function buildShopModal()
 	titleStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
 	titleStroke.Parent = title
 
-	-- Subtitle
-	local subtitle = Instance.new("TextLabel")
-	subtitle.Size = UDim2.new(0.5, 0, 0, 16)
-	subtitle.Position = UDim2.new(0, 22, 0, 44)
-	subtitle.BackgroundTransparency = 1
-	subtitle.Text = "5 min per use • stacks time (max 3h)"
-	subtitle.TextColor3 = Color3.fromRGB(140, 135, 160)
-	subtitle.Font = FONT_SUB
-	subtitle.TextSize = 11
-	subtitle.TextXAlignment = Enum.TextXAlignment.Left
-	subtitle.ZIndex = 52
-	subtitle.Parent = header
-
 	-- Close button (red X)
 	local closeBtn = Instance.new("TextButton")
 	closeBtn.Name = "CloseBtn"
@@ -646,11 +764,77 @@ local function buildShopModal()
 	divider.ZIndex = 52
 	divider.Parent = modal
 
+	potionRestockTimerLabel = Instance.new("TextLabel")
+	potionRestockTimerLabel.Name = "RestockTimer"
+	potionRestockTimerLabel.Size = UDim2.new(0, 200, 0, 18)
+	potionRestockTimerLabel.Position = UDim2.new(0.5, 0, 0, 44)
+	potionRestockTimerLabel.AnchorPoint = Vector2.new(0.5, 0)
+	potionRestockTimerLabel.BackgroundTransparency = 1
+	potionRestockTimerLabel.Text = "Restock: --:--"
+	potionRestockTimerLabel.TextColor3 = Color3.fromRGB(255, 220, 100)
+	potionRestockTimerLabel.Font = FONT_SUB
+	potionRestockTimerLabel.TextSize = 12
+	potionRestockTimerLabel.ZIndex = 53
+	potionRestockTimerLabel.Parent = modal
+
+	-- Tab row (Luck / Money pages)
+	local currentTab = "Luck"
+	local luckTabBtn
+	local moneyTabBtn
+
+	local tabRow = Instance.new("Frame")
+	tabRow.Name = "TabRow"
+	tabRow.Size = UDim2.new(1, -24, 0, 32)
+	tabRow.Position = UDim2.new(0.5, 0, 0, 74)
+	tabRow.AnchorPoint = Vector2.new(0.5, 0)
+	tabRow.BackgroundTransparency = 1
+	tabRow.ZIndex = 52
+	tabRow.Parent = modal
+
+	local tabLayout = Instance.new("UIListLayout")
+	tabLayout.FillDirection = Enum.FillDirection.Horizontal
+	tabLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	tabLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+	tabLayout.Padding = UDim.new(0, 8)
+	tabLayout.Parent = tabRow
+
+	local function createTabButton(text)
+		local btn = Instance.new("TextButton")
+		btn.Size = UDim2.new(0, 120, 0, 30)
+		btn.BackgroundColor3 = Color3.fromRGB(55, 50, 75)
+		btn.Text = text
+		btn.TextColor3 = Color3.fromRGB(180, 175, 200)
+		btn.Font = BUBBLE_FONT
+		btn.TextSize = 16
+		btn.BorderSizePixel = 0
+		btn.AutoButtonColor = false
+		btn.ZIndex = 53
+		btn.Parent = tabRow
+		Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
+		local bStroke = Instance.new("UIStroke")
+		bStroke.Color = Color3.fromRGB(80, 75, 110)
+		bStroke.Thickness = 1.2
+		bStroke.Parent = btn
+		return btn
+	end
+
+	luckTabBtn = createTabButton("Luck")
+	moneyTabBtn = createTabButton("Money")
+
+	local function updateTabStyles()
+		local function style(btn, active, activeColor)
+			btn.BackgroundColor3 = active and activeColor or Color3.fromRGB(55, 50, 75)
+			btn.TextColor3 = active and Color3.new(1, 1, 1) or Color3.fromRGB(180, 175, 200)
+		end
+		style(luckTabBtn, currentTab == "Luck", Color3.fromRGB(60, 190, 95))
+		style(moneyTabBtn, currentTab == "Cash", Color3.fromRGB(190, 150, 55))
+	end
+
 	-- Scrollable potion list
 	local scroll = Instance.new("ScrollingFrame")
 	scroll.Name = "PotionScroll"
-	scroll.Size = UDim2.new(1, -24, 1, -86)
-	scroll.Position = UDim2.new(0.5, 0, 0, 78)
+	scroll.Size = UDim2.new(1, -24, 1, -120)
+	scroll.Position = UDim2.new(0.5, 0, 0, 112)
 	scroll.AnchorPoint = Vector2.new(0.5, 0)
 	scroll.BackgroundTransparency = 1
 	scroll.BorderSizePixel = 0
@@ -801,7 +985,7 @@ local function buildShopModal()
 	local useBtn = Instance.new("TextButton")
 	useBtn.Name = "UseBtn"
 	useBtn.Size = UDim2.new(0, 70, 0, 28)
-	useBtn.Position = UDim2.new(0, prisTextX + 90, 0, 78)
+	useBtn.Position = UDim2.new(0, prisTextX + 130, 0, 78)
 	useBtn.BackgroundColor3 = Color3.fromRGB(180, 80, 220)
 	useBtn.Text = "USE"
 	useBtn.TextColor3 = Color3.new(1, 1, 1)
@@ -906,31 +1090,106 @@ local function buildShopModal()
 		end)
 	end
 
-	-------------------------------------------------
-	-- LUCK POTIONS
-	-------------------------------------------------
-	for _, potion in ipairs(Potions.Types.Luck) do
-		local r = buildPotionRow("Luck", potion, scroll)
-		r.LayoutOrder = potion.tier
+	local function clearPotionRows()
+		for _, child in ipairs(scroll:GetChildren()) do
+			if child ~= prisRow and not child:IsA("UIListLayout") and not child:IsA("UIPadding") then
+				child:Destroy()
+			end
+		end
 	end
 
-	-- Divider between Luck and Money potions
-	local potionDivider = Instance.new("Frame")
-	potionDivider.Name = "PotionDivider"
-	potionDivider.Size = UDim2.new(0.9, 0, 0, 3)
-	potionDivider.BackgroundColor3 = Color3.fromRGB(120, 100, 170)
-	potionDivider.BorderSizePixel = 0
-	potionDivider.LayoutOrder = 9
-	potionDivider.Parent = scroll
-	Instance.new("UICorner", potionDivider).CornerRadius = UDim.new(1, 0)
+	local function buildSectionHeader(text, color, order)
+		local section = Instance.new("Frame")
+		section.Name = "SectionHeader"
+		section.Size = UDim2.new(1, -24, 0, 34)
+		section.BackgroundColor3 = Color3.fromRGB(34, 30, 48)
+		section.BorderSizePixel = 0
+		section.LayoutOrder = order
+		section.ZIndex = 52
+		section.Parent = scroll
+		Instance.new("UICorner", section).CornerRadius = UDim.new(0, 10)
+		local sectionStroke = Instance.new("UIStroke")
+		sectionStroke.Color = color
+		sectionStroke.Thickness = 1.4
+		sectionStroke.Transparency = 0.25
+		sectionStroke.Parent = section
 
-	-------------------------------------------------
-	-- MONEY POTIONS
-	-------------------------------------------------
-	for _, potion in ipairs(Potions.Types.Cash) do
-		local r = buildPotionRow("Cash", potion, scroll)
-		r.LayoutOrder = 10 + potion.tier
+		local sectionLabel = Instance.new("TextLabel")
+		sectionLabel.Size = UDim2.new(1, -18, 1, 0)
+		sectionLabel.Position = UDim2.new(0, 10, 0, 0)
+		sectionLabel.BackgroundTransparency = 1
+		sectionLabel.Text = text
+		sectionLabel.TextColor3 = color
+		sectionLabel.Font = BUBBLE_FONT
+		sectionLabel.TextSize = 18
+		sectionLabel.TextXAlignment = Enum.TextXAlignment.Left
+		sectionLabel.ZIndex = 53
+		sectionLabel.Parent = section
+		local sectionLabelStroke = Instance.new("UIStroke")
+		sectionLabelStroke.Color = Color3.new(0, 0, 0)
+		sectionLabelStroke.Thickness = 1.2
+		sectionLabelStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+		sectionLabelStroke.Parent = sectionLabel
 	end
+
+	local function renderPotionPage()
+		clearPotionRows()
+
+		local order = 0
+		prisRow.Parent = scroll
+		prisRow.LayoutOrder = order
+		order += 1
+
+		if divineCountLabel then
+			local payload = PotionController.ActivePotions or {}
+			local count = payload._divineCount or 0
+			divineCountLabel.Text = "You have: " .. count .. " potion" .. (count ~= 1 and "s" or "")
+		end
+
+		if currentTab == "Luck" then
+			for _, potion in ipairs(Potions.Types.Luck) do
+				local r = buildPotionRow("Luck", potion, scroll, getOwnedCount("Luck", potion.tier), getStockCount("Luck", potion.tier))
+				r.LayoutOrder = order
+				order += 1
+			end
+		else
+			for _, potion in ipairs(Potions.Types.Cash) do
+				local r = buildPotionRow("Cash", potion, scroll, getOwnedCount("Cash", potion.tier), getStockCount("Cash", potion.tier))
+				r.LayoutOrder = order
+				order += 1
+			end
+		end
+
+		updateTabStyles()
+	end
+	refreshShopRows = renderPotionPage
+
+	luckTabBtn.MouseButton1Click:Connect(function()
+		if currentTab == "Luck" then return end
+		currentTab = "Luck"
+		renderPotionPage()
+	end)
+	moneyTabBtn.MouseButton1Click:Connect(function()
+		if currentTab == "Cash" then return end
+		currentTab = "Cash"
+		renderPotionPage()
+	end)
+
+	renderPotionPage()
+
+	-- keep both tabs responsive while hovering
+	local function bindTabHover(btn, activeTab)
+		btn.MouseEnter:Connect(function()
+			if currentTab == activeTab then return end
+			TweenService:Create(btn, TweenInfo.new(0.1), { BackgroundColor3 = Color3.fromRGB(70, 64, 92) }):Play()
+		end)
+		btn.MouseLeave:Connect(function()
+			if currentTab == activeTab then return end
+			TweenService:Create(btn, TweenInfo.new(0.1), { BackgroundColor3 = Color3.fromRGB(55, 50, 75) }):Play()
+		end)
+	end
+	bindTabHover(luckTabBtn, "Luck")
+	bindTabHover(moneyTabBtn, "Cash")
 
 	return modal
 end
@@ -941,6 +1200,10 @@ end
 
 function PotionController.OpenShop()
 	if shopModal then
+		GetPotionStock:FireServer()
+		if refreshShopRows then
+			refreshShopRows()
+		end
 		shopModal.Visible = true
 		isShopOpen = true
 		UIHelper.ScaleIn(shopModal, 0.25)
@@ -964,12 +1227,13 @@ function PotionController.Init()
 
 	-- Build shop
 	shopModal = buildShopModal()
+	lastKnownRebirth = HUDController.Data.rebirthCount or 0
 
 	-- Build indicators (bottom-right)
 	indicatorContainer = Instance.new("Frame")
 	indicatorContainer.Name = "PotionIndicators"
 	indicatorContainer.Size = UDim2.new(0, 240, 0, 100)
-	indicatorContainer.Position = UDim2.new(1, -10, 1, -10)
+	indicatorContainer.Position = UDim2.new(1, -INDICATOR_MARGIN, 1, -INDICATOR_MARGIN)
 	indicatorContainer.AnchorPoint = Vector2.new(1, 1)
 	indicatorContainer.BackgroundTransparency = 1
 	indicatorContainer.Parent = screenGui
@@ -993,19 +1257,53 @@ function PotionController.Init()
 	divineIndicator.LayoutOrder = 3
 	divineIndicator.Parent = indicatorContainer
 
+	local indicatorsPinnedLeft = false
+	local camera = workspace.CurrentCamera
+	if camera then
+		camera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
+			applyIndicatorContainerPlacement(indicatorsPinnedLeft)
+		end)
+	end
+
 	-- Listen for potion updates from server
 	PotionUpdate.OnClientEvent:Connect(function(payload)
 		PotionController.ActivePotions = payload or {}
+		ownedPotionData = (payload and payload._ownedPotions) or ownedPotionData
 		updateIndicator(luckIndicator, payload.Luck, false)
 		updateIndicator(cashIndicator, payload.Cash, false)
 		updateIndicator(divineIndicator, payload.Divine, true)
+		local divineActive = payload and payload.Divine and payload.Divine.remaining and payload.Divine.remaining > 0
+		local luckActive = payload and payload.Luck and payload.Luck.remaining and payload.Luck.remaining > 0
+		indicatorsPinnedLeft = divineActive or luckActive
+		applyIndicatorContainerPlacement(indicatorsPinnedLeft)
 
 		-- Update divine count in shop
 		if divineCountLabel then
 			local count = payload._divineCount or 0
 			divineCountLabel.Text = "You have: " .. count .. " potion" .. (count ~= 1 and "s" or "")
 		end
+		if isShopOpen and refreshShopRows then
+			refreshShopRows()
+		end
 	end)
+
+	local function handlePotionStockPayload(payload)
+		if type(payload) ~= "table" then return end
+		if type(payload.stock) == "table" then
+			potionStockData = payload.stock
+		end
+		if type(payload.maxStock) == "number" then
+			MAX_POTION_STOCK = payload.maxStock
+		end
+		if type(payload.restockIn) == "number" then
+			potionRestockSecondsLeft = payload.restockIn
+		end
+		if isShopOpen and refreshShopRows then
+			refreshShopRows()
+		end
+	end
+	PotionStockUpdate.OnClientEvent:Connect(handlePotionStockPayload)
+	GetPotionStock.OnClientEvent:Connect(handlePotionStockPayload)
 
 	-- Listen for buy results (flash feedback + error toast)
 	BuyPotionResult.OnClientEvent:Connect(function(result)
@@ -1067,6 +1365,28 @@ function PotionController.Init()
 			PotionController.CloseShop()
 		else
 			PotionController.OpenShop()
+		end
+	end)
+
+	task.defer(function()
+		GetPotionStock:FireServer()
+	end)
+
+	RunService.Heartbeat:Connect(function(dt)
+		potionRestockSecondsLeft = math.max(0, potionRestockSecondsLeft - dt)
+		if potionRestockTimerLabel then
+			potionRestockTimerLabel.Text = "Restock: " .. formatTime(potionRestockSecondsLeft)
+		end
+	end)
+
+	-- Re-evaluate potion rebirth locks immediately after rebirth changes.
+	HUDController.OnDataUpdated(function(data)
+		local currentRebirth = (data and data.rebirthCount) or 0
+		if currentRebirth ~= lastKnownRebirth then
+			lastKnownRebirth = currentRebirth
+			if isShopOpen and refreshShopRows then
+				refreshShopRows()
+			end
 		end
 	end)
 end

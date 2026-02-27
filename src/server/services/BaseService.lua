@@ -68,6 +68,11 @@ local function getNestedTable(bucket, userId)
 	return t
 end
 
+local function resetSlotIncomeTimer(userId: number, padSlot: number, nowTs: number?)
+	local nextBySlot = getNestedTable(BaseService._nextMoneyTickAt, userId)
+	nextBySlot[padSlot] = (nowTs or time()) + 1
+end
+
 local LOCKED_PAD_COLOR = Color3.fromRGB(180, 40, 40)
 
 local function isPadSlotUnlocked(player: Player, padSlot: number): boolean
@@ -253,8 +258,7 @@ local function tryCollectMoney(player: Player, padSlot: number)
 		PlayerData.AddCash(player, math.floor(amount))
 		pendingBySlot[padSlot] = 0
 		-- Restart this slot's income timer from now.
-		local nextBySlot = getNestedTable(BaseService._nextMoneyTickAt, userId)
-		nextBySlot[padSlot] = time() + 1
+		resetSlotIncomeTimer(userId, padSlot)
 		updateMoneyText(player, padSlot)
 	end
 
@@ -1066,7 +1070,7 @@ local function assignBase(player)
 					if placeOnGreySlot(player, padSlot, item) then
 						local pendingBySlot = getNestedTable(BaseService._pendingMoney, player.UserId)
 						pendingBySlot[padSlot] = 0
-						getNestedTable(BaseService._nextMoneyTickAt, player.UserId)[padSlot] = time() + 1
+						resetSlotIncomeTimer(player.UserId, padSlot)
 						updateMoneyText(player, padSlot)
 						updatePromptText(player, padSlot)
 					end
@@ -1270,7 +1274,7 @@ function BaseService.Init(playerDataModule, potionServiceModule)
 					if placeOnGreySlot(player, slot, item) then
 						local pendingBySlot = getNestedTable(BaseService._pendingMoney, userId)
 						pendingBySlot[slot] = 0
-						getNestedTable(BaseService._nextMoneyTickAt, userId)[slot] = time() + 1
+						resetSlotIncomeTimer(userId, slot)
 						updateMoneyText(player, slot)
 						updatePromptText(player, slot)
 						EquipResult:FireClient(player, {
@@ -1317,28 +1321,27 @@ function BaseService.Init(playerDataModule, potionServiceModule)
 						nextTickBySlot[padSlot] = nil
 						continue
 					end
-					local streamerId = type(item) == "table" and item.id or item
-					local effectName = type(item) == "table" and item.effect or nil
-					local info = Streamers.ById[streamerId]
-					if not info then
+					local perSec = getEffectiveCps(player, item)
+					if perSec <= 0 then
 						continue
-					end
-					local perSec = info.cashPerSecond or 0
-					if effectName then
-						local eff = Effects.ByName[effectName]
-						if eff and eff.cashMultiplier then
-							perSec = perSec * eff.cashMultiplier
-						end
 					end
 
 					local nextTick = nextTickBySlot[padSlot]
 					if not nextTick then
-						nextTickBySlot[padSlot] = now + 1
+						resetSlotIncomeTimer(player.UserId, padSlot, now)
 						nextTick = nextTickBySlot[padSlot]
+					end
+
+					-- Never back-pay long gaps (disconnect/rejoin/server hiccup).
+					-- Income should only accrue while actively connected in-session.
+					if (now - nextTick) > 2 then
+						resetSlotIncomeTimer(player.UserId, padSlot, now)
+						updateMoneyText(player, padSlot)
+						continue
 					end
 					if now >= nextTick then
 						pendingBySlot[padSlot] = (pendingBySlot[padSlot] or 0) + math.floor(perSec)
-						nextTickBySlot[padSlot] = now + 1
+						resetSlotIncomeTimer(player.UserId, padSlot, now)
 						updateMoneyText(player, padSlot)
 					end
 				end

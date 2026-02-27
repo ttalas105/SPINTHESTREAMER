@@ -5,6 +5,26 @@
 ]]
 
 local services = script.Parent.services
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
+
+-- Ensure RemoteEvents exist as early as possible (before heavy world build/service init).
+do
+	local remotes = ReplicatedStorage:WaitForChild("RemoteEvents")
+	local newRemotes = {
+		"ClaimQuestReward", "QuestUpdate", "EnhancedCaseResult",
+		"BuyCrateStock", "BuyCrateResult", "OpenOwnedCrate", "OpenCrateResult",
+		"GetCaseStock", "CaseStockUpdate",
+		"GetPotionStock", "PotionStockUpdate", "BuyPotionStock", "UseOwnedPotion",
+	}
+	for _, name in ipairs(newRemotes) do
+		if not remotes:FindFirstChild(name) then
+			local re = Instance.new("RemoteEvent")
+			re.Name = name
+			re.Parent = remotes
+		end
+	end
+end
 
 -- Load WorldBuilder first and build world immediately so map/stalls/bases exist
 -- even if a later service fails to load
@@ -23,9 +43,7 @@ local GemShopService  = require(services.GemShopService)
 local SacrificeService = require(services.SacrificeService)
 local ReceiptHandler   = require(services.ReceiptHandler)
 local CaseStockService = require(services.CaseStockService)
-
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Workspace = game:GetService("Workspace")
+local PotionService    = require(services.PotionService)
 
 -- Remove duplicate RemoteEvents (Studio can save extras alongside Rojo-synced ones)
 do
@@ -380,6 +398,7 @@ do
 		"ClaimQuestReward", "QuestUpdate", "EnhancedCaseResult",
 		"BuyCrateStock", "BuyCrateResult", "OpenOwnedCrate", "OpenCrateResult",
 		"GetCaseStock", "CaseStockUpdate",
+		"GetPotionStock", "PotionStockUpdate", "BuyPotionStock", "UseOwnedPotion",
 	}
 	for _, name in ipairs(newRemotes) do
 		if not remotes:FindFirstChild(name) then

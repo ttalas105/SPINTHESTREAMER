@@ -2,36 +2,42 @@
 	PotionService.lua
 	Server-side potion management.
 	Tracks active luck/cash/divine potions per player with expiry times.
-	Time stacks (+5 min each use, max 3 hours). Multiplier does NOT stack (replaced).
+	Time stacks (Luck/Cash +5 min per use, Divine +15 min per use, max 3 hours).
 	Divine (Robux) boosts both luck and cash simultaneously (x5).
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
-local MarketplaceService = game:GetService("MarketplaceService")
 
 local Potions = require(ReplicatedStorage.Shared.Config.Potions)
 
 local PotionService = {}
 
-local PlayerData -- set in Init
-local QuestService -- set via SetQuestService after Init
+local PlayerData
+local QuestService
 
 local RemoteEvents = ReplicatedStorage:WaitForChild("RemoteEvents")
 local BuyPotionRequest = RemoteEvents:WaitForChild("BuyPotionRequest")
 local BuyPotionResult = RemoteEvents:WaitForChild("BuyPotionResult")
 local PotionUpdate = RemoteEvents:WaitForChild("PotionUpdate")
+local GetPotionStock = RemoteEvents:WaitForChild("GetPotionStock")
+local PotionStockUpdate = RemoteEvents:WaitForChild("PotionStockUpdate")
+local BuyPotionStock = RemoteEvents:WaitForChild("BuyPotionStock")
+local UseOwnedPotion = RemoteEvents:WaitForChild("UseOwnedPotion")
 
--- Per-player active potions:
--- { [userId] = { Luck = {multiplier, tier, expiresAt}, Cash = {...}, Divine = {...} } }
-local activeEffects = {}
+local MAX_STOCK_PER_POTION = 8
+local STOCK_RESTOCK_INTERVAL = 5 * 60
 
--- Per-player pending Divine potion count (bought with Robux, consumed one at a time)
-local divineInventory = {} -- { [userId] = count }
+local activeEffects = {}     -- [userId] = { Luck/Cash/Divine/SacrificeLuck }
+local divineInventory = {}   -- [userId] = count
+local ownedPotions = {}      -- [userId] = { Luck = { [tier] = count }, Cash = { [tier] = count } }
 
--------------------------------------------------
--- HELPERS
--------------------------------------------------
+local stock = {}             -- ["Luck_1"] = 8, ...
+local lastRestockTime = 0
+
+local function getServerTime()
+	return workspace:GetServerTimeNow()
+end
 
 local function getEffects(userId)
 	if not activeEffects[userId] then
@@ -40,12 +46,88 @@ local function getEffects(userId)
 	return activeEffects[userId]
 end
 
+local function getOwned(userId)
+	if not ownedPotions[userId] then
+		ownedPotions[userId] = { Luck = {}, Cash = {} }
+	end
+	return ownedPotions[userId]
+end
+
+local function stockKey(potionType, tier)
+	return tostring(potionType) .. "_" .. tostring(tier)
+end
+
+local function restockAllStock()
+	for _, potionType in ipairs({ "Luck", "Cash" }) do
+		local list = Potions.Types[potionType] or {}
+		for _, potion in ipairs(list) do
+			stock[stockKey(potionType, potion.tier)] = MAX_STOCK_PER_POTION
+		end
+	end
+	lastRestockTime = getServerTime()
+end
+
+local function getSecondsUntilRestock()
+	local elapsed = getServerTime() - lastRestockTime
+	return math.max(0, STOCK_RESTOCK_INTERVAL - elapsed)
+end
+
+local function checkAutoRestock()
+	if getSecondsUntilRestock() <= 0 then
+		restockAllStock()
+		return true
+	end
+	return false
+end
+
+local function buildOwnedPayload(userId)
+	local owned = getOwned(userId)
+	local payload = { Luck = {}, Cash = {} }
+	for _, potionType in ipairs({ "Luck", "Cash" }) do
+		for tier, count in pairs(owned[potionType] or {}) do
+			if count and count > 0 then
+				payload[potionType][tostring(tier)] = count
+			end
+		end
+	end
+	return payload
+end
+
+local function persistPotionState(player)
+	local data = PlayerData and PlayerData.Get(player)
+	if not data then return end
+
+	local userId = player.UserId
+	local now = os.time()
+	local effects = activeEffects[userId] or {}
+	local savedEffects = {}
+
+	for potionType, info in pairs(effects) do
+		if (potionType == "Luck" or potionType == "Cash" or potionType == "Divine")
+			and type(info) == "table"
+			and type(info.expiresAt) == "number"
+			and info.expiresAt > now then
+			savedEffects[potionType] = {
+				multiplier = tonumber(info.multiplier) or 1,
+				tier = tonumber(info.tier) or 0,
+				expiresAt = math.floor(info.expiresAt),
+			}
+		end
+	end
+
+	data.activePotionEffects = savedEffects
+	data.divinePotionCount = math.max(0, math.floor(divineInventory[userId] or 0))
+	data.potionInventory = buildOwnedPayload(userId)
+end
+
 local function sendPotionUpdate(player)
-	local effects = getEffects(player.UserId)
+	local userId = player.UserId
+	local effects = getEffects(userId)
 	local now = os.time()
 	local payload = {}
+
 	for potionType, info in pairs(effects) do
-		if info.expiresAt > now then
+		if info.expiresAt and info.expiresAt > now then
 			payload[potionType] = {
 				multiplier = info.multiplier,
 				tier = info.tier,
@@ -53,88 +135,106 @@ local function sendPotionUpdate(player)
 			}
 		end
 	end
-	-- Include divine inventory count
-	payload._divineCount = divineInventory[player.UserId] or 0
+
+	payload._divineCount = divineInventory[userId] or 0
+	payload._ownedPotions = buildOwnedPayload(userId)
 	PotionUpdate:FireClient(player, payload)
 end
 
--------------------------------------------------
--- BUY / CONSUME POTION (Luck/Cash — in-game currency)
--------------------------------------------------
-
-local function handleBuyPotion(player, potionType, tier)
-	if not PlayerData.IsTutorialComplete(player) then
-		BuyPotionResult:FireClient(player, { success = false, reason = "Complete the tutorial first!" })
-		return
+local function broadcastPotionStock(justRestocked)
+	local payload = {
+		stock = stock,
+		restockIn = getSecondsUntilRestock(),
+		restocked = justRestocked == true,
+		maxStock = MAX_STOCK_PER_POTION,
+	}
+	for _, p in ipairs(Players:GetPlayers()) do
+		PotionStockUpdate:FireClient(p, payload)
 	end
-	-- Validate
-	if type(potionType) ~= "string" or type(tier) ~= "number" then
-		BuyPotionResult:FireClient(player, { success = false, reason = "Invalid request." })
-		return
+end
+
+local function loadPotionState(player)
+	local data = PlayerData and PlayerData.Get(player)
+	if not data then return end
+
+	local userId = player.UserId
+	local now = os.time()
+
+	activeEffects[userId] = {}
+	local savedEffects = type(data.activePotionEffects) == "table" and data.activePotionEffects or {}
+	for potionType, info in pairs(savedEffects) do
+		if (potionType == "Luck" or potionType == "Cash" or potionType == "Divine")
+			and type(info) == "table"
+			and type(info.expiresAt) == "number"
+			and info.expiresAt > now then
+			activeEffects[userId][potionType] = {
+				multiplier = tonumber(info.multiplier) or 1,
+				tier = tonumber(info.tier) or 0,
+				expiresAt = math.floor(info.expiresAt),
+			}
+		end
 	end
 
+	divineInventory[userId] = math.max(0, math.floor(tonumber(data.divinePotionCount) or 0))
+	ownedPotions[userId] = { Luck = {}, Cash = {} }
+	local savedOwned = type(data.potionInventory) == "table" and data.potionInventory or {}
+	for _, potionType in ipairs({ "Luck", "Cash" }) do
+		local src = type(savedOwned[potionType]) == "table" and savedOwned[potionType] or {}
+		for tier, count in pairs(src) do
+			local nTier = tonumber(tier)
+			local nCount = math.max(0, math.floor(tonumber(count) or 0))
+			if nTier and nCount > 0 then
+				ownedPotions[userId][potionType][nTier] = nCount
+			end
+		end
+	end
+
+	sendPotionUpdate(player)
+end
+
+local function fail(player, reason, potionType, tier)
+	BuyPotionResult:FireClient(player, {
+		success = false,
+		reason = reason,
+		potionType = potionType,
+		tier = tier,
+	})
+end
+
+local function activateOwnedPotion(player, potionType, tier)
 	local potionInfo = Potions.Get(potionType, tier)
 	if not potionInfo then
-		BuyPotionResult:FireClient(player, { success = false, reason = "Unknown potion." })
+		fail(player, "Unknown potion.", potionType, tier)
 		return
 	end
 
-	-- Check rebirth requirement
-	local rebirthRequired = potionInfo.rebirthRequired or 0
-	if rebirthRequired > 0 then
-		local rebirthCount = PlayerData.GetRebirthCount(player)
-		if rebirthCount < rebirthRequired then
-			BuyPotionResult:FireClient(player, {
-				success = false,
-				reason = "Requires Rebirth " .. rebirthRequired .. "! (You are Rebirth " .. rebirthCount .. ")",
-			})
-			return
-		end
-	end
-
-	-- Check cash
-	local data = PlayerData.Get(player)
-	if not data then
-		BuyPotionResult:FireClient(player, { success = false, reason = "Data not loaded." })
-		return
-	end
-
-	if data.cash < potionInfo.cost then
-		BuyPotionResult:FireClient(player, { success = false, reason = "Not enough cash!" })
-		return
-	end
-
-	-- Check conflicts with Divine (Divine covers both Luck + Cash)
-	local effects = getEffects(player.UserId)
+	local userId = player.UserId
+	local effects = getEffects(userId)
 	local now = os.time()
-	local divine = effects.Divine
-	if divine and divine.expiresAt > now then
-		BuyPotionResult:FireClient(player, {
-			success = false,
-			reason = "You have a Divine Potion active! It already boosts " .. potionType .. ".",
-		})
+
+	local existing = effects[potionType]
+	if existing and existing.expiresAt > now and existing.tier ~= tier then
+		fail(player, "You already have " .. potionType .. " Potion " .. tostring(existing.tier) .. " active!", potionType, tier)
 		return
 	end
 
-	-- Check if a potion of the same TYPE is already active
-	local existing = effects[potionType]
-	if existing and existing.expiresAt > now then
-		if existing.tier ~= tier then
-			BuyPotionResult:FireClient(player, {
-				success = false,
-				reason = "You already have " .. potionType .. " Potion " .. tostring(existing.tier) .. " active! You can only stack the same tier to add more time.",
-			})
-			return
-		end
+	local owned = getOwned(userId)
+	local count = (owned[potionType] and owned[potionType][tier]) or 0
+	if count <= 0 then
+		fail(player, "You don't own this potion yet.", potionType, tier)
+		return
+	end
 
-		-- Same tier: add time (max 3 hours)
-		data.cash = data.cash - potionInfo.cost
+	owned[potionType][tier] = count - 1
+	if owned[potionType][tier] <= 0 then
+		owned[potionType][tier] = nil
+	end
+
+	if existing and existing.expiresAt > now then
 		local currentRemaining = existing.expiresAt - now
 		local newRemaining = math.min(currentRemaining + Potions.DURATION_PER_USE, Potions.MAX_DURATION)
 		existing.expiresAt = now + newRemaining
 	else
-		-- No active potion: start fresh
-		data.cash = data.cash - potionInfo.cost
 		effects[potionType] = {
 			multiplier = potionInfo.multiplier,
 			tier = potionInfo.tier,
@@ -143,80 +243,134 @@ local function handleBuyPotion(player, potionType, tier)
 	end
 
 	PlayerData.Replicate(player)
+	persistPotionState(player)
 	sendPotionUpdate(player)
 	BuyPotionResult:FireClient(player, {
 		success = true,
 		potionType = potionType,
-		tier = potionInfo.tier,
+		tier = tier,
 		name = potionInfo.name,
+		action = "used",
+	})
+end
+
+local function buyPotionStock(player, potionType, tier, amount)
+	if not PlayerData.IsTutorialComplete(player) then
+		fail(player, "Complete the tutorial first!", potionType, tier)
+		return
+	end
+
+	if type(potionType) ~= "string" or type(tier) ~= "number" then
+		fail(player, "Invalid request.", potionType, tier)
+		return
+	end
+	if potionType ~= "Luck" and potionType ~= "Cash" then
+		fail(player, "Only Luck/Money potions use stock.", potionType, tier)
+		return
+	end
+
+	local potionInfo = Potions.Get(potionType, tier)
+	if not potionInfo then
+		fail(player, "Unknown potion.", potionType, tier)
+		return
+	end
+
+	checkAutoRestock()
+
+	local data = PlayerData.Get(player)
+	if not data then
+		fail(player, "Data not loaded.", potionType, tier)
+		return
+	end
+
+	local rebirthRequired = potionInfo.rebirthRequired or 0
+	if rebirthRequired > 0 and (data.rebirthCount or 0) < rebirthRequired then
+		fail(player, "Requires Rebirth " .. rebirthRequired .. "!", potionType, tier)
+		return
+	end
+
+	local requested = math.max(1, math.floor(tonumber(amount) or 1))
+	if requested > 999 then requested = 999 end
+
+	local key = stockKey(potionType, tier)
+	local available = stock[key] or 0
+	local toBuy = math.min(requested, available)
+	if toBuy <= 0 then
+		fail(player, "Out of stock!", potionType, tier)
+		return
+	end
+
+	local maxAffordable = math.floor((data.cash or 0) / (potionInfo.cost or 1))
+	toBuy = math.min(toBuy, maxAffordable)
+	if toBuy <= 0 then
+		fail(player, "Not enough cash!", potionType, tier)
+		return
+	end
+
+	data.cash = (data.cash or 0) - potionInfo.cost * toBuy
+	stock[key] = available - toBuy
+
+	local owned = getOwned(player.UserId)
+	owned[potionType][tier] = (owned[potionType][tier] or 0) + toBuy
+
+	PlayerData.Replicate(player)
+	persistPotionState(player)
+	sendPotionUpdate(player)
+	broadcastPotionStock(false)
+	BuyPotionResult:FireClient(player, {
+		success = true,
+		potionType = potionType,
+		tier = tier,
+		bought = toBuy,
+		remaining = stock[key],
+		action = "bought",
 	})
 	if QuestService then
-		QuestService.Increment(player, "potionsBought", 1)
+		QuestService.Increment(player, "potionsBought", toBuy)
 	end
 end
 
--------------------------------------------------
--- DIVINE POTION (Robux)
--------------------------------------------------
-
--- Consume one divine potion from inventory (activate or extend time)
 local function handleUseDivine(player)
 	local userId = player.UserId
 	local count = divineInventory[userId] or 0
 	if count <= 0 then
-		BuyPotionResult:FireClient(player, {
-			success = false,
-			reason = "You have no Divine Potions! Purchase some first.",
-		})
+		fail(player, "You have no Divine Potions! Purchase some first.", "Divine", 0)
 		return
 	end
 
 	local effects = getEffects(userId)
 	local now = os.time()
 
-	-- Check conflicts: cannot use Divine if Luck or Cash potion is active
-	local luckActive = effects.Luck and effects.Luck.expiresAt > now
-	local cashActive = effects.Cash and effects.Cash.expiresAt > now
-	if luckActive or cashActive then
-		local activeType = luckActive and "Luck" or "Cash"
-		BuyPotionResult:FireClient(player, {
-			success = false,
-			reason = "You have a " .. activeType .. " Potion active! Wait for it to expire before using Divine.",
-		})
-		return
-	end
-
-	-- Use one potion
 	divineInventory[userId] = count - 1
-
+	local divineDuration = Potions.DIVINE_DURATION_PER_USE or Potions.DURATION_PER_USE
 	local existing = effects.Divine
 	if existing and existing.expiresAt > now then
-		-- Stack time
 		local currentRemaining = existing.expiresAt - now
-		local newRemaining = math.min(currentRemaining + Potions.DURATION_PER_USE, Potions.MAX_DURATION)
+		local newRemaining = math.min(currentRemaining + divineDuration, Potions.MAX_DURATION)
 		existing.expiresAt = now + newRemaining
 	else
-		-- Start fresh
 		effects.Divine = {
 			multiplier = Potions.Divine.multiplier,
 			tier = 0,
-			expiresAt = now + Potions.DURATION_PER_USE,
+			expiresAt = now + divineDuration,
 		}
 	end
 
+	persistPotionState(player)
 	sendPotionUpdate(player)
 	BuyPotionResult:FireClient(player, {
 		success = true,
 		potionType = "Divine",
 		tier = 0,
 		name = Potions.Divine.name,
+		action = "used",
 	})
 end
 
--- Grant divine potions after Robux purchase
 local function grantDivinePotions(player, amount)
 	local userId = player.UserId
 	divineInventory[userId] = (divineInventory[userId] or 0) + amount
+	persistPotionState(player)
 	sendPotionUpdate(player)
 	BuyPotionResult:FireClient(player, {
 		success = true,
@@ -224,51 +378,44 @@ local function grantDivinePotions(player, amount)
 		tier = 0,
 		name = amount .. "x Divine Potion" .. (amount > 1 and "s" or ""),
 		amount = amount,
+		action = "bought",
 	})
 	if QuestService then
 		QuestService.Increment(player, "potionsBought", amount)
 	end
 end
 
--------------------------------------------------
--- PUBLIC API (used by SpinService / EconomyService)
--------------------------------------------------
-
---- Set QuestService reference (called from Main.server.lua after all services are initialized)
 function PotionService.SetQuestService(qs)
 	QuestService = qs
 end
 
---- Get the active luck multiplier for a player (1 if no potion)
 function PotionService.GetLuckMultiplier(player): number
 	local effects = activeEffects[player.UserId]
 	if not effects then return 1 end
-
 	local now = os.time()
 
-	-- Sacrifice "Feeling Lucky" overrides: 0 or 2 for 10 min
 	if effects.SacrificeLuck and effects.SacrificeLuck.expiresAt > now then
 		return effects.SacrificeLuck.multiplier
 	end
-	if effects.SacrificeLuck and effects.SacrificeLuck.expiresAt <= now then effects.SacrificeLuck = nil end
-
-	-- Check Divine first (it covers luck)
+	if effects.SacrificeLuck and effects.SacrificeLuck.expiresAt <= now then
+		effects.SacrificeLuck = nil
+	end
+	local divineMult = 0
+	local luckMult = 0
 	if effects.Divine and effects.Divine.expiresAt > now then
-		return effects.Divine.multiplier
+		divineMult = effects.Divine.multiplier or 0
 	end
-
 	if effects.Luck and effects.Luck.expiresAt > now then
-		return effects.Luck.multiplier
+		luckMult = effects.Luck.multiplier or 0
 	end
-
-	-- Cleanup expired
 	if effects.Luck and effects.Luck.expiresAt <= now then effects.Luck = nil end
 	if effects.Divine and effects.Divine.expiresAt <= now then effects.Divine = nil end
-
+	if divineMult > 0 or luckMult > 0 then
+		return divineMult + luckMult
+	end
 	return 1
 end
 
---- Set temporary luck modifier from Sacrifice "Feeling Lucky" (multiplier 0 or 2, duration in seconds)
 function PotionService.SetSacrificeLuck(player, multiplier: number, durationSeconds: number)
 	local effects = getEffects(player.UserId)
 	effects.SacrificeLuck = {
@@ -278,76 +425,112 @@ function PotionService.SetSacrificeLuck(player, multiplier: number, durationSeco
 	sendPotionUpdate(player)
 end
 
---- Get the active cash multiplier for a player (1 if no potion)
 function PotionService.GetCashMultiplier(player): number
 	local effects = activeEffects[player.UserId]
 	if not effects then return 1 end
-
 	local now = os.time()
-
-	-- Check Divine first (it covers cash)
+	local divineMult = 0
+	local cashMult = 0
 	if effects.Divine and effects.Divine.expiresAt > now then
-		return effects.Divine.multiplier
+		divineMult = effects.Divine.multiplier or 0
 	end
-
 	if effects.Cash and effects.Cash.expiresAt > now then
-		return effects.Cash.multiplier
+		cashMult = effects.Cash.multiplier or 0
 	end
-
-	-- Cleanup expired
 	if effects.Cash and effects.Cash.expiresAt <= now then effects.Cash = nil end
 	if effects.Divine and effects.Divine.expiresAt <= now then effects.Divine = nil end
-
+	if divineMult > 0 or cashMult > 0 then
+		return divineMult + cashMult
+	end
 	return 1
 end
 
---- Grant divine potions (called by ReceiptHandler after Robux purchase)
 function PotionService.GrantDivinePotions(player, amount)
 	grantDivinePotions(player, amount)
 end
 
---- Clear all active potions for a player (used on rebirth)
 function PotionService.ClearPotions(player)
-	activeEffects[player.UserId] = {}
-	-- Note: divine inventory (bought with Robux) and SacrificeLuck are cleared
+	local userId = player.UserId
+	activeEffects[userId] = {}
+	ownedPotions[userId] = { Luck = {}, Cash = {} }
+	divineInventory[userId] = 0
+	persistPotionState(player)
 	sendPotionUpdate(player)
 end
 
--------------------------------------------------
--- INIT
--------------------------------------------------
+-- Rebirth: reset non-divine potions (owned + active), preserve Divine timer/inventory.
+function PotionService.ClearPotionsForRebirth(player)
+	local userId = player.UserId
+	local preservedDivine = activeEffects[userId] and activeEffects[userId].Divine or nil
+	activeEffects[userId] = {}
+	if preservedDivine and preservedDivine.expiresAt and preservedDivine.expiresAt > os.time() then
+		activeEffects[userId].Divine = preservedDivine
+	end
+	ownedPotions[userId] = { Luck = {}, Cash = {} }
+	persistPotionState(player)
+	sendPotionUpdate(player)
+end
 
 function PotionService.Init(playerDataModule)
 	PlayerData = playerDataModule
 
-	-- Regular potion purchases (in-game cash)
+	restockAllStock()
+
+	Players.PlayerAdded:Connect(function(player)
+		loadPotionState(player)
+	end)
+	for _, player in ipairs(Players:GetPlayers()) do
+		loadPotionState(player)
+	end
+
 	BuyPotionRequest.OnServerEvent:Connect(function(player, potionType, tier)
-		if potionType == "UseDivine" then
-			handleUseDivine(player)
-		else
-			handleBuyPotion(player, potionType, tier)
-		end
+		PlayerData.WithLock(player, function()
+			if potionType == "UseDivine" then
+				handleUseDivine(player)
+			end
+		end)
 	end)
 
-	-- SECURITY FIX: ProcessReceipt is now handled by ReceiptHandler.lua
-	-- Do NOT set MarketplaceService.ProcessReceipt here (only one callback allowed)
+	BuyPotionStock.OnServerEvent:Connect(function(player, potionType, tier, amount)
+		PlayerData.WithLock(player, function()
+			buyPotionStock(player, potionType, tier, amount)
+		end)
+	end)
 
-	-- Periodic update: send timer updates to all players every 1 second
+	UseOwnedPotion.OnServerEvent:Connect(function(player, potionType, tier)
+		PlayerData.WithLock(player, function()
+			activateOwnedPotion(player, potionType, tier)
+		end)
+	end)
+
+	GetPotionStock.OnServerEvent:Connect(function(player)
+		checkAutoRestock()
+		GetPotionStock:FireClient(player, {
+			stock = stock,
+			restockIn = getSecondsUntilRestock(),
+			maxStock = MAX_STOCK_PER_POTION,
+		})
+	end)
+
 	task.spawn(function()
 		while true do
 			task.wait(1)
+			if checkAutoRestock() then
+				broadcastPotionStock(true)
+			end
 			for _, player in ipairs(Players:GetPlayers()) do
-				if activeEffects[player.UserId] then
+				if activeEffects[player.UserId] or (divineInventory[player.UserId] or 0) > 0 then
+					persistPotionState(player)
 					sendPotionUpdate(player)
 				end
 			end
 		end
 	end)
 
-	-- Cleanup on leave
 	Players.PlayerRemoving:Connect(function(player)
 		activeEffects[player.UserId] = nil
 		divineInventory[player.UserId] = nil
+		ownedPotions[player.UserId] = nil
 	end)
 end
 

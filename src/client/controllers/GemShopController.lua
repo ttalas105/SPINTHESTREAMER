@@ -17,6 +17,7 @@ local Rarities    = require(ReplicatedStorage.Shared.Config.Rarities)
 local UIHelper    = require(script.Parent.UIHelper)
 local HUDController = require(script.Parent.HUDController)
 local StoreController = require(script.Parent.StoreController)
+local SpinController = require(script.Parent.SpinController)
 
 local GemShopController = {}
 
@@ -33,6 +34,7 @@ local isOpen      = false
 local balanceLabel
 local autoOpenEnabled  = false
 local autoOpenCaseId   = nil
+local pendingGemSpin = false
 
 local FONT = Enum.Font.FredokaOne
 local FONT_SUB = Enum.Font.GothamBold
@@ -71,6 +73,7 @@ local function addStroke(parent, color, thickness)
 end
 
 local activeGemPopup = nil
+local activeErrorToast = nil
 
 local function showNotEnoughGemsPopup()
 	if activeGemPopup and activeGemPopup.Parent then activeGemPopup:Destroy() end
@@ -267,6 +270,50 @@ local function showNotEnoughGemsPopup()
 	TweenService:Create(box, TweenInfo.new(0.25, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
 		Size = UDim2.new(0, 400, 0, 240),
 	}):Play()
+end
+
+local function showGemCaseErrorToast(message)
+	if not screenGui then return end
+	if activeErrorToast and activeErrorToast.Parent then
+		activeErrorToast:Destroy()
+	end
+
+	local toast = Instance.new("Frame")
+	toast.Name = "GemCaseErrorToast"
+	toast.Size = UDim2.new(0, 430, 0, 46)
+	toast.Position = UDim2.new(0.5, 0, 0.92, 0)
+	toast.AnchorPoint = Vector2.new(0.5, 0.5)
+	toast.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+	toast.BorderSizePixel = 0
+	toast.ZIndex = 95
+	toast.Parent = screenGui
+	activeErrorToast = toast
+	Instance.new("UICorner", toast).CornerRadius = UDim.new(0, 10)
+
+	local tL = Instance.new("TextLabel")
+	tL.Size = UDim2.new(1, -12, 1, 0)
+	tL.Position = UDim2.new(0.5, 0, 0.5, 0)
+	tL.AnchorPoint = Vector2.new(0.5, 0.5)
+	tL.BackgroundTransparency = 1
+	tL.Text = tostring(message or "Error!")
+	tL.TextColor3 = Color3.new(1, 1, 1)
+	tL.Font = FONT
+	tL.TextSize = 14
+	tL.TextWrapped = true
+	tL.ZIndex = 96
+	tL.Parent = toast
+
+	task.delay(2.2, function()
+		if not toast.Parent then return end
+		TweenService:Create(toast, TweenInfo.new(0.22), { BackgroundTransparency = 1 }):Play()
+		TweenService:Create(tL, TweenInfo.new(0.22), { TextTransparency = 1 }):Play()
+		task.delay(0.26, function()
+			if toast.Parent then toast:Destroy() end
+			if activeErrorToast == toast then
+				activeErrorToast = nil
+			end
+		end)
+	end)
 end
 
 local function stopViewports()
@@ -884,6 +931,16 @@ local function buildCaseCard(caseData, parent, order)
 				showNotEnoughGemsPopup()
 				return
 			end
+			-- Route gem case openings through SpinController so animation/flow
+			-- exactly matches regular case openings.
+			pendingGemSpin = true
+			GemShopController.Close()
+			SpinController.SetCurrentCost(0)
+			SpinController.SetCurrentCrateId(nil)
+			SpinController.SetOwnedCrateMode(false)
+			SpinController.SetGemCaseVisual(caseData.id)
+			SpinController.Show()
+			SpinController.WaitForResult()
 			BuyGemCase:FireServer(caseData.id)
 		end)
 	end
@@ -1088,11 +1145,14 @@ function GemShopController.Init()
 	end)
 
 	GemCaseResult.OnClientEvent:Connect(function(result)
-		if not isOpen then return end
 		if result.success then
-			local caseData2 = result.caseId and GemCases.ById[result.caseId]
-			if caseData2 then showCaseOpenAnimation(caseData2, result) end
+			pendingGemSpin = false
+			SpinController._startSpin(result)
 		else
+			if pendingGemSpin then
+				pendingGemSpin = false
+				SpinController.Hide()
+			end
 			if autoOpenEnabled then
 				autoOpenEnabled = false; autoOpenCaseId = nil
 			end
@@ -1100,24 +1160,7 @@ function GemShopController.Init()
 			if isGemError then
 				showNotEnoughGemsPopup()
 			else
-				local toast = Instance.new("Frame")
-				toast.Size = UDim2.new(0.7, 0, 0, 42)
-				toast.Position = UDim2.new(0.5, 0, 0.92, 0)
-				toast.AnchorPoint = Vector2.new(0.5, 0.5)
-				toast.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-				toast.BorderSizePixel = 0; toast.ZIndex = 25
-				toast.Parent = modalFrame
-				Instance.new("UICorner", toast).CornerRadius = UDim.new(0, 10)
-				local tL = Instance.new("TextLabel")
-				tL.Size = UDim2.new(1, -12, 1, 0)
-				tL.Position = UDim2.new(0.5, 0, 0.5, 0)
-				tL.AnchorPoint = Vector2.new(0.5, 0.5)
-				tL.BackgroundTransparency = 1
-				tL.Text = result.reason or "Error!"
-				tL.TextColor3 = Color3.new(1, 1, 1)
-				tL.Font = FONT; tL.TextSize = 14; tL.ZIndex = 26
-				tL.Parent = toast
-				task.delay(2, function() if toast.Parent then toast:Destroy() end end)
+				showGemCaseErrorToast(result.reason or "Error!")
 			end
 		end
 	end)

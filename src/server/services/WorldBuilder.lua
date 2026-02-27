@@ -355,11 +355,6 @@ local function buildHub()
 				UDim2.new(16, 0, 4.5, 0), Vector3.new(0, 0, 0),
 				{ font = Enum.Font.FredokaOne, strokeThickness = 4, strokeColor = Color3.fromRGB(20, 20, 40) })
 
-			if stallCfg.npc then
-				local npcCfg = stallCfg.npc
-				npcCfg.name = stallCfg.name
-				buildNPC(npcCfg, targetPos + Vector3.new(0, 0, -2), hub)
-			end
 		end
 
 		shopLoaded = true
@@ -385,11 +380,6 @@ local function buildHub()
 			billboard(signPart, string.upper(cfg.name), DesignConfig.Colors.White, nil,
 				UDim2.new(16, 0, 4.5, 0), Vector3.new(0, 0, 0),
 				{ font = Enum.Font.FredokaOne, strokeThickness = 4, strokeColor = Color3.fromRGB(20, 20, 40) })
-			if cfg.npc then
-				local npcCfg = cfg.npc
-				npcCfg.name = cfg.name
-				buildNPC(npcCfg, pos, hub)
-			end
 		end
 		p({ Name = "MarketFloor",
 			Size = Vector3.new(totalW + 40, 0.4, 50),
