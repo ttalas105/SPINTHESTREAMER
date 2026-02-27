@@ -159,6 +159,15 @@ local function updateSectionButtons()
 	storageTabBtn.TextColor3 = (not hotbarActive) and Color3.new(1, 1, 1) or Color3.fromRGB(180, 180, 210)
 end
 
+local function getSacrificeQueuedSet()
+	-- Lazy-load SacrificeController to exclude queued items
+	if not SacrificeController then
+		local ok, mod = pcall(function() return require(script.Parent.SacrificeController) end)
+		if ok then SacrificeController = mod end
+	end
+	return SacrificeController and SacrificeController.GetQueuedIndices and SacrificeController.GetQueuedIndices() or {}
+end
+
 -- BUILD ITEM CARD
 -------------------------------------------------
 
@@ -329,7 +338,12 @@ local function buildItemCard(item, originalIndex, source, parent)
 		}):Play()
 	end)
 	sellBtn.MouseButton1Click:Connect(function()
-		SellByIndexRequest:FireServer(originalIndex, source)
+		local queuedSet = getSacrificeQueuedSet()
+		local virtualIndex = source == "storage" and (STORAGE_OFFSET + originalIndex) or originalIndex
+		if queuedSet[virtualIndex] then
+			return
+		end
+		SellByIndexRequest:FireServer(originalIndex, source, queuedSet)
 	end)
 
 	return card, sellPrice
@@ -390,12 +404,7 @@ local function buildInventoryList(force)
 
 	if emptyLabel then emptyLabel.Visible = false end
 
-	-- Lazy-load SacrificeController to exclude queued items
-	if not SacrificeController then
-		local ok, mod = pcall(function() return require(script.Parent.SacrificeController) end)
-		if ok then SacrificeController = mod end
-	end
-	local queuedSet = SacrificeController and SacrificeController.GetQueuedIndices and SacrificeController.GetQueuedIndices() or {}
+	local queuedSet = getSacrificeQueuedSet()
 
 	local sortedEntries = {}
 	if activeSection == "hotbar" then
@@ -746,7 +755,8 @@ function SellStandController.Init()
 	end)
 	sellAllBtn.MouseButton1Click:Connect(function()
 		local source = activeSection == "storage" and "storage" or "hotbar"
-		SellAllRequest:FireServer(source)
+		local queuedSet = getSacrificeQueuedSet()
+		SellAllRequest:FireServer(source, queuedSet)
 	end)
 
 	-------------------------------------------------

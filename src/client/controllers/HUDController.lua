@@ -9,6 +9,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local StarterGui = game:GetService("StarterGui")
+local SoundService = game:GetService("SoundService")
 
 local DesignConfig = require(ReplicatedStorage.Shared.Config.DesignConfig)
 local UIHelper = require(script.Parent.UIHelper)
@@ -23,6 +24,10 @@ local playerGui = player:WaitForChild("PlayerGui")
 local cashLabel
 local gemsLabel
 local luckLabel
+local moneyMultLabel
+local GEM_GAIN_SOUND_ID = "rbxassetid://2650039396"
+local cachedGemGainSound = nil
+local hasSeenInitialGemValue = false
 
 -- Local data mirror
 HUDController.Data = {
@@ -49,6 +54,26 @@ HUDController.Data = {
 }
 
 local onDataUpdated = {}
+
+local function playGemGainSound()
+	if not cachedGemGainSound or not cachedGemGainSound.Parent then
+		cachedGemGainSound = Instance.new("Sound")
+		cachedGemGainSound.Name = "GemGainSFX"
+		cachedGemGainSound.SoundId = GEM_GAIN_SOUND_ID
+		cachedGemGainSound.Volume = 0.9
+		cachedGemGainSound.Parent = SoundService
+	end
+
+	local clone = cachedGemGainSound:Clone()
+	clone.Parent = SoundService
+	SoundService:PlayLocalSound(clone)
+	clone.Ended:Connect(function()
+		if clone and clone.Parent then clone:Destroy() end
+	end)
+	task.delay(3, function()
+		if clone and clone.Parent then clone:Destroy() end
+	end)
+end
 
 local function formatCompactBalance(value)
 	local n = tonumber(value) or 0
@@ -94,7 +119,7 @@ function HUDController.Init()
 
 	local hudContainer = Instance.new("Frame")
 	hudContainer.Name = "HUDContainer"
-	hudContainer.Size = UDim2.new(0, 300, 0, 120)
+	hudContainer.Size = UDim2.new(0, 300, 0, 148)
 	hudContainer.Position = UDim2.new(0.5, -250, 0, 8)
 	hudContainer.AnchorPoint = Vector2.new(1, 0)
 	hudContainer.BackgroundTransparency = 1
@@ -152,6 +177,23 @@ function HUDController.Init()
 	luckStroke.Thickness = 2
 	luckStroke.Parent = luckLabel
 
+	moneyMultLabel = Instance.new("TextLabel")
+	moneyMultLabel.Name = "MoneyMultLabel"
+	moneyMultLabel.Size = UDim2.new(1, 0, 0, 26)
+	moneyMultLabel.Position = UDim2.new(0, 0, 0, 100)
+	moneyMultLabel.BackgroundTransparency = 1
+	moneyMultLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
+	moneyMultLabel.Font = Enum.Font.FredokaOne
+	moneyMultLabel.TextSize = 22
+	moneyMultLabel.Text = "Money: x1.0"
+	moneyMultLabel.TextXAlignment = Enum.TextXAlignment.Left
+	moneyMultLabel.Parent = hudContainer
+
+	local moneyMultStroke = Instance.new("UIStroke")
+	moneyMultStroke.Color = Color3.fromRGB(0, 0, 0)
+	moneyMultStroke.Thickness = 2
+	moneyMultStroke.Parent = moneyMultLabel
+
 	-- Listen for data updates from server
 	local RemoteEvents = ReplicatedStorage:WaitForChild("RemoteEvents")
 	local PlayerDataUpdate = RemoteEvents:WaitForChild("PlayerDataUpdate")
@@ -176,6 +218,8 @@ end
 
 function HUDController.UpdateData(payload)
 	local previousCash = HUDController.Data.cash
+	local previousGems = HUDController.Data.gems or 0
+	local payloadIncludesGems = payload and payload.gems ~= nil
 
 	for key, value in pairs(payload) do
 		HUDController.Data[key] = value
@@ -217,6 +261,13 @@ function HUDController.UpdateData(payload)
 	if gemsLabel then
 		gemsLabel.Text = "\u{1F48E} " .. formatCompactBalance(HUDController.Data.gems or 0) .. " Gems"
 	end
+	if payloadIncludesGems then
+		local currentGems = HUDController.Data.gems or 0
+		if hasSeenInitialGemValue and currentGems > previousGems then
+			playGemGainSound()
+		end
+		hasSeenInitialGemValue = true
+	end
 
 	-- Update luck display (1 luck = +1%) with potion boost shown
 	if luckLabel then
@@ -251,6 +302,39 @@ function HUDController.UpdateData(payload)
 		else
 			luckLabel.Text = ("Luck: %d (+%d%%)"):format(luck, percent)
 			luckLabel.TextColor3 = Color3.fromRGB(200, 180, 255) -- default purple
+		end
+	end
+
+	-- Update money multiplier display
+	if moneyMultLabel then
+		local mult = 1
+		local cashUpgrade = HUDController.Data.cashUpgrade or 0
+		mult = mult * (1 + cashUpgrade * 0.02)
+		if HUDController.Data.hasVIP then
+			mult = mult * 1.5
+		end
+		if HUDController.Data.doubleCash then
+			mult = mult * 2
+		end
+		if not PotionController then
+			local ok, mod = pcall(function() return require(script.Parent.PotionController) end)
+			if ok then PotionController = mod end
+		end
+		if PotionController and PotionController.ActivePotions then
+			local divineMult = (PotionController.ActivePotions.Divine and PotionController.ActivePotions.Divine.multiplier) or 0
+			local cashPotMult = (PotionController.ActivePotions.Cash and PotionController.ActivePotions.Cash.multiplier) or 0
+			local potionTotal = divineMult + cashPotMult
+			if potionTotal > 0 then
+				mult = mult * potionTotal
+			end
+		end
+
+		if mult > 1 then
+			moneyMultLabel.Text = ("Money: x%.1f"):format(mult)
+			moneyMultLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
+		else
+			moneyMultLabel.Text = "Money: x1.0"
+			moneyMultLabel.TextColor3 = Color3.fromRGB(160, 160, 180)
 		end
 	end
 

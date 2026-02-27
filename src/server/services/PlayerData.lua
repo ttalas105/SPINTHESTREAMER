@@ -360,6 +360,14 @@ function PlayerData.Init()
 		end
 	end)
 
+	-- Save all players on server shutdown so permanent purchases are never lost
+	game:BindToClose(function()
+		for _, player in ipairs(Players:GetPlayers()) do
+			task.spawn(saveData, player)
+		end
+		task.wait(3)
+	end)
+
 	-- Handle already-connected players
 	for _, player in ipairs(Players:GetPlayers()) do
 		if not PlayerData._cache[player.UserId] then

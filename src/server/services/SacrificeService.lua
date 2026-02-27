@@ -533,16 +533,14 @@ local function onSacrificeRequest(player, sacrificeType, ...)
 		handleGemTrade(player, ...)
 	elseif sacrificeType == "OneTime" then
 		handleOneTime(player, ...)
-	elseif sacrificeType == "FiftyFifty" then
-		handleFiftyFifty(player)
-	elseif sacrificeType == "FeelingLucky" then
-		handleFeelingLucky(player)
-	elseif sacrificeType == "DontDoIt" then
-		handleDontDoIt(player, ...)
-	elseif sacrificeType == "GemRoulette" then
-		handleGemRoulette(player, ...)
 	elseif sacrificeType == "Elemental" then
 		handleElemental(player, ...)
+	elseif sacrificeType == "FiftyFifty"
+		or sacrificeType == "FeelingLucky"
+		or sacrificeType == "DontDoIt"
+		or sacrificeType == "GemRoulette"
+	then
+		SacrificeResult:FireClient(player, { success = false, reason = "Test Your Luck is disabled." })
 	else
 		SacrificeResult:FireClient(player, { success = false, reason = "Unknown type." })
 	end

@@ -61,6 +61,8 @@ local skipRequested = false
 local currentAnimConnection = nil
 local preSpinConnection = nil
 
+local onHideCallback = nil
+
 local autoSpinEnabled = false
 local autoSpinButton = nil
 
@@ -596,6 +598,12 @@ local function playSpinAnimation(resultData, callback)
 	if not carouselContainer or not carouselFrame then return end
 	stopPreSpinVisual()
 
+	local forcedEffect = getForcedGemCaseEffect()
+	if not forcedEffect and resultData and resultData.caseId then
+		local caseData = GemCases.ById[resultData.caseId]
+		forcedEffect = caseData and caseData.effect or nil
+	end
+
 	local targetStreamerId = resultData.streamerId or resultData.id
 	local occurrences = {}
 	for i, item in ipairs(items) do
@@ -635,7 +643,9 @@ local function playSpinAnimation(resultData, callback)
 	for _, offset in ipairs(nearMissOffsets) do
 		local adjIdx = targetIndex + offset
 		if adjIdx >= 1 and adjIdx <= #items and adjIdx ~= targetIndex then
-			if math.random() < 0.40 then
+			if forcedEffect then
+				applyEffectToCard(adjIdx, forcedEffect)
+			elseif math.random() < 0.40 then
 				local randEff = Effects.List[math.random(1, #Effects.List)]
 				applyEffectToCard(adjIdx, randEff.name)
 			end
@@ -1496,6 +1506,16 @@ function SpinController.Hide()
 		pcall(function() currentAnimConnection:Disconnect() end)
 		currentAnimConnection = nil
 	end
+
+	if onHideCallback then
+		local cb = onHideCallback
+		onHideCallback = nil
+		task.defer(cb)
+	end
+end
+
+function SpinController.SetOnHideCallback(cb)
+	onHideCallback = cb
 end
 
 function SpinController.IsVisible(): boolean

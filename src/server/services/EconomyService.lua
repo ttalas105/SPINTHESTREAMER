@@ -26,6 +26,7 @@ local EconomyService = {}
 local PlayerData
 local PotionService
 local QuestService
+local STORAGE_OFFSET = 1000
 
 -------------------------------------------------
 -- SELL HELPERS
@@ -43,6 +44,19 @@ local function getSellPrice(item)
 		price = price * (Economy.EffectSellMultiplier or 1.5)
 	end
 	return math.floor(price)
+end
+
+local function normalizeQueuedSet(raw): { [number]: boolean }
+	local out = {}
+	if type(raw) ~= "table" then return out end
+	for k, v in pairs(raw) do
+		if type(k) == "number" and v then
+			out[k] = true
+		elseif type(v) == "number" then
+			out[v] = true
+		end
+	end
+	return out
 end
 
 -------------------------------------------------
@@ -105,7 +119,7 @@ end
 -- SELL BY INDEX (sell a specific item from inventory or storage)
 -------------------------------------------------
 
-local function handleSellByIndex(player, itemIndex: number, source: string?)
+local function handleSellByIndex(player, itemIndex: number, source: string?, queuedSetRaw)
 	if not PlayerData then return end
 	if typeof(itemIndex) ~= "number" then return end
 	if source ~= nil and typeof(source) ~= "string" then return end
@@ -117,6 +131,12 @@ local function handleSellByIndex(player, itemIndex: number, source: string?)
 	local data = PlayerData.Get(player)
 	if not data then return end
 	local fromStorage = source == "storage"
+	local queuedSet = normalizeQueuedSet(queuedSetRaw)
+	local virtualIndex = fromStorage and (STORAGE_OFFSET + itemIndex) or itemIndex
+	if queuedSet[virtualIndex] then
+		SellResult:FireClient(player, { success = false, reason = "Queued for sacrifice." })
+		return
+	end
 	local item
 	local removed
 	if fromStorage then
@@ -165,7 +185,7 @@ end
 -- SELL ALL (sell every item in the selected section)
 -------------------------------------------------
 
-local function handleSellAll(player, source: string?)
+local function handleSellAll(player, source: string?, queuedSetRaw)
 	if not PlayerData then return end
 	if source ~= nil and typeof(source) ~= "string" then
 		SellResult:FireClient(player, { success = false, reason = "Invalid request." })
@@ -178,28 +198,40 @@ local function handleSellAll(player, source: string?)
 	local data = PlayerData.Get(player)
 	if not data then return end
 	local section = (source == "storage") and "storage" or "hotbar"
+	local queuedSet = normalizeQueuedSet(queuedSetRaw)
 
 	local totalCash = 0
 	local count = 0
+	local indicesToSell = {}
 
 	if section == "storage" then
-		count = #data.storage
-		if count == 0 then
+		if #data.storage == 0 then
 			SellResult:FireClient(player, { success = false, reason = "Storage is empty!" })
 			return
 		end
-		for _, item in ipairs(data.storage) do
-			totalCash = totalCash + getSellPrice(item)
+		for i, item in ipairs(data.storage) do
+			if not queuedSet[STORAGE_OFFSET + i] then
+				count += 1
+				totalCash += getSellPrice(item)
+				table.insert(indicesToSell, i)
+			end
 		end
 	else
-		count = #data.inventory
-		if count == 0 then
+		if #data.inventory == 0 then
 			SellResult:FireClient(player, { success = false, reason = "Hotbar is empty!" })
 			return
 		end
-		for _, item in ipairs(data.inventory) do
-			totalCash = totalCash + getSellPrice(item)
+		for i, item in ipairs(data.inventory) do
+			if not queuedSet[i] then
+				count += 1
+				totalCash += getSellPrice(item)
+				table.insert(indicesToSell, i)
+			end
 		end
+	end
+	if count == 0 then
+		SellResult:FireClient(player, { success = false, reason = "No sellable streamers." })
+		return
 	end
 
 	if PlayerData.HasDoubleCash(player) then
@@ -209,11 +241,16 @@ local function handleSellAll(player, source: string?)
 		totalCash = math.floor(totalCash * (Economy.VIPCashMultiplier or 1.5))
 	end
 
-	-- Clear only the requested section
+	-- Clear only sellable items from the requested section.
+	table.sort(indicesToSell, function(a, b) return a > b end)
 	if section == "storage" then
-		data.storage = {}
+		for _, idx in ipairs(indicesToSell) do
+			table.remove(data.storage, idx)
+		end
 	else
-		data.inventory = {}
+		for _, idx in ipairs(indicesToSell) do
+			table.remove(data.inventory, idx)
+		end
 	end
 	PlayerData.AddCash(player, math.floor(totalCash))
 	PlayerData.IncrementStat(player, "totalCashEarned", math.floor(totalCash))
@@ -321,12 +358,12 @@ function EconomyService.Init(playerDataModule, potionServiceModule, questService
 		PlayerData.WithLock(player, function() handleSell(player, streamerId) end)
 	end)
 
-	SellByIndexRequest.OnServerEvent:Connect(function(player, itemIndex, source)
-		PlayerData.WithLock(player, function() handleSellByIndex(player, itemIndex, source) end)
+	SellByIndexRequest.OnServerEvent:Connect(function(player, itemIndex, source, queuedSetRaw)
+		PlayerData.WithLock(player, function() handleSellByIndex(player, itemIndex, source, queuedSetRaw) end)
 	end)
 
-	SellAllRequest.OnServerEvent:Connect(function(player, source)
-		PlayerData.WithLock(player, function() handleSellAll(player, source) end)
+	SellAllRequest.OnServerEvent:Connect(function(player, source, queuedSetRaw)
+		PlayerData.WithLock(player, function() handleSellAll(player, source, queuedSetRaw) end)
 	end)
 
 	UpgradeLuckRequest.OnServerEvent:Connect(function(player)

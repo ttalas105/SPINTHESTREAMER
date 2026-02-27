@@ -1196,6 +1196,10 @@ function BaseService.Init(playerDataModule, potionServiceModule)
 				local key = tostring(slot)
 				local equipped = data.equippedPads[key]
 				if equipped then
+					if #data.inventory >= PlayerData.HOTBAR_MAX then
+						EquipResult:FireClient(player, { success = false, reason = "Inventory is full. Free a hotbar slot first." })
+						return
+					end
 					local streamerId = type(equipped) == "table" and equipped.id or equipped
 					local effect = type(equipped) == "table" and equipped.effect or nil
 					local pendingBySlot = getNestedTable(BaseService._pendingMoney, userId)
@@ -1231,6 +1235,10 @@ function BaseService.Init(playerDataModule, potionServiceModule)
 						local orphanItem = data.equippedPads[orphanKey]
 						local orphanId = type(orphanItem) == "table" and orphanItem.id or orphanItem
 						local orphanEffect = type(orphanItem) == "table" and orphanItem.effect or nil
+						if #data.inventory >= PlayerData.HOTBAR_MAX then
+							EquipResult:FireClient(player, { success = false, reason = "Inventory is full. Free a hotbar slot first." })
+							return
+						end
 						if orphanItem and PlayerData.UnequipFromPad(player, orphanedSlot) then
 							local pendingBySlot = getNestedTable(BaseService._pendingMoney, userId)
 							local pending = pendingBySlot[orphanedSlot] or 0

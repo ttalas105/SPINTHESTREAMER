@@ -246,7 +246,7 @@ local function showNotEnoughGemsPopup()
 	yesBtn.MouseButton1Click:Connect(function()
 		dismiss()
 		GemShopController.Close()
-		StoreController.Open()
+		StoreController.Open("Gems")
 	end)
 
 	noBtn.MouseButton1Click:Connect(function()

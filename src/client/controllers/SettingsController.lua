@@ -141,6 +141,7 @@ function SettingsController.Init()
 	modalFrame.ClipsDescendants = true
 	modalFrame.Parent = screenGui
 	Instance.new("UICorner", modalFrame).CornerRadius = UDim.new(0, 28)
+	UIHelper.SinkInput(modalFrame)
 
 	local outerStroke = Instance.new("UIStroke")
 	outerStroke.Color = Color3.fromRGB(120, 80, 200)

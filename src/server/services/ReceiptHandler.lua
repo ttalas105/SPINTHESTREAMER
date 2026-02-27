@@ -87,6 +87,20 @@ function ReceiptHandler.Init(playerDataModule, spinServiceModule)
 		-- Enhanced Cases (Robux-only exclusive cases)
 		for _, caseData in ipairs(EnhancedCases.List) do
 			if productId == Economy.Products[caseData.key] then
+				local data = PlayerData.Get(player)
+				if data then
+					local invFull = #(data.inventory or {}) >= PlayerData.HOTBAR_MAX
+					local stoFull = #(data.storage or {}) >= PlayerData.STORAGE_MAX
+					if invFull and stoFull then
+						local remotes = ReplicatedStorage:FindFirstChild("RemoteEvents")
+						local resultRemote = remotes and remotes:FindFirstChild("EnhancedCaseResult")
+						if resultRemote then
+							resultRemote:FireClient(player, { success = false, reason = "Inventory and storage are full!" })
+						end
+						return Enum.ProductPurchaseDecision.NotProcessedYet
+					end
+				end
+
 				local streamerId, effect = EnhancedCases.Roll(caseData.key)
 				if streamerId then
 					local dest = PlayerData.AddToInventory(player, streamerId, effect)

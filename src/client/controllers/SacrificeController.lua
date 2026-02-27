@@ -168,37 +168,16 @@ end
 -- AVATAR SLOT HELPER
 -------------------------------------------------
 
-local modelsFolder = ReplicatedStorage:FindFirstChild("StreamerModels")
-
 local function buildAvatarSlot(slot, streamerId)
-	local modelTemplate = modelsFolder and modelsFolder:FindFirstChild(streamerId)
-	if not modelTemplate then
-		local fallback = Instance.new("TextLabel")
-		fallback.Size = UDim2.new(1, 0, 1, 0); fallback.BackgroundTransparency = 1
-		local dn = Streamers.ById[streamerId] and Streamers.ById[streamerId].displayName or streamerId
-		fallback.Text = dn:sub(1, 2):upper(); fallback.TextColor3 = Color3.fromRGB(200, 255, 200)
-		fallback.Font = FONT; fallback.TextSize = sx(18); fallback.Parent = slot
-		return
-	end
-
-	slot.ClipsDescendants = true
-	local vp = Instance.new("ViewportFrame")
-	vp.Size = UDim2.new(1, 0, 1, 0); vp.BackgroundTransparency = 1
-	vp.BorderSizePixel = 0; vp.Parent = slot
-
-	local vpModel = modelTemplate:Clone()
-	vpModel.Parent = vp
-	local vpCam = Instance.new("Camera"); vpCam.Parent = vp; vp.CurrentCamera = vpCam
-
-	local ok, cf, size = pcall(function() return vpModel:GetBoundingBox() end)
-	if ok and cf and size then
-		local dist = math.max(size.X, size.Y, size.Z) * 1.6
-		local target = cf.Position
-		local yOff = size.Y * 0.15
-		vpCam.CFrame = CFrame.new(target + Vector3.new(0, yOff, dist), target)
-	else
-		vpCam.CFrame = CFrame.new(Vector3.new(0, 2, 4), Vector3.new(0, 1, 0))
-	end
+	local fallback = Instance.new("TextLabel")
+	fallback.Size = UDim2.new(1, 0, 1, 0)
+	fallback.BackgroundTransparency = 1
+	local dn = Streamers.ById[streamerId] and Streamers.ById[streamerId].displayName or streamerId
+	fallback.Text = dn:sub(1, 2):upper()
+	fallback.TextColor3 = Color3.fromRGB(200, 255, 200)
+	fallback.Font = FONT
+	fallback.TextSize = sx(18)
+	fallback.Parent = slot
 end
 
 -------------------------------------------------
@@ -467,7 +446,7 @@ local function showNotEnoughGemsPopup()
 	yesBtn.MouseButton1Click:Connect(function()
 		dismiss()
 		SacrificeController.Close()
-		StoreController.Open()
+		StoreController.Open("Gems")
 	end)
 
 	noBtn.MouseButton1Click:Connect(function()
@@ -592,40 +571,27 @@ local function showPicker(title, filterFn, excludeSet, onSelect)
 		Instance.new("UICorner", cell).CornerRadius = UDim.new(0, sx(12))
 		local cs = Instance.new("UIStroke", cell); cs.Color = rColor; cs.Thickness = 2; cs.Transparency = 0.2
 
-		-- Avatar viewport (centered top)
+		-- Lightweight avatar badge (no viewport/model cloning)
 		local pvpS = sx(48)
-		local pvp = Instance.new("ViewportFrame")
+		local pvp = Instance.new("Frame")
 		pvp.Size = UDim2.new(0, pvpS, 0, pvpS)
 		pvp.Position = UDim2.new(0.5, 0, 0, sx(8))
 		pvp.AnchorPoint = Vector2.new(0.5, 0)
-		pvp.BackgroundColor3 = Color3.fromRGB(30, 26, 50); pvp.BackgroundTransparency = 0.3
-		pvp.BorderSizePixel = 0; pvp.ZIndex = 43; pvp.Parent = cell
-		pvp.ClipsDescendants = true
+		pvp.BackgroundColor3 = Color3.fromRGB(30, 26, 50)
+		pvp.BackgroundTransparency = 0.15
+		pvp.BorderSizePixel = 0
+		pvp.ZIndex = 43
+		pvp.Parent = cell
 		Instance.new("UICorner", pvp).CornerRadius = UDim.new(1, 0)
-
-		local pStreamerId = type(item) == "table" and item.id or item
-		local pTmpl = modelsFolder and modelsFolder:FindFirstChild(pStreamerId)
-		if pTmpl then
-			local pm = pTmpl:Clone(); pm.Parent = pvp
-			local pCam = Instance.new("Camera"); pCam.Parent = pvp; pvp.CurrentCamera = pCam
-			local pOk, pCf, pSz = pcall(function() return pm:GetBoundingBox() end)
-			if pOk and pCf and pSz then
-				local pDist = math.max(pSz.X, pSz.Y, pSz.Z) * 1.6
-				pCam.CFrame = CFrame.new(pCf.Position + Vector3.new(0, pSz.Y * 0.15, pDist), pCf.Position)
-			else
-				pCam.CFrame = CFrame.new(Vector3.new(0, 2, 4), Vector3.new(0, 1, 0))
-			end
-		end
-
-		-- Storage badge (top-right corner)
-		if isStorage then
-			local si = Instance.new("TextLabel")
-			si.Size = UDim2.new(0, sx(16), 0, sx(16)); si.Position = UDim2.new(1, -sx(6), 0, sx(4))
-			si.AnchorPoint = Vector2.new(1, 0); si.BackgroundColor3 = Color3.fromRGB(200, 120, 30)
-			si.Text = "S"; si.TextColor3 = Color3.new(1, 1, 1)
-			si.Font = Enum.Font.GothamBold; si.TextSize = sx(9); si.ZIndex = 44; si.Parent = cell
-			Instance.new("UICorner", si).CornerRadius = UDim.new(1, 0)
-		end
+		local avatarText = Instance.new("TextLabel")
+		avatarText.Size = UDim2.new(1, 0, 1, 0)
+		avatarText.BackgroundTransparency = 1
+		avatarText.Text = string.upper((info and info.displayName or id):sub(1, 2))
+		avatarText.TextColor3 = Color3.fromRGB(220, 240, 255)
+		avatarText.Font = FONT
+		avatarText.TextSize = sx(14)
+		avatarText.ZIndex = 44
+		avatarText.Parent = pvp
 
 		-- Name (centered, below avatar)
 		local nameY = sx(8) + pvpS + sx(4)
@@ -966,38 +932,24 @@ local function buildStreamerGrid(parent, matchFn, queueSet, onChanged, accentCol
 		cs.Thickness = selected and 2.5 or 1.5
 		cs.Transparency = selected and 0 or 0.3
 
-		-- Avatar viewport (top-left)
+		-- Lightweight avatar badge (no viewport/model cloning)
 		local vpS = sx(44)
-		local vp = Instance.new("ViewportFrame")
+		local vp = Instance.new("Frame")
 		vp.Size = UDim2.new(0, vpS, 0, vpS)
 		vp.Position = UDim2.new(0, sx(6), 0, sx(6))
-		vp.BackgroundColor3 = Color3.fromRGB(30, 26, 50); vp.BackgroundTransparency = 0.3
-		vp.BorderSizePixel = 0; vp.Parent = cell
-		vp.ClipsDescendants = true
+		vp.BackgroundColor3 = Color3.fromRGB(30, 26, 50)
+		vp.BackgroundTransparency = 0.15
+		vp.BorderSizePixel = 0
+		vp.Parent = cell
 		Instance.new("UICorner", vp).CornerRadius = UDim.new(1, 0)
-
-		local streamerId = type(item) == "table" and item.id or item
-		local tmpl = modelsFolder and modelsFolder:FindFirstChild(streamerId)
-		if tmpl then
-			local m = tmpl:Clone(); m.Parent = vp
-			local cam = Instance.new("Camera"); cam.Parent = vp; vp.CurrentCamera = cam
-			local okk, cf2, sz2 = pcall(function() return m:GetBoundingBox() end)
-			if okk and cf2 and sz2 then
-				local d = math.max(sz2.X, sz2.Y, sz2.Z) * 1.6
-				cam.CFrame = CFrame.new(cf2.Position + Vector3.new(0, sz2.Y * 0.15, d), cf2.Position)
-			else
-				cam.CFrame = CFrame.new(Vector3.new(0, 2, 4), Vector3.new(0, 1, 0))
-			end
-		end
-
-		-- Storage indicator
-		if isStorage then
-			local si = Instance.new("TextLabel")
-			si.Size = UDim2.new(0, sx(18), 0, sx(12)); si.Position = UDim2.new(1, -sx(4), 0, sx(2))
-			si.AnchorPoint = Vector2.new(1, 0); si.BackgroundTransparency = 1
-			si.Text = "S"; si.TextColor3 = Color3.fromRGB(255, 165, 50)
-			si.Font = Enum.Font.GothamBold; si.TextSize = sx(10); si.Parent = cell
-		end
+		local avatarText = Instance.new("TextLabel")
+		avatarText.Size = UDim2.new(1, 0, 1, 0)
+		avatarText.BackgroundTransparency = 1
+		avatarText.Text = string.upper((info and info.displayName or id):sub(1, 2))
+		avatarText.TextColor3 = Color3.fromRGB(220, 240, 255)
+		avatarText.Font = FONT
+		avatarText.TextSize = sx(13)
+		avatarText.Parent = vp
 
 		local textX = vpS + sx(10)
 		local textW = sx(130) - textX - sx(4)
@@ -1647,15 +1599,6 @@ local function buildLuckContent(luckType)
 					rl.Font = FONT2; rl.TextSize = sx(12)
 					rl.TextXAlignment = Enum.TextXAlignment.Left; rl.Parent = cell
 
-					if isStorage then
-						local sl = Instance.new("TextLabel")
-						sl.Size = UDim2.new(0, sx(14), 0, sx(14)); sl.Position = UDim2.new(1, -sx(6), 0, sx(6))
-						sl.AnchorPoint = Vector2.new(1, 0); sl.BackgroundColor3 = Color3.fromRGB(60, 130, 200)
-						sl.Text = "S"; sl.TextColor3 = Color3.new(1, 1, 1)
-						sl.Font = FONT; sl.TextSize = sx(9); sl.Parent = cell
-						Instance.new("UICorner", sl).CornerRadius = UDim.new(0, sx(3))
-					end
-
 					local bl = Instance.new("TextLabel")
 					bl.Size = UDim2.new(1, -sx(8), 0, sx(22)); bl.Position = UDim2.new(0.5, 0, 1, -sx(4))
 					bl.AnchorPoint = Vector2.new(0.5, 1); bl.BackgroundTransparency = 1
@@ -2281,7 +2224,8 @@ buildContent = function(tabId)
 	elseif Sacrifice.OneTime[tabId] then
 		buildOneTimeContent(tabId)
 	elseif tabId == "FiftyFifty" or tabId == "FeelingLucky" or tabId == "DontDoIt" then
-		buildLuckContent(tabId)
+		-- Test Your Luck removed from UI.
+		return
 	elseif tabId == "GemRoulette" then
 		buildGemRouletteContent()
 	end
@@ -2308,6 +2252,7 @@ function SacrificeController.Close()
 	gemRouletteInputActive = false
 	closePicker()
 	cleanupBinarySpin()
+	clearAllQueues()
 	if confirmFrame then confirmFrame:Destroy(); confirmFrame = nil end
 	if modalFrame then UIHelper.ScaleOut(modalFrame, 0.2) end
 	for _, cb in ipairs(onCloseCallbacks) do task.spawn(cb) end
@@ -2378,7 +2323,6 @@ function SacrificeController.Init()
 		{ key = "gems",        label = "Gems",           order = 1 },
 		{ key = "onetime",     label = "One Time",       order = 2 },
 		{ key = "elemOnetime", label = "Elem One Time",  order = 3 },
-		{ key = "luck",        label = "Test Your Luck", order = 4 },
 	}
 	for _, def in ipairs(tabDefs) do
 		local tab = Instance.new("TextButton")
@@ -2506,17 +2450,6 @@ function SacrificeController.Init()
 		{ "VoidAbyss",        "Void Abyss",        Color3.fromRGB(80, 40, 120)   },
 	}
 	for i, t in ipairs(eoTabs) do addTabTo("elemOnetime", eoSidebar, t[1], t[2], t[3], i) end
-
-	-- TEST YOUR LUCK sidebar
-	local lkSidebar = makeSidebar("LuckSidebar")
-	sidebars.luck = lkSidebar
-	local lkTabs = {
-		{ "FiftyFifty",   "50 / 50",           Color3.fromRGB(255, 220, 60)  },
-		{ "FeelingLucky",  "Feeling Lucky?",    Color3.fromRGB(100, 200, 255) },
-		{ "DontDoIt",      "Streamer Sacrifice", Color3.fromRGB(255, 80, 80) },
-		{ "GemRoulette",   "Gem Roulette",      Color3.fromRGB(255, 180, 50) },
-	}
-	for i, t in ipairs(lkTabs) do addTabTo("luck", lkSidebar, t[1], t[2], t[3], i) end
 
 	-- Content area (position/size managed by switchTopTab)
 	contentFrame = Instance.new("ScrollingFrame")

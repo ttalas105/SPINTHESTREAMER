@@ -356,7 +356,9 @@ local function closeAllModals(except)
 	if except ~= "Potion"      and PotionController.IsShopOpen()     then PotionController.CloseShop() end
 	if except ~= "GemShop"     and GemShopController.IsOpen()        then GemShopController.Close() end
 	if except ~= "Sacrifice"   and SacrificeController.IsOpen()      then SacrificeController.Close() end
-	SpinController.Hide()
+	if except ~= "EnhancedCase" then
+		SpinController.Hide()
+	end
 end
 
 local function isTutorialInputBlocked()
@@ -572,18 +574,9 @@ end)
 local UnequipResult = RemoteEvents:WaitForChild("UnequipResult")
 UnequipResult.OnClientEvent:Connect(function(data)
 	if data and data.success and data.streamerId then
-		-- Remove action: also select returned item in inventory.
-		local selected = InventoryController.SelectByItem(data.streamerId, data.effect)
-		if not selected then
-			-- Fallback in case inventory replication arrives slightly later.
-			HoldController.Hold({
-				id = data.streamerId,
-				effect = data.effect,
-			})
-			task.delay(0.12, function()
-				InventoryController.SelectByItem(data.streamerId, data.effect)
-			end)
-		end
+		-- Remove action: return streamer to inventory only.
+		-- Do not auto-select/swap hand item, so the currently held streamer
+		-- stays ready to place on another slot.
 	end
 end)
 
@@ -620,6 +613,10 @@ EnhancedCaseResult.OnClientEvent:Connect(function(data)
 	if data.success then
 		StoreController.Close()
 		closeAllModals("EnhancedCase")
+
+		SpinController.SetOnHideCallback(function()
+			StoreController.Open()
+		end)
 
 		SpinController._startSpin({
 			success = true,

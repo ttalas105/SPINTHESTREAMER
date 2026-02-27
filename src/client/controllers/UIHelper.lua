@@ -445,6 +445,17 @@ end
 -- MODAL OVERLAY
 -------------------------------------------------
 
+function UIHelper.SinkInput(frame)
+	local sink = Instance.new("TextButton")
+	sink.Name = "_InputSink"
+	sink.Size = UDim2.new(1, 0, 1, 0)
+	sink.BackgroundTransparency = 1
+	sink.Text = ""
+	sink.ZIndex = frame.ZIndex
+	sink.Parent = frame
+	return sink
+end
+
 function UIHelper.CreateModalOverlay(screenGui, onClick)
 	local overlay = Instance.new("TextButton")
 	overlay.Name = "ModalOverlay"

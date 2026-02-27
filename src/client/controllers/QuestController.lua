@@ -270,6 +270,7 @@ function QuestController.Init()
 	modalFrame.Visible = false
 	modalFrame.Parent = screenGui
 	Instance.new("UICorner", modalFrame).CornerRadius = UDim.new(0, 18)
+	UIHelper.SinkInput(modalFrame)
 
 	UIHelper.MakeResponsiveModal(modalFrame, MODAL_W, MODAL_H)
 
