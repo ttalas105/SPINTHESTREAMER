@@ -122,6 +122,12 @@ function SlotPadController.Init(_holdCtrl, _inventoryCtrl)
 
 	ProximityPromptService.PromptTriggered:Connect(function(prompt, _inputType)
 		if not prompt or prompt.Name ~= "BaseSingleSlotPrompt" then return end
+
+		local ownerUserId = prompt:GetAttribute("OwnerUserId")
+		if ownerUserId and tonumber(ownerUserId) ~= player.UserId then
+			return
+		end
+
 		local padSlotAttr = prompt:GetAttribute("PadSlot")
 		local padSlot = tonumber(padSlotAttr)
 		if not padSlot or padSlot < 1 then
@@ -139,8 +145,21 @@ function SlotPadController.Init(_holdCtrl, _inventoryCtrl)
 			warn("[SlotPadController] DisplayInteract remote unavailable")
 			return
 		end
-		remote:FireServer(padSlot, heldId, heldEffect)
+		remote:FireServer(padSlot, heldId, heldEffect, ownerUserId)
 	end)
+	ProximityPromptService.PromptShown:Connect(function(prompt, _inputType)
+		if not prompt or prompt.Name ~= "BaseSingleSlotPrompt" then return end
+		local ownerUserId = prompt:GetAttribute("OwnerUserId")
+		if ownerUserId and tonumber(ownerUserId) ~= player.UserId then
+			prompt.Enabled = false
+			task.defer(function()
+				if prompt and prompt.Parent then
+					prompt.Enabled = true
+				end
+			end)
+		end
+	end)
+
 	task.defer(scanAndWire)
 	Workspace.DescendantAdded:Connect(function(inst)
 		if inst:IsA("BasePart") and isGreenCollectPart(inst) and myBasePosition then

@@ -2252,9 +2252,9 @@ function SacrificeController.Close()
 	gemRouletteInputActive = false
 	closePicker()
 	cleanupBinarySpin()
-	clearAllQueues()
 	if confirmFrame then confirmFrame:Destroy(); confirmFrame = nil end
 	if modalFrame then UIHelper.ScaleOut(modalFrame, 0.2) end
+	fireQueueChanged()
 	for _, cb in ipairs(onCloseCallbacks) do task.spawn(cb) end
 end
 

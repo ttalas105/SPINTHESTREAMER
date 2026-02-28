@@ -240,6 +240,8 @@ end
 
 local updateMoneyText
 
+BaseService._globalCollectDebounce = {} -- userId -> os.clock timestamp
+
 local function tryCollectMoney(player: Player, padSlot: number)
 	local key = tostring(padSlot)
 	local data = PlayerData and PlayerData.Get(player)
@@ -248,6 +250,12 @@ local function tryCollectMoney(player: Player, padSlot: number)
 	if not equipped then return end
 
 	local userId = player.UserId
+
+	local now = os.clock()
+	local lastGlobal = BaseService._globalCollectDebounce[userId]
+	if lastGlobal and (now - lastGlobal) < 0.15 then return end
+	BaseService._globalCollectDebounce[userId] = now
+
 	local debounceBySlot = getNestedTable(BaseService._collectDebounce, userId)
 	if debounceBySlot[padSlot] then return end
 	debounceBySlot[padSlot] = true
@@ -257,7 +265,6 @@ local function tryCollectMoney(player: Player, padSlot: number)
 	if amount > 0 then
 		PlayerData.AddCash(player, math.floor(amount))
 		pendingBySlot[padSlot] = 0
-		-- Restart this slot's income timer from now.
 		resetSlotIncomeTimer(userId, padSlot)
 		updateMoneyText(player, padSlot)
 	end
@@ -401,7 +408,7 @@ local function nearestGreyAny(green: BasePart, greys: { BasePart }): BasePart?
 	return bestGrey
 end
 
-local function buildDisplayPairs(baseModel: Model): { [number]: { padSlot: number, greenPart: BasePart, greyPart: BasePart, prompt: ProximityPrompt? } }
+local function buildDisplayPairs(baseModel: Model, baseRotation: number?): { [number]: { padSlot: number, greenPart: BasePart, greyPart: BasePart, prompt: ProximityPrompt? } }
 	local greenParts = {}
 	local greyParts = {}
 	for _, d in ipairs(baseModel:GetDescendants()) do
@@ -416,26 +423,62 @@ local function buildDisplayPairs(baseModel: Model): { [number]: { padSlot: numbe
 	if #greenParts == 0 then
 		return {}
 	end
-	-- Some base assets only expose a single pad color/material. In that case we
-	-- still allow placement by using the green pads as placement anchors.
 	if #greyParts == 0 then
 		greyParts = table.clone(greenParts)
+	end
+
+	-- Transform world positions into a canonical local space so that slot
+	-- numbering is identical regardless of base rotation.  We rotate all
+	-- positions around the base center by -baseRotation so that the
+	-- entrance always faces the same canonical direction.
+	local baseCenterX, baseCenterZ = 0, 0
+	for _, g in ipairs(greenParts) do
+		baseCenterX = baseCenterX + g.Position.X
+		baseCenterZ = baseCenterZ + g.Position.Z
+	end
+	baseCenterX = baseCenterX / #greenParts
+	baseCenterZ = baseCenterZ / #greenParts
+
+	local rotRad = math.rad(-(baseRotation or 0))
+	local cosR = math.cos(rotRad)
+	local sinR = math.sin(rotRad)
+
+	local function toLocal(worldPos: Vector3): Vector3
+		local dx = worldPos.X - baseCenterX
+		local dz = worldPos.Z - baseCenterZ
+		return Vector3.new(dx * cosR - dz * sinR, worldPos.Y, dx * sinR + dz * cosR)
+	end
+
+	local localPositions = {} -- part -> local Vector3
+	for _, g in ipairs(greenParts) do
+		localPositions[g] = toLocal(g.Position)
+	end
+	for _, g in ipairs(greyParts) do
+		localPositions[g] = toLocal(g.Position)
 	end
 
 	local minX, maxX = math.huge, -math.huge
 	local minZ, maxZ = math.huge, -math.huge
 	for _, g in ipairs(greenParts) do
-		minX = math.min(minX, g.Position.X)
-		maxX = math.max(maxX, g.Position.X)
-		minZ = math.min(minZ, g.Position.Z)
-		maxZ = math.max(maxZ, g.Position.Z)
+		local lp = localPositions[g]
+		minX = math.min(minX, lp.X)
+		maxX = math.max(maxX, lp.X)
+		minZ = math.min(minZ, lp.Z)
+		maxZ = math.max(maxZ, lp.Z)
 	end
 	local majorOnX = (maxX - minX) >= (maxZ - minZ)
 
+	local function getLocalMajorMinor(part)
+		local lp = localPositions[part]
+		local major = majorOnX and lp.X or lp.Z
+		local minor = majorOnX and lp.Z or lp.X
+		return major, minor
+	end
+
 	local sortedGreens = table.clone(greenParts)
 	table.sort(sortedGreens, function(a, b)
-		local aMajor, aMinor = getMajorMinor(majorOnX, a.Position)
-		local bMajor, bMinor = getMajorMinor(majorOnX, b.Position)
+		local aMajor, aMinor = getLocalMajorMinor(a)
+		local bMajor, bMinor = getLocalMajorMinor(b)
 		if math.abs(aMinor - bMinor) > 0.001 then
 			return aMinor < bMinor
 		end
@@ -445,12 +488,11 @@ local function buildDisplayPairs(baseModel: Model): { [number]: { padSlot: numbe
 		return aMajor < bMajor
 	end)
 
-	-- Split into near/far sides by median on the minor axis.
 	local medianMinor = 0
 	do
 		local mids = {}
 		for _, g in ipairs(sortedGreens) do
-			local _, minor = getMajorMinor(majorOnX, g.Position)
+			local _, minor = getLocalMajorMinor(g)
 			table.insert(mids, minor)
 		end
 		table.sort(mids)
@@ -460,7 +502,7 @@ local function buildDisplayPairs(baseModel: Model): { [number]: { padSlot: numbe
 	local nearSide = {}
 	local farSide = {}
 	for _, g in ipairs(sortedGreens) do
-		local _, minor = getMajorMinor(majorOnX, g.Position)
+		local _, minor = getLocalMajorMinor(g)
 		if minor <= medianMinor then
 			table.insert(nearSide, g)
 		else
@@ -473,8 +515,8 @@ local function buildDisplayPairs(baseModel: Model): { [number]: { padSlot: numbe
 
 	local function sortByMajor(list)
 		table.sort(list, function(a, b)
-			local aMajor = getMajorMinor(majorOnX, a.Position)
-			local bMajor = getMajorMinor(majorOnX, b.Position)
+			local aMajor = getLocalMajorMinor(a)
+			local bMajor = getLocalMajorMinor(b)
 			if math.abs(aMajor - bMajor) < 0.001 then
 				return a.Name < b.Name
 			end
@@ -487,7 +529,7 @@ local function buildDisplayPairs(baseModel: Model): { [number]: { padSlot: numbe
 	local nearGreys = {}
 	local farGreys = {}
 	for _, grey in ipairs(greyParts) do
-		local _, minor = getMajorMinor(majorOnX, grey.Position)
+		local _, minor = getLocalMajorMinor(grey)
 		if minor <= medianMinor then
 			table.insert(nearGreys, grey)
 		else
@@ -553,7 +595,6 @@ local function buildDisplayPairs(baseModel: Model): { [number]: { padSlot: numbe
 	local nearEntries = collectSidePairs(nearSide, nearGreys, true, true)
 	local farEntries = collectSidePairs(farSide, farGreys, true, false)
 
-	-- Interleave 2 from near side, 2 from far side so unlock order spans both sides.
 	local slotCounter = 1
 	local nearIdx = 1
 	local farIdx = 1
@@ -874,12 +915,21 @@ local function bindCollectTouch(displayInfo, player: Player)
 		if not hum then return end
 		local touchPlayer = Players:GetPlayerFromCharacter(char)
 		if not touchPlayer or touchPlayer.UserId ~= player.UserId then return end
+
+		local root = char:FindFirstChild("HumanoidRootPart")
+		if not root then return end
+		local dist = (root.Position - displayInfo.greenPart.Position).Magnitude
+		if dist > displayInfo.greenPart.Size.Magnitude then return end
+
 		tryCollectMoney(touchPlayer, padSlot)
 	end)
 end
 
 local function bindPrompt(displayInfo, player: Player)
 	if not displayInfo.greenPart then return end
+
+	displayInfo.greenPart:SetAttribute("OwnerUserId", player.UserId)
+
 	local promptAnchor = Instance.new("Part")
 	promptAnchor.Name = "DisplayPromptAnchor_" .. tostring(displayInfo.padSlot)
 	promptAnchor.Size = Vector3.new(0.4, 0.4, 0.4)
@@ -895,6 +945,7 @@ local function bindPrompt(displayInfo, player: Player)
 	local prompt = Instance.new("ProximityPrompt")
 	prompt.Name = "BaseSingleSlotPrompt"
 	prompt:SetAttribute("PadSlot", displayInfo.padSlot)
+	prompt:SetAttribute("OwnerUserId", player.UserId)
 	prompt.KeyboardKeyCode = Enum.KeyCode.E
 	prompt.HoldDuration = 0
 	prompt.MaxActivationDistance = 10
@@ -1034,9 +1085,8 @@ local function assignBase(player)
 
 	local displays = {}
 	if baseModel and baseModel:IsA("Model") then
-		-- Retry up to 10 times waiting for the model's children to stream in
 		for attempt = 1, 10 do
-			displays = buildDisplayPairs(baseModel)
+			displays = buildDisplayPairs(baseModel, slotInfo.rotation)
 			if next(displays) ~= nil then break end
 			task.wait(1)
 		end
@@ -1130,6 +1180,7 @@ function BaseService.Init(playerDataModule, potionServiceModule)
 		BaseService._displayModels[userId] = nil
 		BaseService._collectDebounce[userId] = nil
 		BaseService._equipDebounce[userId] = nil
+		BaseService._globalCollectDebounce[userId] = nil
 	end)
 
 	for _, player in ipairs(Players:GetPlayers()) do
@@ -1155,7 +1206,7 @@ function BaseService.Init(playerDataModule, potionServiceModule)
 
 	local EQUIP_DEBOUNCE_SEC = 0.6
 
-	DisplayInteract.OnServerEvent:Connect(function(player, padSlot, heldStreamerId, heldEffect)
+	DisplayInteract.OnServerEvent:Connect(function(player, padSlot, heldStreamerId, heldEffect, promptOwnerUserId)
 		local slot = tonumber(padSlot)
 		if not slot or slot < 1 then
 			EquipResult:FireClient(player, { success = false, reason = "Invalid base slot." })
@@ -1163,6 +1214,13 @@ function BaseService.Init(playerDataModule, potionServiceModule)
 		end
 
 		local userId = player.UserId
+
+		-- Ownership check: reject if the prompt belongs to a different player's base
+		if promptOwnerUserId and tonumber(promptOwnerUserId) ~= userId then
+			EquipResult:FireClient(player, { success = false, reason = "This is not your base!" })
+			return
+		end
+
 		local debounceBySlot = getNestedTable(BaseService._equipDebounce, userId)
 		local now = time()
 		if debounceBySlot[slot] and (now - debounceBySlot[slot]) < EQUIP_DEBOUNCE_SEC then

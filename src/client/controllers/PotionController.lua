@@ -332,24 +332,13 @@ end
 
 local function applyIndicatorContainerPlacement(moveToLeftHud)
 	if not indicatorContainer then return end
-	local uiScale = UIHelper.GetScale()
-	if uiScale <= 0 then uiScale = 1 end
 
 	if moveToLeftHud then
-		local camera = workspace.CurrentCamera
-		local viewportW = (camera and camera.ViewportSize and camera.ViewportSize.X) or 1920
-		local designW = viewportW / uiScale
-		-- Keep active indicators near the left HUD area, scaled by resolution.
-		local leftDesignX = math.clamp(designW * 0.21, 240, 430)
-		indicatorContainer.AnchorPoint = Vector2.new(0, 0)
-		indicatorContainer.Position = UDim2.new(
-			0, math.floor(leftDesignX * uiScale),
-			0, math.floor(INDICATOR_TOP_MARGIN * uiScale)
-		)
+		indicatorContainer.AnchorPoint = Vector2.new(1, 0)
+		indicatorContainer.Position = UDim2.new(0.5, -250, 0, 160)
 	else
-		local marginPx = math.floor(INDICATOR_MARGIN * uiScale)
 		indicatorContainer.AnchorPoint = Vector2.new(1, 1)
-		indicatorContainer.Position = UDim2.new(1, -marginPx, 1, -marginPx)
+		indicatorContainer.Position = UDim2.new(1, -INDICATOR_MARGIN, 1, -INDICATOR_MARGIN)
 	end
 end
 
@@ -1229,10 +1218,11 @@ function PotionController.Init()
 	shopModal = buildShopModal()
 	lastKnownRebirth = HUDController.Data.rebirthCount or 0
 
-	-- Build indicators (bottom-right)
+	-- Build indicators (bottom-right, auto-sizes to fit active potions)
 	indicatorContainer = Instance.new("Frame")
 	indicatorContainer.Name = "PotionIndicators"
-	indicatorContainer.Size = UDim2.new(0, 240, 0, 100)
+	indicatorContainer.Size = UDim2.new(0, 0, 0, 100)
+	indicatorContainer.AutomaticSize = Enum.AutomaticSize.X
 	indicatorContainer.Position = UDim2.new(1, -INDICATOR_MARGIN, 1, -INDICATOR_MARGIN)
 	indicatorContainer.AnchorPoint = Vector2.new(1, 1)
 	indicatorContainer.BackgroundTransparency = 1
@@ -1242,7 +1232,8 @@ function PotionController.Init()
 	indLayout.FillDirection = Enum.FillDirection.Horizontal
 	indLayout.SortOrder = Enum.SortOrder.LayoutOrder
 	indLayout.HorizontalAlignment = Enum.HorizontalAlignment.Right
-	indLayout.Padding = UDim.new(0, 8)
+	indLayout.VerticalAlignment = Enum.VerticalAlignment.Bottom
+	indLayout.Padding = UDim.new(0, 10)
 	indLayout.Parent = indicatorContainer
 
 	luckIndicator = createIndicator("Luck", Color3.fromRGB(80, 255, 100), false)

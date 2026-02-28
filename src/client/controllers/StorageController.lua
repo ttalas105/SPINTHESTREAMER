@@ -100,12 +100,10 @@ local function buildGrid()
 	if not gridFrame then return end
 	clearGrid()
 
-	-- Lazy-load SacrificeController
 	if not SacrificeController then
-		local ok, mod = pcall(function() return require(script.Parent.SacrificeController) end)
-		if ok then SacrificeController = mod end
+		SacrificeController = require(script.Parent.SacrificeController)
 	end
-	local queuedSet = SacrificeController and SacrificeController.GetQueuedIndices and SacrificeController.GetQueuedIndices() or {}
+	local queuedSet = SacrificeController.GetQueuedIndices()
 
 	local storage = HUDController.Data.storage or {}
 

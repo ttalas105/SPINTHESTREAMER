@@ -32,18 +32,20 @@ local WorldBuilder = require(services.WorldBuilder)
 WorldBuilder.Build()
 
 -- Now load services that depend on config (Streamers, etc.)
-local PlayerData     = require(services.PlayerData)
-local SpinService    = require(services.SpinService)
-local EconomyService = require(services.EconomyService)
-local RebirthService = require(services.RebirthService)
-local StoreService   = require(services.StoreService)
-local BaseService    = require(services.BaseService)
-local IndexService    = require(services.IndexService)
-local GemShopService  = require(services.GemShopService)
+local PlayerData       = require(services.PlayerData)
+local SpinService      = require(services.SpinService)
+local EconomyService   = require(services.EconomyService)
+local RebirthService   = require(services.RebirthService)
+local StoreService     = require(services.StoreService)
+local BaseService      = require(services.BaseService)
+local IndexService     = require(services.IndexService)
+local GemShopService   = require(services.GemShopService)
 local SacrificeService = require(services.SacrificeService)
 local ReceiptHandler   = require(services.ReceiptHandler)
 local CaseStockService = require(services.CaseStockService)
 local PotionService    = require(services.PotionService)
+local QuestService     = require(services.QuestService)
+local LeaderboardService = require(services.LeaderboardService)
 
 -- Remove duplicate RemoteEvents (Studio can save extras alongside Rojo-synced ones)
 do
@@ -192,8 +194,6 @@ do
 		warn("[Server] Could not find a part to attach Sell stand ProximityPrompt")
 	end
 end
-
-local PotionService  = require(services.PotionService)
 
 -- Rebirth is accessed via the UI button (no physical stall needed)
 
@@ -409,9 +409,6 @@ do
 	end
 end
 
-local QuestService = require(services.QuestService)
-local LeaderboardService = require(services.LeaderboardService)
-
 -- Initialize services (order matters: PlayerData first, then BaseService)
 PlayerData.Init()
 PotionService.Init(PlayerData)
@@ -429,71 +426,5 @@ CaseStockService.Init(PlayerData, SpinService, QuestService)
 LeaderboardService.Init(PlayerData)
 PotionService.SetQuestService(QuestService)
 
--------------------------------------------------
--- DEBUG: Give all streamers (Studio only)
--------------------------------------------------
-do
-	local RunService = game:GetService("RunService")
-	if RunService:IsStudio() then
-		local Streamers = require(ReplicatedStorage.Shared.Config.Streamers)
-		local Effects = require(ReplicatedStorage.Shared.Config.Effects)
-		local remotes = ReplicatedStorage:WaitForChild("RemoteEvents")
-		local debugRemote = remotes:FindFirstChild("DebugGiveAll")
-		if not debugRemote then
-			debugRemote = Instance.new("RemoteEvent")
-			debugRemote.Name = "DebugGiveAll"
-			debugRemote.Parent = remotes
-		end
-		debugRemote.OnServerEvent:Connect(function(player)
-			print("[DEBUG] Giving all streamers + effects to " .. player.Name)
-			local grantedCount = 0
-			local fullCount = 0
-			for _, s in ipairs(Streamers.List) do
-				-- Base variant (no effect)
-				local dest = PlayerData.AddToInventory(player, s.id)
-				if dest == "full" then
-					fullCount += 1
-				else
-					grantedCount += 1
-				end
-
-				-- Every special effect variant (Acid, Snow, etc.)
-				for _, effect in ipairs(Effects.List) do
-					local effDest = PlayerData.AddToInventory(player, s.id, effect.name)
-					if effDest == "full" then
-						fullCount += 1
-					else
-						grantedCount += 1
-					end
-				end
-			end
-			PlayerData.Replicate(player)
-			print(string.format(
-				"[DEBUG] Done — attempted %d variants, granted %d, full %d",
-				#Streamers.List * (#Effects.List + 1),
-				grantedCount,
-				fullCount
-			))
-		end)
-		print("[Server] Debug: DebugGiveAll remote active (Studio only)")
-
-		local debugMaxRebirth = remotes:FindFirstChild("DebugMaxRebirth")
-		if not debugMaxRebirth then
-			debugMaxRebirth = Instance.new("RemoteEvent")
-			debugMaxRebirth.Name = "DebugMaxRebirth"
-			debugMaxRebirth.Parent = remotes
-		end
-		debugMaxRebirth.OnServerEvent:Connect(function(player)
-			print("[DEBUG] Setting max rebirth for " .. player.Name)
-			local data = PlayerData._cache[player.UserId]
-			if not data then return end
-			local Economy = require(ReplicatedStorage.Shared.Config.Economy)
-			data.rebirthCount = Economy.MaxRebirths
-			PlayerData.Replicate(player)
-			print("[DEBUG] " .. player.Name .. " is now Rebirth " .. Economy.MaxRebirths)
-		end)
-		print("[Server] Debug: DebugMaxRebirth remote active (Studio only)")
-	end
-end
 
 print("[Server] Spin the Streamer initialized! Map size: 400x1000 studs, 8 base slots")

@@ -160,12 +160,10 @@ local function updateSectionButtons()
 end
 
 local function getSacrificeQueuedSet()
-	-- Lazy-load SacrificeController to exclude queued items
 	if not SacrificeController then
-		local ok, mod = pcall(function() return require(script.Parent.SacrificeController) end)
-		if ok then SacrificeController = mod end
+		SacrificeController = require(script.Parent.SacrificeController)
 	end
-	return SacrificeController and SacrificeController.GetQueuedIndices and SacrificeController.GetQueuedIndices() or {}
+	return SacrificeController.GetQueuedIndices()
 end
 
 -- BUILD ITEM CARD

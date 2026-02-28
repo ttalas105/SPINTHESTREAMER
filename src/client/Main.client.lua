@@ -10,10 +10,213 @@ local RunService = game:GetService("RunService")
 local StarterGui = game:GetService("StarterGui")
 local TweenService = game:GetService("TweenService")
 local SoundService = game:GetService("SoundService")
-local Economy = require(ReplicatedStorage.Shared.Config.Economy)
+local ContentProvider = game:GetService("ContentProvider")
+
+-------------------------------------------------
+-- LOADING SCREEN (shown immediately)
+-------------------------------------------------
+
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+local loadGui = Instance.new("ScreenGui")
+loadGui.Name = "LoadingScreen"
+loadGui.ResetOnSpawn = false
+loadGui.DisplayOrder = 999
+loadGui.IgnoreGuiInset = true
+loadGui.Parent = playerGui
+
+local bg = Instance.new("Frame")
+bg.Name = "BG"
+bg.Size = UDim2.new(1, 0, 1, 0)
+bg.BackgroundColor3 = Color3.fromRGB(12, 10, 22)
+bg.BorderSizePixel = 0
+bg.ZIndex = 1
+bg.Parent = loadGui
+
+local bgGrad = Instance.new("UIGradient")
+bgGrad.Color = ColorSequence.new({
+	ColorSequenceKeypoint.new(0, Color3.fromRGB(18, 14, 36)),
+	ColorSequenceKeypoint.new(0.5, Color3.fromRGB(12, 10, 22)),
+	ColorSequenceKeypoint.new(1, Color3.fromRGB(22, 16, 40)),
+})
+bgGrad.Rotation = 135
+bgGrad.Parent = bg
+
+local titleLabel = Instance.new("TextLabel")
+titleLabel.Name = "Title"
+titleLabel.Size = UDim2.new(0, 600, 0, 80)
+titleLabel.Position = UDim2.new(0.5, 0, 0.35, 0)
+titleLabel.AnchorPoint = Vector2.new(0.5, 0.5)
+titleLabel.BackgroundTransparency = 1
+titleLabel.Text = "SPIN THE STREAMER"
+titleLabel.TextColor3 = Color3.new(1, 1, 1)
+titleLabel.Font = Enum.Font.FredokaOne
+titleLabel.TextSize = 52
+titleLabel.TextScaled = true
+titleLabel.ZIndex = 5
+titleLabel.Parent = bg
+local titleStroke = Instance.new("UIStroke")
+titleStroke.Color = Color3.fromRGB(80, 40, 200)
+titleStroke.Thickness = 3
+titleStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+titleStroke.Parent = titleLabel
+
+local titleGrad = Instance.new("UIGradient")
+titleGrad.Color = ColorSequence.new({
+	ColorSequenceKeypoint.new(0, Color3.fromRGB(120, 200, 255)),
+	ColorSequenceKeypoint.new(0.5, Color3.fromRGB(200, 140, 255)),
+	ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 100, 180)),
+})
+titleGrad.Parent = titleLabel
+
+local subtitleLabel = Instance.new("TextLabel")
+subtitleLabel.Name = "Subtitle"
+subtitleLabel.Size = UDim2.new(0, 400, 0, 28)
+subtitleLabel.Position = UDim2.new(0.5, 0, 0.43, 0)
+subtitleLabel.AnchorPoint = Vector2.new(0.5, 0.5)
+subtitleLabel.BackgroundTransparency = 1
+subtitleLabel.Text = "Loading assets..."
+subtitleLabel.TextColor3 = Color3.fromRGB(180, 175, 200)
+subtitleLabel.Font = Enum.Font.GothamBold
+subtitleLabel.TextSize = 18
+subtitleLabel.ZIndex = 5
+subtitleLabel.Parent = bg
+
+local barBg = Instance.new("Frame")
+barBg.Name = "BarBG"
+barBg.Size = UDim2.new(0, 400, 0, 12)
+barBg.Position = UDim2.new(0.5, 0, 0.50, 0)
+barBg.AnchorPoint = Vector2.new(0.5, 0.5)
+barBg.BackgroundColor3 = Color3.fromRGB(40, 35, 60)
+barBg.BorderSizePixel = 0
+barBg.ZIndex = 5
+barBg.Parent = bg
+Instance.new("UICorner", barBg).CornerRadius = UDim.new(1, 0)
+local barStroke = Instance.new("UIStroke")
+barStroke.Color = Color3.fromRGB(70, 60, 110)
+barStroke.Thickness = 1.5
+barStroke.Parent = barBg
+
+local barFill = Instance.new("Frame")
+barFill.Name = "Fill"
+barFill.Size = UDim2.new(0, 0, 1, 0)
+barFill.BackgroundColor3 = Color3.fromRGB(120, 80, 255)
+barFill.BorderSizePixel = 0
+barFill.ZIndex = 6
+barFill.Parent = barBg
+Instance.new("UICorner", barFill).CornerRadius = UDim.new(1, 0)
+local fillGrad = Instance.new("UIGradient")
+fillGrad.Color = ColorSequence.new({
+	ColorSequenceKeypoint.new(0, Color3.fromRGB(100, 180, 255)),
+	ColorSequenceKeypoint.new(1, Color3.fromRGB(180, 80, 255)),
+})
+fillGrad.Parent = barFill
+
+local percentLabel = Instance.new("TextLabel")
+percentLabel.Name = "Percent"
+percentLabel.Size = UDim2.new(0, 100, 0, 20)
+percentLabel.Position = UDim2.new(0.5, 0, 0.55, 0)
+percentLabel.AnchorPoint = Vector2.new(0.5, 0.5)
+percentLabel.BackgroundTransparency = 1
+percentLabel.Text = "0%"
+percentLabel.TextColor3 = Color3.fromRGB(160, 150, 190)
+percentLabel.Font = Enum.Font.GothamBold
+percentLabel.TextSize = 14
+percentLabel.ZIndex = 5
+percentLabel.Parent = bg
+
+local tipLabel = Instance.new("TextLabel")
+tipLabel.Name = "Tip"
+tipLabel.Size = UDim2.new(0, 500, 0, 24)
+tipLabel.Position = UDim2.new(0.5, 0, 0.92, 0)
+tipLabel.AnchorPoint = Vector2.new(0.5, 0.5)
+tipLabel.BackgroundTransparency = 1
+tipLabel.TextColor3 = Color3.fromRGB(120, 115, 145)
+tipLabel.Font = Enum.Font.GothamBold
+tipLabel.TextSize = 14
+tipLabel.ZIndex = 5
+tipLabel.Parent = bg
+
+local TIPS = {
+	"Place streamers on your base to earn cash!",
+	"Rarer streamers earn way more cash per second.",
+	"Use potions to multiply your luck and earnings!",
+	"Sacrifice duplicate streamers for gems.",
+	"Check the Index to see which streamers you're missing.",
+	"VIP Pass gives you 1.5x cash forever!",
+	"Rebirth to unlock stronger potions and bonuses.",
+	"Divine Potions multiply EVERYTHING by 5x!",
+}
+tipLabel.Text = TIPS[math.random(#TIPS)]
+
+local spinnerDots = {}
+for i = 1, 3 do
+	local dot = Instance.new("Frame")
+	dot.Name = "Dot" .. i
+	dot.Size = UDim2.new(0, 8, 0, 8)
+	dot.Position = UDim2.new(0.5, (i - 2) * 18, 0.60, 0)
+	dot.AnchorPoint = Vector2.new(0.5, 0.5)
+	dot.BackgroundColor3 = Color3.fromRGB(120, 80, 255)
+	dot.BackgroundTransparency = 0.6
+	dot.BorderSizePixel = 0
+	dot.ZIndex = 5
+	dot.Parent = bg
+	Instance.new("UICorner", dot).CornerRadius = UDim.new(1, 0)
+	spinnerDots[i] = dot
+end
+
+task.spawn(function()
+	local idx = 0
+	while loadGui and loadGui.Parent do
+		idx = (idx % 3) + 1
+		for i, dot in ipairs(spinnerDots) do
+			local target = (i == idx) and 0 or 0.6
+			TweenService:Create(dot, TweenInfo.new(0.25), { BackgroundTransparency = target }):Play()
+		end
+		task.wait(0.35)
+	end
+end)
+
+local function setLoadProgress(fraction, statusText)
+	fraction = math.clamp(fraction, 0, 1)
+	TweenService:Create(barFill, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+		Size = UDim2.new(fraction, 0, 1, 0),
+	}):Play()
+	percentLabel.Text = math.floor(fraction * 100) .. "%"
+	if statusText then
+		subtitleLabel.Text = statusText
+	end
+end
+
+local function dismissLoadingScreen()
+	setLoadProgress(1, "Ready!")
+	task.wait(0.4)
+
+	local fadeInfo = TweenInfo.new(0.6, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+	TweenService:Create(bg, fadeInfo, { BackgroundTransparency = 1 }):Play()
+	TweenService:Create(titleLabel, fadeInfo, { TextTransparency = 1 }):Play()
+	TweenService:Create(titleStroke, fadeInfo, { Transparency = 1 }):Play()
+	TweenService:Create(subtitleLabel, fadeInfo, { TextTransparency = 1 }):Play()
+	TweenService:Create(percentLabel, fadeInfo, { TextTransparency = 1 }):Play()
+	TweenService:Create(tipLabel, fadeInfo, { TextTransparency = 1 }):Play()
+	TweenService:Create(barBg, fadeInfo, { BackgroundTransparency = 1 }):Play()
+	TweenService:Create(barStroke, fadeInfo, { Transparency = 1 }):Play()
+	TweenService:Create(barFill, fadeInfo, { BackgroundTransparency = 1 }):Play()
+	for _, dot in ipairs(spinnerDots) do
+		TweenService:Create(dot, fadeInfo, { BackgroundTransparency = 1 }):Play()
+	end
+
+	task.wait(0.65)
+	loadGui:Destroy()
+end
 
 -- Wait for shared modules
 ReplicatedStorage:WaitForChild("Shared")
+
+setLoadProgress(0.05, "Loading modules...")
+
+local Economy = require(ReplicatedStorage.Shared.Config.Economy)
 
 local controllers = script.Parent.controllers
 
@@ -41,6 +244,8 @@ local SettingsController     = require(controllers.SettingsController)
 local TutorialController     = require(controllers.TutorialController)
 local QuestController        = require(controllers.QuestController)
 local UIHelper               = require(controllers.UIHelper)
+
+setLoadProgress(0.15, "Connecting to server...")
 
 local RemoteEvents = ReplicatedStorage:WaitForChild("RemoteEvents")
 local CaseStockUpdate = RemoteEvents:WaitForChild("CaseStockUpdate")
@@ -195,6 +400,70 @@ local function handlePotionStockPayload(payload)
 end
 
 -------------------------------------------------
+-- PRELOAD ASSETS
+-------------------------------------------------
+
+setLoadProgress(0.20, "Loading assets...")
+
+do
+	local assetsToPreload = {}
+
+	local streamerModels = ReplicatedStorage:FindFirstChild("StreamerModels")
+	if streamerModels then
+		for _, model in ipairs(streamerModels:GetChildren()) do
+			table.insert(assetsToPreload, model)
+		end
+	end
+
+	local Potions = require(ReplicatedStorage.Shared.Config.Potions)
+	if Potions.Types then
+		for _, list in pairs(Potions.Types) do
+			for _, p in ipairs(list) do
+				if p.imageId and p.imageId ~= "" then
+					local img = Instance.new("ImageLabel")
+					img.Image = p.imageId
+					table.insert(assetsToPreload, img)
+				end
+			end
+		end
+	end
+
+	local soundIds = {
+		"rbxassetid://7212399604",
+		"rbxassetid://421058925",
+		"rbxassetid://140728595235867",
+		"rbxassetid://137402801272072",
+		"rbxassetid://2650039396",
+	}
+	for _, sid in ipairs(soundIds) do
+		local s = Instance.new("Sound")
+		s.SoundId = sid
+		table.insert(assetsToPreload, s)
+	end
+
+	local totalAssets = math.max(#assetsToPreload, 1)
+	local loaded = 0
+
+	if totalAssets > 0 then
+		ContentProvider:PreloadAsync(assetsToPreload, function()
+			loaded += 1
+			local frac = 0.20 + (loaded / totalAssets) * 0.50
+			setLoadProgress(frac, "Loading assets...")
+		end)
+	end
+
+	for _, obj in ipairs(assetsToPreload) do
+		if obj:IsA("ImageLabel") or obj:IsA("Sound") then
+			if not obj.Parent then
+				obj:Destroy()
+			end
+		end
+	end
+end
+
+setLoadProgress(0.75, "Building UI...")
+
+-------------------------------------------------
 -- INITIALIZE ALL CONTROLLERS
 -------------------------------------------------
 
@@ -202,91 +471,29 @@ HUDController.Init()
 TopNavController.Init()
 LeftSideNavController.Init()
 RightSideNavController.Init()
+setLoadProgress(0.80, "Building UI...")
 StoreController.Init()
 SpinController.Init()
 SpinStandController.Init()
 UpgradeStandController.Init()
 SellStandController.Init()
 PotionController.Init()
+setLoadProgress(0.85, "Building UI...")
 RebirthController.Init()
 HoldController.Init()
 InventoryController.Init()
 IndexController.Init()
 GemShopController.Init()
 SacrificeController.Init()
+setLoadProgress(0.90, "Almost there...")
 StorageController.Init()
 MusicController.Init()
 SettingsController.Init()
 TutorialController.Init()
 QuestController.Init()
 SlotPadController.Init(HoldController, InventoryController)
+setLoadProgress(0.95, "Finishing up...")
 
--------------------------------------------------
--- DEBUG: Give all streamers button (Studio only)
--------------------------------------------------
-if RunService:IsStudio() then
-	task.defer(function()
-		local debugRemote = RemoteEvents:FindFirstChild("DebugGiveAll")
-		if not debugRemote then
-			debugRemote = RemoteEvents:WaitForChild("DebugGiveAll", 5)
-		end
-		if debugRemote then
-			local playerGui = Players.LocalPlayer:WaitForChild("PlayerGui")
-			local sg = Instance.new("ScreenGui")
-			sg.Name = "DebugGui"; sg.ResetOnSpawn = false; sg.DisplayOrder = 100; sg.Parent = playerGui
-			local btn = Instance.new("TextButton")
-			btn.Size = UDim2.new(0, 160, 0, 36)
-			btn.Position = UDim2.new(0, 10, 0, 10)
-			btn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-			btn.Text = "DEBUG: Give All"; btn.TextColor3 = Color3.new(1, 1, 1)
-			btn.Font = Enum.Font.FredokaOne; btn.TextSize = 16; btn.BorderSizePixel = 0
-			btn.Parent = sg
-			Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
-			btn.MouseButton1Click:Connect(function()
-				btn.Text = "Giving..."
-				debugRemote:FireServer()
-				task.wait(1)
-				btn.Text = "DEBUG: Give All"
-			end)
-
-			local skipBtn = Instance.new("TextButton")
-			skipBtn.Size = UDim2.new(0, 160, 0, 36)
-			skipBtn.Position = UDim2.new(0, 10, 0, 52)
-			skipBtn.BackgroundColor3 = Color3.fromRGB(180, 120, 30)
-			skipBtn.Text = "DEBUG: Skip Tutorial"; skipBtn.TextColor3 = Color3.new(1, 1, 1)
-			skipBtn.Font = Enum.Font.FredokaOne; skipBtn.TextSize = 14; skipBtn.BorderSizePixel = 0
-			skipBtn.Parent = sg
-			Instance.new("UICorner", skipBtn).CornerRadius = UDim.new(0, 8)
-			skipBtn.MouseButton1Click:Connect(function()
-				skipBtn.Text = "Skipping..."
-				TutorialController.ForceComplete()
-				task.wait(0.5)
-				skipBtn.Text = "Done!"
-			end)
-
-			local rebirthRemote = RemoteEvents:FindFirstChild("DebugMaxRebirth")
-			if not rebirthRemote then
-				rebirthRemote = RemoteEvents:WaitForChild("DebugMaxRebirth", 5)
-			end
-			if rebirthRemote then
-				local rebirthBtn = Instance.new("TextButton")
-				rebirthBtn.Size = UDim2.new(0, 160, 0, 36)
-				rebirthBtn.Position = UDim2.new(0, 10, 0, 94)
-				rebirthBtn.BackgroundColor3 = Color3.fromRGB(140, 50, 200)
-				rebirthBtn.Text = "DEBUG: Max Rebirth"; rebirthBtn.TextColor3 = Color3.new(1, 1, 1)
-				rebirthBtn.Font = Enum.Font.FredokaOne; rebirthBtn.TextSize = 14; rebirthBtn.BorderSizePixel = 0
-				rebirthBtn.Parent = sg
-				Instance.new("UICorner", rebirthBtn).CornerRadius = UDim.new(0, 8)
-				rebirthBtn.MouseButton1Click:Connect(function()
-					rebirthBtn.Text = "Setting..."
-					rebirthRemote:FireServer()
-					task.wait(1)
-					rebirthBtn.Text = "DEBUG: Max Rebirth"
-				end)
-			end
-		end
-	end)
-end
 
 -------------------------------------------------
 -- HIDE PLAYER HEALTH BARS + MOVEMENT SPEED
@@ -504,10 +711,11 @@ task.defer(function()
 	end
 end)
 
--- When sacrifice queues change, refresh inventory/storage visuals
+-- When sacrifice queues change, refresh inventory/storage/sell visuals
 SacrificeController.OnQueueChanged(function()
 	InventoryController.RefreshVisuals()
 	StorageController.Refresh()
+	SellStandController.RefreshList()
 end)
 
 -- Music: pause lobby / start sacrifice music on open, reverse on close
@@ -707,5 +915,11 @@ RunService.Heartbeat:Connect(function(dt)
 		end
 	end
 end)
+
+-------------------------------------------------
+-- DISMISS LOADING SCREEN
+-------------------------------------------------
+
+dismissLoadingScreen()
 
 print("[Client] Spin the Streamer initialized!")

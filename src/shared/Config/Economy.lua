@@ -157,25 +157,25 @@ Economy.CrateMaxStock = {
 Economy.MaxRebirths = 19
 
 Economy.RebirthCosts = {
-	750000,        -- Rebirth 1:  $750K  (achievable in ~20-30 min)
-	2500000,       -- Rebirth 2:  $2.5M  (another ~20-30 min)
-	7000000,       -- Rebirth 3:  $7M    (first hour done)
-	18000000,      -- Rebirth 4:  $18M   (~1 hour)
-	40000000,      -- Rebirth 5:  $40M   (~1 hour)
-	80000000,      -- Rebirth 6:  $80M   (~1 hour)
-	150000000,     -- Rebirth 7:  $150M  (~1 hour)
-	275000000,     -- Rebirth 8:  $275M  (~1 hour)
-	500000000,     -- Rebirth 9:  $500M  (getting longer)
-	850000000,     -- Rebirth 10: $850M
-	1500000000,    -- Rebirth 11: $1.5B
-	2500000000,    -- Rebirth 12: $2.5B
-	4000000000,    -- Rebirth 13: $4B
-	7000000000,    -- Rebirth 14: $7B
-	12000000000,   -- Rebirth 15: $12B
-	20000000000,   -- Rebirth 16: $20B
-	35000000000,   -- Rebirth 17: $35B
-	60000000000,   -- Rebirth 18: $60B
-	100000000000,  -- Rebirth 19: $100B
+	750000,          -- Rebirth 1:  $750K
+	2500000,         -- Rebirth 2:  $2.5M
+	7000000,         -- Rebirth 3:  $7M
+	75000000,        -- Rebirth 4:  $75M
+	200000000,       -- Rebirth 5:  $200M
+	500000000,       -- Rebirth 6:  $500M
+	1200000000,      -- Rebirth 7:  $1.2B
+	3000000000,      -- Rebirth 8:  $3B
+	7500000000,      -- Rebirth 9:  $7.5B
+	18000000000,     -- Rebirth 10: $18B
+	45000000000,     -- Rebirth 11: $45B
+	100000000000,    -- Rebirth 12: $100B
+	250000000000,    -- Rebirth 13: $250B
+	600000000000,    -- Rebirth 14: $600B
+	1500000000000,   -- Rebirth 15: $1.5T
+	4000000000000,   -- Rebirth 16: $4T
+	10000000000000,  -- Rebirth 17: $10T
+	30000000000000,  -- Rebirth 18: $30T
+	100000000000000, -- Rebirth 19: $100T
 }
 
 -- Escalating rebirth bonus percentages per level

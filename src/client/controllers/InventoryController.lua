@@ -160,12 +160,10 @@ end
 -------------------------------------------------
 
 local function updateSlotVisuals()
-	-- Lazy-load SacrificeController (avoid circular dependency at require-time)
 	if not SacrificeController then
-		local ok, mod = pcall(function() return require(script.Parent.SacrificeController) end)
-		if ok then SacrificeController = mod end
+		SacrificeController = require(script.Parent.SacrificeController)
 	end
-	local queuedSet = SacrificeController and SacrificeController.GetQueuedIndices and SacrificeController.GetQueuedIndices() or {}
+	local queuedSet = SacrificeController.GetQueuedIndices()
 
 	for i = 1, VISIBLE_SLOTS do
 		local slotData = slots[i]
@@ -377,10 +375,9 @@ end
 function InventoryController.SelectSlot(slotIndex: number)
 	-- Don't allow selecting items that are queued for sacrifice
 	if not SacrificeController then
-		local ok, mod = pcall(function() return require(script.Parent.SacrificeController) end)
-		if ok then SacrificeController = mod end
+		SacrificeController = require(script.Parent.SacrificeController)
 	end
-	local queuedSet = SacrificeController and SacrificeController.GetQueuedIndices and SacrificeController.GetQueuedIndices() or {}
+	local queuedSet = SacrificeController.GetQueuedIndices()
 	if queuedSet[slotIndex] then return end
 
 	if selectedIndex == slotIndex then
