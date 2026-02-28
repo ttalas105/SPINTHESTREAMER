@@ -128,24 +128,24 @@ Economy.CrateRarities = {
 }
 
 Economy.CrateMaxStock = {
-	100,  -- Case 1:  Scrap Case
+	999,  -- Case 1:  Scrap Case
 	80,   -- Case 2:  Basic Case
 	70,   -- Case 3:  Lucky Case
 	60,   -- Case 4:  Polished Case
 	50,   -- Case 5:  Shiny Case
 	45,   -- Case 6:  Mystic Case
-	40,   -- Case 7:  Inferno Case
-	35,   -- Case 8:  Neon Case
-	30,   -- Case 9:  Cosmic Case
-	25,   -- Case 10: Radiant Case
-	20,   -- Case 11: Celestial Case
-	18,   -- Case 12: Abyss Case
-	15,   -- Case 13: Iridescent Case
+	18,   -- Case 7:  Inferno Case
+	18,   -- Case 8:  Neon Case
+	18,   -- Case 9:  Cosmic Case
+	12,   -- Case 10: Radiant Case
+	12,   -- Case 11: Celestial Case
+	12,   -- Case 12: Abyss Case
+	12,   -- Case 13: Iridescent Case
 	12,   -- Case 14: Angelic Case
-	10,   -- Case 15: Time Case
-	8,    -- Case 16: Tidal Case
-	5,    -- Case 17: Infinity Case
-	3,    -- Case 18: Prismatic Case
+	12,   -- Case 15: Time Case
+	12,   -- Case 16: Tidal Case
+	12,   -- Case 17: Infinity Case
+	12,   -- Case 18: Prismatic Case
 }
 
 -------------------------------------------------
@@ -323,23 +323,23 @@ Economy.DoubleCashMultiplier = 2
 -- Base per rarity; elemental variants multiply by IndexEffectMultipliers.
 -------------------------------------------------
 Economy.IndexGemRewards = {
-	Common    = 50,
-	Rare      = 100,
-	Epic      = 200,
-	Legendary = 400,
-	Mythic    = 800,
+	Common    = 5,
+	Rare      = 20,
+	Epic      = 50,
+	Legendary = 100,
+	Mythic    = 200,
 }
 
 Economy.IndexEffectMultipliers = {
-	Acid      = 3,
-	Snow      = 5,
-	Lava      = 10,
-	Lightning = 20,
-	Shadow    = 40,
-	Glitchy   = 100,
-	Lunar     = 200,
-	Solar     = 500,
-	Void      = 1000,
+	Acid      = 2,
+	Snow      = 3,
+	Lava      = 4,
+	Lightning = 5,
+	Shadow    = 6,
+	Glitchy   = 7,
+	Lunar     = 8,
+	Solar     = 9,
+	Void      = 10,
 }
 
 --- Get gem reward for claiming an Index entry (rarity + optional effect).

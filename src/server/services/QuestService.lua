@@ -60,6 +60,44 @@ local function resetIfNeeded(data)
 	return changed
 end
 
+local function syncLifetimeProgress(data)
+	ensureQuestData(data)
+
+	local rebirthCount = data.rebirthCount or 0
+
+	local indexCounts = {}
+	if data.indexCollection then
+		for key, val in pairs(data.indexCollection) do
+			if val == "claimed" then
+				local colon = string.find(key, ":")
+				local effectKey = colon and string.sub(key, 1, colon - 1) or "Default"
+				indexCounts[effectKey] = (indexCounts[effectKey] or 0) + 1
+			end
+		end
+	end
+
+	for _, q in ipairs(Quests.Lifetime) do
+		if q.type == "rebirths" then
+			local actual = math.min(rebirthCount, q.goal)
+			local current = data.questProgress[q.id] or 0
+			if actual > current then
+				data.questProgress[q.id] = actual
+			end
+		end
+
+		local PREFIX = "index"
+		if string.sub(q.type, 1, #PREFIX) == PREFIX then
+			local effectKey = string.sub(q.type, #PREFIX + 1)
+			local count = indexCounts[effectKey] or 0
+			local actual = math.min(count, q.goal)
+			local current = data.questProgress[q.id] or 0
+			if actual > current then
+				data.questProgress[q.id] = actual
+			end
+		end
+	end
+end
+
 local function sendQuestUpdate(player, data)
 	ensureQuestData(data)
 	local QuestUpdate = RemoteEvents:FindFirstChild("QuestUpdate")
@@ -153,6 +191,7 @@ function QuestService.Init(playerDataModule)
 			local data = PlayerData.Get(player)
 			if data then
 				resetIfNeeded(data)
+				syncLifetimeProgress(data)
 				sendQuestUpdate(player, data)
 			end
 		end)

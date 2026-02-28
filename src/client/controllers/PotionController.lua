@@ -199,48 +199,85 @@ end
 -- ACTIVE POTION INDICATOR (bottom-right corner)
 -------------------------------------------------
 
+local cursorTooltip
+local cursorTooltipConn
+
+local function showCursorTooltip(text)
+	if not screenGui then return end
+	if not cursorTooltip then
+		cursorTooltip = Instance.new("TextLabel")
+		cursorTooltip.Name = "CursorTooltip"
+		cursorTooltip.Size = UDim2.new(0, 200, 0, 30)
+		cursorTooltip.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
+		cursorTooltip.BackgroundTransparency = 0.1
+		cursorTooltip.BorderSizePixel = 0
+		cursorTooltip.TextColor3 = Color3.new(1, 1, 1)
+		cursorTooltip.Font = BUBBLE_FONT
+		cursorTooltip.TextSize = 13
+		cursorTooltip.ZIndex = 100
+		cursorTooltip.AutomaticSize = Enum.AutomaticSize.X
+		cursorTooltip.Parent = screenGui
+		local pad = Instance.new("UIPadding")
+		pad.PaddingLeft = UDim.new(0, 10)
+		pad.PaddingRight = UDim.new(0, 10)
+		pad.Parent = cursorTooltip
+		local c = Instance.new("UICorner")
+		c.CornerRadius = UDim.new(0, 6)
+		c.Parent = cursorTooltip
+	end
+	cursorTooltip.Text = text
+	cursorTooltip.Visible = true
+
+	if cursorTooltipConn then cursorTooltipConn:Disconnect() end
+	local UIS = game:GetService("UserInputService")
+	local function updatePos()
+		local mousePos = UIS:GetMouseLocation()
+		cursorTooltip.Position = UDim2.new(0, mousePos.X, 0, mousePos.Y - 36)
+	end
+	updatePos()
+	cursorTooltipConn = game:GetService("RunService").RenderStepped:Connect(updatePos)
+end
+
+local function hideCursorTooltip()
+	if cursorTooltip then cursorTooltip.Visible = false end
+	if cursorTooltipConn then cursorTooltipConn:Disconnect() cursorTooltipConn = nil end
+end
+
 local function createIndicator(potionType, liquidColor, isRainbow)
 	local frame = Instance.new("Frame")
 	frame.Name = potionType .. "Indicator"
-	frame.Size = UDim2.new(0, 70, 0, 90)
-	frame.BackgroundColor3 = Color3.fromRGB(30, 30, 45)
-	frame.BackgroundTransparency = 0.3
+	frame.Size = UDim2.new(0, 75, 0, 95)
+	frame.BackgroundTransparency = 1
 	frame.BorderSizePixel = 0
 	frame.Visible = false
-	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0, 10)
-	corner.Parent = frame
-	local stroke = Instance.new("UIStroke")
-	stroke.Color = liquidColor
-	stroke.Thickness = 2
-	stroke.Transparency = 0.3
-	stroke.Parent = frame
 
-	if isRainbow then
-		-- Rainbow stroke effect
-		task.spawn(function()
-			local colors = {
-				Color3.fromRGB(255, 80, 80),
-				Color3.fromRGB(255, 200, 60),
-				Color3.fromRGB(80, 255, 100),
-				Color3.fromRGB(80, 200, 255),
-				Color3.fromRGB(160, 100, 255),
-				Color3.fromRGB(255, 100, 200),
-			}
-			local ci = 1
-			while frame and frame.Parent do
-				stroke.Color = colors[ci]
-				ci = ci % #colors + 1
-				task.wait(0.5)
-			end
-		end)
+	-- Potion icon
+	local defaultImage = ""
+	if potionType == "Divine" then
+		local divineShopImage = (Potions.Divine and Potions.Divine.imageId) or ""
+		defaultImage = divineShopImage ~= "" and divineShopImage or DIVINE_ICON_IMAGE
+	else
+		local list = Potions.Types[potionType]
+		if list and list[1] and list[1].imageId then
+			defaultImage = list[1].imageId
+		end
 	end
 
-	-- Timer label
+	local icon = Instance.new("ImageLabel")
+	icon.Name = "PotionImage"
+	icon.Size = UDim2.new(0, 70, 0, 70)
+	icon.Position = UDim2.new(0.5, 0, 0, 0)
+	icon.AnchorPoint = Vector2.new(0.5, 0)
+	icon.BackgroundTransparency = 1
+	icon.Image = defaultImage
+	icon.ScaleType = Enum.ScaleType.Fit
+	icon.Parent = frame
+
+	-- Timer label below icon
 	local timerLabel = Instance.new("TextLabel")
 	timerLabel.Name = "Timer"
 	timerLabel.Size = UDim2.new(1, 0, 0, 18)
-	timerLabel.Position = UDim2.new(0.5, 0, 0, 4)
+	timerLabel.Position = UDim2.new(0.5, 0, 0, 72)
 	timerLabel.AnchorPoint = Vector2.new(0.5, 0)
 	timerLabel.BackgroundTransparency = 1
 	timerLabel.Text = "0:00"
@@ -254,60 +291,13 @@ local function createIndicator(potionType, liquidColor, isRainbow)
 	timerStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
 	timerStroke.Parent = timerLabel
 
-	-- Potion icon
-	if potionType == "Divine" then
-		local divineShopImage = (Potions.Divine and Potions.Divine.imageId) or ""
-		local divineImageToUse = divineShopImage ~= "" and divineShopImage or DIVINE_ICON_IMAGE
-		local icon = Instance.new("ImageLabel")
-		icon.Name = "DivineIcon"
-		icon.Size = UDim2.new(0, 40, 0, 40)
-		icon.Position = UDim2.new(0.5, 0, 0.45, 0)
-		icon.AnchorPoint = Vector2.new(0.5, 0.5)
-		icon.BackgroundTransparency = 1
-		icon.Image = divineImageToUse
-		icon.ScaleType = Enum.ScaleType.Fit
-		icon.Parent = frame
-	else
-		local icon = createPotionIcon(frame, liquidColor, 40, isRainbow)
-		icon.Position = UDim2.new(0.5, 0, 0.45, 0)
-		icon.AnchorPoint = Vector2.new(0.5, 0.5)
-	end
-
-	-- Tier / type label
-	local tierLabel = Instance.new("TextLabel")
-	tierLabel.Name = "Tier"
-	tierLabel.Size = UDim2.new(1, 0, 0, 18)
-	tierLabel.Position = UDim2.new(0.5, 0, 1, -4)
-	tierLabel.AnchorPoint = Vector2.new(0.5, 1)
-	tierLabel.BackgroundTransparency = 1
-	tierLabel.Text = (potionType == "Divine") and "" or (isRainbow and "\u{1F308}" or "1")
-	tierLabel.TextColor3 = liquidColor
-	tierLabel.Font = BUBBLE_FONT
-	tierLabel.TextSize = 16
-	tierLabel.Parent = frame
-	local tierStroke = Instance.new("UIStroke")
-	tierStroke.Color = Color3.fromRGB(0, 0, 0)
-	tierStroke.Thickness = 1.5
-	tierStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
-	tierStroke.Parent = tierLabel
-
-	-- Type label
-	local typeLabel = Instance.new("TextLabel")
-	typeLabel.Name = "TypeLabel"
-	typeLabel.Size = UDim2.new(1, 0, 0, 12)
-	typeLabel.Position = UDim2.new(0.5, 0, 0, 22)
-	typeLabel.AnchorPoint = Vector2.new(0.5, 0)
-	typeLabel.BackgroundTransparency = 1
-	typeLabel.Text = potionType == "Divine" and "DIVINE" or potionType:upper()
-	typeLabel.TextColor3 = liquidColor
-	typeLabel.Font = BUBBLE_FONT
-	typeLabel.TextSize = 10
-	typeLabel.Parent = frame
-	local tStroke = Instance.new("UIStroke")
-	tStroke.Color = Color3.fromRGB(0, 0, 0)
-	tStroke.Thickness = 1
-	tStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
-	tStroke.Parent = typeLabel
+	frame.MouseEnter:Connect(function()
+		local tt = frame:GetAttribute("TooltipText")
+		if tt and tt ~= "" then showCursorTooltip(tt) end
+	end)
+	frame.MouseLeave:Connect(function()
+		hideCursorTooltip()
+	end)
 
 	return frame
 end
@@ -318,14 +308,24 @@ local function updateIndicator(indicator, data, isRainbow)
 		return
 	end
 	indicator.Visible = true
+
 	local timerLabel = indicator:FindFirstChild("Timer")
 	if timerLabel then timerLabel.Text = formatTime(data.remaining) end
-	local tierLabel = indicator:FindFirstChild("Tier")
-	if tierLabel then
-		if indicator.Name == "DivineIndicator" then
-			tierLabel.Text = ""
-		else
-			tierLabel.Text = isRainbow and "\u{1F308}" or tostring(data.tier or 1)
+
+	local potionType = indicator.Name:gsub("Indicator", "")
+	local potionImage = indicator:FindFirstChild("PotionImage")
+
+	if potionType == "Divine" then
+		indicator:SetAttribute("TooltipText", "Multiplies luck & coins by 5x")
+	else
+		local tier = data.tier or 1
+		local potionData = Potions.Get(potionType, tier)
+		if potionData then
+			if potionImage and potionData.imageId and potionData.imageId ~= "" then
+				potionImage.Image = potionData.imageId
+			end
+			local statName = potionType == "Luck" and "luck" or "coins"
+			indicator:SetAttribute("TooltipText", "Multiplies your " .. statName .. " by " .. potionData.multiplier .. "x")
 		end
 	end
 end

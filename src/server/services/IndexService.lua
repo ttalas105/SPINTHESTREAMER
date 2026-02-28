@@ -74,6 +74,8 @@ local function handleClaimGems(player, streamerId, effect)
 	if QuestService then
 		QuestService.Increment(player, "indexClaimed", 1)
 		QuestService.Increment(player, "gemsEarned", gemReward)
+		local effectKey = (effect and effect ~= "") and effect or "Default"
+		QuestService.Increment(player, "index" .. effectKey, 1)
 	end
 end
 
