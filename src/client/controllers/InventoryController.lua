@@ -41,6 +41,8 @@ local SacrificeController = nil
 local inventory = {}           -- mirror of server inventory
 local selectedIndex = nil      -- currently selected inventory index
 local onSelectionChanged = {}  -- callbacks when selection changes
+local lastSelectTime = 0
+local SELECT_COOLDOWN = 0.15
 
 -- UI refs
 local screenGui
@@ -373,7 +375,10 @@ end
 -------------------------------------------------
 
 function InventoryController.SelectSlot(slotIndex: number)
-	-- Don't allow selecting items that are queued for sacrifice
+	local now = os.clock()
+	if (now - lastSelectTime) < SELECT_COOLDOWN then return end
+	lastSelectTime = now
+
 	if not SacrificeController then
 		SacrificeController = require(script.Parent.SacrificeController)
 	end
@@ -381,10 +386,8 @@ function InventoryController.SelectSlot(slotIndex: number)
 	if queuedSet[slotIndex] then return end
 
 	if selectedIndex == slotIndex then
-		-- Deselect
 		selectedIndex = nil
 	else
-		-- Select if there's an item
 		if inventory[slotIndex] then
 			selectedIndex = slotIndex
 		else
@@ -394,7 +397,6 @@ function InventoryController.SelectSlot(slotIndex: number)
 
 	updateSlotVisuals()
 
-	-- Fire callbacks
 	for _, cb in ipairs(onSelectionChanged) do
 		task.spawn(cb, selectedIndex, selectedIndex and inventory[selectedIndex])
 	end

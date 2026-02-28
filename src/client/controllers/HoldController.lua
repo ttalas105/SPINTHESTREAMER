@@ -24,6 +24,7 @@ local heldModel = nil
 local heldStreamerId = nil
 local heldEffect = nil
 local followConn = nil  -- RenderStepped connection
+local attachGeneration = 0 -- incremented each Hold call to cancel stale attachModel runs
 
 local BUBBLE_FONT = Enum.Font.FredokaOne
 
@@ -139,6 +140,12 @@ local function clearHeld()
 	end
 	heldStreamerId = nil
 	heldEffect = nil
+
+	for _, child in ipairs(workspace:GetChildren()) do
+		if child.Name == "HeldStreamer" and child:IsA("Model") then
+			pcall(function() child:Destroy() end)
+		end
+	end
 end
 
 -------------------------------------------------
@@ -182,7 +189,6 @@ local function cleanModel(model)
 		if animCtrl then animCtrl:Destroy() end
 	end
 
-	-- Preload clothing textures so they render immediately
 	local toPreload = {}
 	for _, desc in ipairs(model:GetDescendants()) do
 		if desc:IsA("Shirt") or desc:IsA("Pants") or desc:IsA("ShirtGraphic") or desc:IsA("Decal") then
@@ -190,7 +196,9 @@ local function cleanModel(model)
 		end
 	end
 	if #toPreload > 0 then
-		pcall(function() ContentProvider:PreloadAsync(toPreload) end)
+		task.spawn(function()
+			pcall(function() ContentProvider:PreloadAsync(toPreload) end)
+		end)
 	end
 
 	-- Anchor every part and disable all collision/interaction
@@ -209,15 +217,21 @@ end
 -- ATTACH: clone model, clean it, start following hand
 -------------------------------------------------
 
-local function attachModel(modelTemplate, streamerInfo, effect)
+local function attachModel(modelTemplate, streamerInfo, effect, generation)
 	local character = player.Character
 	if not character then return end
+
+	if generation ~= attachGeneration then return end
 
 	local clone = modelTemplate:Clone()
 	clone.Name = "HeldStreamer"
 	cleanModel(clone)
 
-	-- Find primary part
+	if generation ~= attachGeneration then
+		clone:Destroy()
+		return
+	end
+
 	local primaryPart = clone.PrimaryPart
 	if not primaryPart then
 		primaryPart = clone:FindFirstChildWhichIsA("BasePart")
@@ -228,9 +242,6 @@ local function attachModel(modelTemplate, streamerInfo, effect)
 	end
 	clone.PrimaryPart = primaryPart
 
-	-- Keep the model at its original size (no shrinking)
-
-	-- Parent to Workspace (not character — no physics interaction)
 	clone.Parent = workspace
 	heldModel = clone
 
@@ -306,6 +317,8 @@ end
 -------------------------------------------------
 
 function HoldController.Hold(item)
+	attachGeneration = attachGeneration + 1
+
 	if item == nil then
 		clearHeld()
 		return
@@ -314,7 +327,6 @@ function HoldController.Hold(item)
 	local streamerId = type(item) == "table" and item.id or item
 	local effect = type(item) == "table" and item.effect or nil
 
-	-- Always clear and re-hold; toggle logic is handled by InventoryController.SelectSlot
 	clearHeld()
 
 	local modelTemplate = findStreamerModelTemplate(streamerId)
@@ -329,7 +341,7 @@ function HoldController.Hold(item)
 
 	heldStreamerId = streamerId
 	heldEffect = effect
-	attachModel(modelTemplate, streamerInfo, effect)
+	attachModel(modelTemplate, streamerInfo, effect, attachGeneration)
 end
 
 function HoldController.IsHolding(): boolean
