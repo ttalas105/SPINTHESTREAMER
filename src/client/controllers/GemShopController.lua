@@ -983,7 +983,7 @@ end
 -------------------------------------------------
 
 function GemShopController.Open()
-	if isOpen then GemShopController.Close(); return end
+	if isOpen or SpinController.IsVisible() then return end
 	isOpen = true
 	if modalFrame then
 		overlay.Visible = true
@@ -1168,7 +1168,8 @@ function GemShopController.Init()
 	OpenGemShopGui.OnClientEvent:Connect(function()
 		local TutorialController = require(script.Parent.TutorialController)
 		if TutorialController.IsActive() then return end
-		if isOpen then GemShopController.Close() else GemShopController.Open() end
+		if isOpen or SpinController.IsVisible() then return end
+		GemShopController.Open()
 	end)
 
 	modalFrame.Visible = false

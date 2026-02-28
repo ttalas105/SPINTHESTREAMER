@@ -16,6 +16,7 @@ do
 		"BuyCrateStock", "BuyCrateResult", "OpenOwnedCrate", "OpenCrateResult",
 		"GetCaseStock", "CaseStockUpdate",
 		"GetPotionStock", "PotionStockUpdate", "BuyPotionStock", "UseOwnedPotion",
+		"SetPlayerBusy",
 	}
 	for _, name in ipairs(newRemotes) do
 		if not remotes:FindFirstChild(name) then
@@ -62,6 +63,18 @@ do
 	end
 end
 
+-- Per-player busy flag: when true, all ProximityPrompt triggers are ignored for that player.
+local busyPlayers: { [Player]: boolean } = {}
+do
+	local SetPlayerBusy = ReplicatedStorage:WaitForChild("RemoteEvents"):WaitForChild("SetPlayerBusy")
+	SetPlayerBusy.OnServerEvent:Connect(function(player, busy)
+		busyPlayers[player] = busy == true or nil
+	end)
+	game:GetService("Players").PlayerRemoving:Connect(function(player)
+		busyPlayers[player] = nil
+	end)
+end
+
 -- Spin stand: add ProximityPrompt so players can open the crate shop
 local hub = Workspace:WaitForChild("Hub") -- wait until hub exists
 do
@@ -106,6 +119,7 @@ do
 
 		local OpenSpinStandGui = ReplicatedStorage.RemoteEvents:WaitForChild("OpenSpinStandGui")
 		prompt.Triggered:Connect(function(player)
+			if busyPlayers[player] then return end
 			OpenSpinStandGui:FireClient(player)
 		end)
 
@@ -147,6 +161,7 @@ do
 		prompt.Parent = frontAnchor
 		local OpenUpgradeStandGui = ReplicatedStorage.RemoteEvents:WaitForChild("OpenUpgradeStandGui")
 		prompt.Triggered:Connect(function(player)
+			if busyPlayers[player] then return end
 			OpenUpgradeStandGui:FireClient(player)
 		end)
 		print("[Server] Upgrade stand ProximityPrompt added")
@@ -187,6 +202,7 @@ do
 		prompt.Parent = frontAnchor
 		local OpenSellStandGui = ReplicatedStorage.RemoteEvents:WaitForChild("OpenSellStandGui")
 		prompt.Triggered:Connect(function(player)
+			if busyPlayers[player] then return end
 			OpenSellStandGui:FireClient(player)
 		end)
 		print("[Server] Sell stand ProximityPrompt added")
@@ -229,6 +245,7 @@ do
 		prompt.Parent = frontAnchor
 		local OpenPotionStandGui = ReplicatedStorage.RemoteEvents:WaitForChild("OpenPotionStandGui")
 		prompt.Triggered:Connect(function(player)
+			if busyPlayers[player] then return end
 			OpenPotionStandGui:FireClient(player)
 		end)
 		print("[Server] Potion stand ProximityPrompt added")
@@ -269,6 +286,7 @@ do
 		prompt.Parent = frontAnchor
 		local OpenGemShopGui = ReplicatedStorage.RemoteEvents:WaitForChild("OpenGemShopGui")
 		prompt.Triggered:Connect(function(player)
+			if busyPlayers[player] then return end
 			OpenGemShopGui:FireClient(player)
 		end)
 		print("[Server] Gem Shop stand ProximityPrompt added")
@@ -309,6 +327,7 @@ do
 		prompt.Parent = frontAnchor
 		local OpenSacrificeGui = ReplicatedStorage.RemoteEvents:WaitForChild("OpenSacrificeGui")
 		prompt.Triggered:Connect(function(player)
+			if busyPlayers[player] then return end
 			OpenSacrificeGui:FireClient(player)
 		end)
 		print("[Server] Sacrifice stand ProximityPrompt added")

@@ -556,7 +556,8 @@ end
 -------------------------------------------------
 
 function SpinStandController.Open()
-	if isOpen then return end
+	local SpinController = require(script.Parent.SpinController)
+	if isOpen or SpinController.IsVisible() then return end
 	isOpen = true
 	GetCaseStock:FireServer()
 	updateAllCards()
@@ -787,8 +788,10 @@ function SpinStandController.Init()
 		end
 	end)
 
-	-- Server event to open shop
+	-- Server event to open shop (block re-entry while shop or spin animation is active)
 	OpenSpinStandGui.OnClientEvent:Connect(function()
+		local SpinController = require(script.Parent.SpinController)
+		if isOpen or SpinController.IsVisible() then return end
 		SpinStandController.Open()
 	end)
 end

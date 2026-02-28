@@ -28,6 +28,7 @@ local RemoteEvents = ReplicatedStorage:WaitForChild("RemoteEvents")
 local SpinRequest = RemoteEvents:WaitForChild("SpinRequest")
 local SpinResult = RemoteEvents:WaitForChild("SpinResult")
 local MythicAlert = RemoteEvents:WaitForChild("MythicAlert")
+local SetPlayerBusy = RemoteEvents:WaitForChild("SetPlayerBusy")
 
 -------------------------------------------------
 -- STYLE CONSTANTS
@@ -70,6 +71,7 @@ local spinGeneration = 0
 local onSpinResult = nil
 local isOwnedCrateOpen = false
 local currentGemCaseId = nil
+
 
 -- Carousel items
 local ITEM_WIDTH = 130
@@ -1477,6 +1479,7 @@ function SpinController.RequestSpin()
 end
 
 function SpinController.Show()
+	SetPlayerBusy:FireServer(true)
 	spinContainer.Visible = true
 	if currentSpinCost <= 0 then
 		spinButton.Text = "OPEN"
@@ -1487,6 +1490,7 @@ function SpinController.Show()
 end
 
 function SpinController.Hide()
+	SetPlayerBusy:FireServer(false)
 	stopPreSpinVisual()
 	UIHelper.ScaleOut(spinContainer, 0.2)
 	isSpinning = false
