@@ -22,7 +22,7 @@ local playerGui = player:WaitForChild("PlayerGui")
 
 -- Cached references
 local cashLabel
-local cashLabelOrigSize
+local cashPopScale
 local activeCashTween
 local gemsLabel
 local luckLabel
@@ -141,7 +141,11 @@ function HUDController.Init()
 	cashLabel.Text = "$0"
 	cashLabel.TextXAlignment = Enum.TextXAlignment.Left
 	cashLabel.Parent = hudContainer
-	cashLabelOrigSize = cashLabel.Size
+
+	cashPopScale = Instance.new("UIScale")
+	cashPopScale.Name = "PopScale"
+	cashPopScale.Scale = 1
+	cashPopScale.Parent = cashLabel
 
 	local cashStroke = Instance.new("UIStroke")
 	cashStroke.Color = Color3.fromRGB(0, 0, 0)
@@ -258,21 +262,18 @@ function HUDController.UpdateData(payload)
 				activeCashTween:Cancel()
 				activeCashTween = nil
 			end
-			cashLabel.Size = cashLabelOrigSize
+			cashPopScale.Scale = 1
 
-			local popSize = UDim2.new(
-				cashLabelOrigSize.X.Scale * 1.06, cashLabelOrigSize.X.Offset * 1.06,
-				cashLabelOrigSize.Y.Scale * 1.06, cashLabelOrigSize.Y.Offset * 1.06
-			)
-			local popInfo = TweenInfo.new(0.1, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
-			local returnInfo = TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.In)
-
-			local popTween = TweenService:Create(cashLabel, popInfo, { Size = popSize })
+			local popTween = TweenService:Create(cashPopScale,
+				TweenInfo.new(0.1, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+				{ Scale = 1.08 })
 			activeCashTween = popTween
 			popTween:Play()
 			popTween.Completed:Connect(function(state)
 				if state == Enum.PlaybackState.Completed then
-					local ret = TweenService:Create(cashLabel, returnInfo, { Size = cashLabelOrigSize })
+					local ret = TweenService:Create(cashPopScale,
+						TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+						{ Scale = 1 })
 					activeCashTween = ret
 					ret:Play()
 					ret.Completed:Connect(function()

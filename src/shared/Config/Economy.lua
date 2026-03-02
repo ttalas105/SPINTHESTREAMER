@@ -23,24 +23,24 @@ Economy.TotalCases = 18
 Economy.RESTOCK_INTERVAL = 300 -- 5 minutes
 
 Economy.CrateCosts = {
-	200,        -- Case 1:  Scrap Case
-	500,        -- Case 2
-	1500,       -- Case 3
-	5000,       -- Case 4
-	15000,      -- Case 5
-	40000,      -- Case 6
-	100000,     -- Case 7
-	250000,     -- Case 8
-	500000,     -- Case 9
-	1000000,    -- Case 10
-	2500000,    -- Case 11
-	5000000,    -- Case 12
-	10000000,   -- Case 13
-	25000000,   -- Case 14
-	50000000,   -- Case 15
-	100000000,  -- Case 16
-	250000000,  -- Case 17
-	500000000,  -- Case 18
+	750,           -- Case 1:  Scrap Case
+	2500,          -- Case 2
+	8000,          -- Case 3
+	25000,         -- Case 4
+	80000,         -- Case 5
+	250000,        -- Case 6
+	650000,        -- Case 7
+	1750000,       -- Case 8
+	4000000,       -- Case 9
+	10000000,      -- Case 10
+	25000000,      -- Case 11
+	60000000,      -- Case 12
+	150000000,     -- Case 13
+	350000000,     -- Case 14
+	800000000,     -- Case 15
+	2000000000,    -- Case 16
+	5000000000,    -- Case 17
+	12500000000,   -- Case 18
 }
 
 Economy.CrateLuckBonuses = {
@@ -157,25 +157,25 @@ Economy.CrateMaxStock = {
 Economy.MaxRebirths = 19
 
 Economy.RebirthCosts = {
-	750000,          -- Rebirth 1:  $750K
-	2500000,         -- Rebirth 2:  $2.5M
-	7000000,         -- Rebirth 3:  $7M
-	75000000,        -- Rebirth 4:  $75M
-	200000000,       -- Rebirth 5:  $200M
-	500000000,       -- Rebirth 6:  $500M
-	1200000000,      -- Rebirth 7:  $1.2B
-	3000000000,      -- Rebirth 8:  $3B
-	7500000000,      -- Rebirth 9:  $7.5B
-	18000000000,     -- Rebirth 10: $18B
-	45000000000,     -- Rebirth 11: $45B
-	100000000000,    -- Rebirth 12: $100B
-	250000000000,    -- Rebirth 13: $250B
-	600000000000,    -- Rebirth 14: $600B
-	1500000000000,   -- Rebirth 15: $1.5T
-	4000000000000,   -- Rebirth 16: $4T
-	10000000000000,  -- Rebirth 17: $10T
-	30000000000000,  -- Rebirth 18: $30T
-	100000000000000, -- Rebirth 19: $100T
+	750000,            -- Rebirth 1:  $750K
+	2500000,           -- Rebirth 2:  $2.5M
+	25000000,          -- Rebirth 3:  $25M
+	100000000,         -- Rebirth 4:  $100M
+	350000000,         -- Rebirth 5:  $350M
+	1000000000,        -- Rebirth 6:  $1B
+	3000000000,        -- Rebirth 7:  $3B
+	8000000000,        -- Rebirth 8:  $8B
+	20000000000,       -- Rebirth 9:  $20B
+	50000000000,       -- Rebirth 10: $50B
+	125000000000,      -- Rebirth 11: $125B
+	300000000000,      -- Rebirth 12: $300B
+	750000000000,      -- Rebirth 13: $750B
+	1750000000000,     -- Rebirth 14: $1.75T
+	4000000000000,     -- Rebirth 15: $4T
+	10000000000000,    -- Rebirth 16: $10T
+	25000000000000,    -- Rebirth 17: $25T
+	65000000000000,    -- Rebirth 18: $65T
+	175000000000000,   -- Rebirth 19: $175T
 }
 
 -- Escalating rebirth bonus percentages per level
@@ -233,18 +233,9 @@ function Economy.GetRebirthInfo(rebirthLevel: number)
 end
 
 -------------------------------------------------
--- SELL PRICES (per rarity — meaningful amounts)
--- Effect streamers sell for 1.5x the base rarity price.
+-- SELL PRICES: 10 seconds of income (cashPerSecond * effectMult * 10)
 -------------------------------------------------
-Economy.SellPrices = {
-	Common    = 500,
-	Rare      = 5000,
-	Epic      = 75000,
-	Legendary = 750000,
-	Mythic    = 7500000,
-}
-
-Economy.EffectSellMultiplier = 1.5
+Economy.SellSeconds = 10
 
 -------------------------------------------------
 -- PASSIVE INCOME (disabled — players earn from streamers/selling only)

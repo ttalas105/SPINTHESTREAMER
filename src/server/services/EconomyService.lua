@@ -32,18 +32,19 @@ local STORAGE_OFFSET = 1000
 -- SELL HELPERS
 -------------------------------------------------
 
--- Calculate sell price for an inventory item (rarity-based + effect bonus)
+-- Sell price = 10 seconds of income (cashPerSecond * effect multiplier * 10)
 local function getSellPrice(item)
 	local streamerId = type(item) == "table" and item.id or item
 	local effect = type(item) == "table" and item.effect or nil
 	local info = Streamers.ById[streamerId]
 	if not info then return 0 end
 
-	local price = Economy.SellPrices[info.rarity] or Economy.SellPrices.Common
+	local income = info.cashPerSecond or 0
 	if effect and effect ~= "" then
-		price = price * (Economy.EffectSellMultiplier or 1.5)
+		local ei = Effects.ByName[effect]
+		if ei and ei.cashMultiplier then income = income * ei.cashMultiplier end
 	end
-	return math.floor(price)
+	return math.floor(income * 10)
 end
 
 local function normalizeQueuedSet(raw): { [number]: boolean }
