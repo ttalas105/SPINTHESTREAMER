@@ -93,7 +93,7 @@ end
 
 
 local DEFAULT_DATA = {
-	cash = 200,
+	cash = 750,
 	gems = 0,
 	inventory = {},
 	storage = {},  -- overflow storage (max 200 items, same {id, effect} format)
