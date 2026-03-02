@@ -51,8 +51,10 @@ HUDController.Data = {
 	spinCredits = 0,
 	sacrificeOneTime = {},
 	sacrificeChargeState = { FiftyFifty = { count = 0, nextAt = nil }, FeelingLucky = { count = 0, nextAt = nil } },
+	sacrificeQueues = {},
 	tutorialComplete = nil,
 	ownedCrates = {},
+	settings = nil,  -- { musicMuted, sacrificeMusicMuted, sfxEnabled } — applied when received
 }
 
 local onDataUpdated = {}
@@ -226,6 +228,20 @@ function HUDController.UpdateData(payload)
 
 	for key, value in pairs(payload) do
 		HUDController.Data[key] = value
+	end
+
+	-- Apply persisted settings to music/SFX controllers
+	if payload.settings and type(payload.settings) == "table" then
+		local s = payload.settings
+		local ok1, MusicController = pcall(require, script.Parent.MusicController)
+		local ok2, UISounds = pcall(require, script.Parent.UISounds)
+		if ok1 and MusicController then
+			MusicController.SetLobbyMuted(s.musicMuted == true)
+			MusicController.SetSacrificeMuted(s.sacrificeMusicMuted == true)
+		end
+		if ok2 and UISounds then
+			UISounds.SetEnabled(s.sfxEnabled ~= false)
+		end
 	end
 
 	-- Update cash display

@@ -7,6 +7,7 @@
 
 local TweenService = game:GetService("TweenService")
 local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local UIHelper = require(script.Parent.UIHelper)
 local MusicController = require(script.Parent.MusicController)
@@ -19,6 +20,7 @@ local playerGui = player:WaitForChild("PlayerGui")
 
 local screenGui = nil
 local modalFrame = nil
+local contentFrame = nil
 local isOpen = false
 
 local FONT = Enum.Font.FredokaOne
@@ -192,18 +194,40 @@ function SettingsController.Init()
 	Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(1, 0)
 	closeBtn.MouseButton1Click:Connect(function() SettingsController.Close() end)
 
-	-- Content area
-	local content = Instance.new("Frame")
-	content.Size = UDim2.new(1, 0, 1, -70)
-	content.Position = UDim2.new(0, 0, 0, 68)
-	content.BackgroundTransparency = 1
-	content.Parent = modalFrame
+	-- Content area (built in Open() so toggles reflect persisted settings)
+	contentFrame = Instance.new("Frame")
+	contentFrame.Size = UDim2.new(1, 0, 1, -70)
+	contentFrame.Position = UDim2.new(0, 0, 0, 68)
+	contentFrame.BackgroundTransparency = 1
+	contentFrame.Parent = modalFrame
 
 	local contentLayout = Instance.new("UIListLayout")
 	contentLayout.Padding = UDim.new(0, 14)
 	contentLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 	contentLayout.SortOrder = Enum.SortOrder.LayoutOrder
-	contentLayout.Parent = content
+	contentLayout.Parent = contentFrame
+
+	-- Content is built in Open() so it always reflects current state (including persisted settings)
+	screenGui.Enabled = false
+end
+
+local function fireSettingsToServer()
+	local re = ReplicatedStorage:WaitForChild("RemoteEvents"):FindFirstChild("SettingsUpdate")
+	if re then
+		re:FireServer({
+			musicMuted = MusicController.IsLobbyMuted(),
+			sacrificeMusicMuted = MusicController.IsSacrificeMuted(),
+			sfxEnabled = UISounds.IsEnabled(),
+		})
+	end
+end
+
+local function buildSettingsContent(content)
+	for _, child in ipairs(content:GetChildren()) do
+		if not child:IsA("UIListLayout") then
+			child:Destroy()
+		end
+	end
 
 	-- Section label: Music
 	local musicSection = Instance.new("TextLabel")
@@ -223,12 +247,14 @@ function SettingsController.Init()
 	-- Toggle: Main Music
 	local t1 = createToggle(content, "\u{1F3B6}  Main Music", not MusicController.IsLobbyMuted(), function(on)
 		MusicController.SetLobbyMuted(not on)
+		fireSettingsToServer()
 	end)
 	t1.LayoutOrder = 2
 
 	-- Toggle: Sacrifice Music
 	local t2 = createToggle(content, "\u{1F525}  Sacrifice Music", not MusicController.IsSacrificeMuted(), function(on)
 		MusicController.SetSacrificeMuted(not on)
+		fireSettingsToServer()
 	end)
 	t2.LayoutOrder = 3
 
@@ -250,6 +276,7 @@ function SettingsController.Init()
 	-- Toggle: Sound Effects
 	local t3 = createToggle(content, "\u{1F514}  Sound Effects", UISounds.IsEnabled(), function(on)
 		UISounds.SetEnabled(on)
+		fireSettingsToServer()
 	end)
 	t3.LayoutOrder = 5
 
@@ -271,8 +298,6 @@ function SettingsController.Init()
 	footer.Font = FONT2; footer.TextSize = 14
 	footer.LayoutOrder = 7
 	footer.Parent = content
-
-	screenGui.Enabled = false
 end
 
 -------------------------------------------------
@@ -282,6 +307,9 @@ end
 function SettingsController.Open()
 	if isOpen then SettingsController.Close(); return end
 	isOpen = true
+	if contentFrame then
+		buildSettingsContent(contentFrame)
+	end
 	screenGui.Enabled = true
 	UIHelper.ScaleIn(modalFrame, 0.22)
 end

@@ -20,8 +20,6 @@ local InventoryController = require(script.Parent.InventoryController)
 
 local StorageController = {}
 
--- Lazy-loaded SacrificeController for checking queued indices
-local SacrificeController = nil
 
 local player    = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
@@ -100,11 +98,6 @@ local function buildGrid()
 	if not gridFrame then return end
 	clearGrid()
 
-	if not SacrificeController then
-		SacrificeController = require(script.Parent.SacrificeController)
-	end
-	local queuedSet = SacrificeController.GetQueuedIndices()
-
 	local storage = HUDController.Data.storage or {}
 
 	-- Update header
@@ -152,10 +145,6 @@ local function buildGrid()
 		local item = storage[si]
 		local id, effect, info = getItemInfo(item)
 		if not info then continue end
-
-		-- Completely hide items queued for sacrifice
-		local virtualIdx = STORAGE_OFFSET + si
-		if queuedSet[virtualIdx] then continue end
 
 		local effectInfo = effect and Effects.ByName[effect] or nil
 		local rarityColor = DesignConfig.RarityColors[info.rarity] or Color3.fromRGB(170, 170, 170)
@@ -458,14 +447,14 @@ local function buildHotbarPreview()
 
 		-- Click: if a storage item is selected, swap/move it here
 		local capI = i
+		local capItem = item
 		slot.MouseButton1Click:Connect(function()
 			if activeDragStorageIdx then return end
 			if selectedStorageIdx then
 				local capSI = selectedStorageIdx
 				selectedStorageIdx = nil
 				moveStorageItemToHotbar(capSI, capI)
-			elseif item then
-				-- Quick store: click occupied hotbar slot to move it to storage
+			elseif capItem then
 				StorageAction:FireServer("toStorage", capI)
 			end
 		end)

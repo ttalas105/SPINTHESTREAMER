@@ -494,6 +494,90 @@ QuestController.Init()
 SlotPadController.Init(HoldController, InventoryController)
 setLoadProgress(0.95, "Finishing up...")
 
+-------------------------------------------------
+-- DEBUG: Give all streamers + Skip tutorial (Studio only)
+-- Buttons in bottom-right corner to avoid overlapping other UI
+-------------------------------------------------
+if RunService:IsStudio() then
+	task.defer(function()
+		local debugGiveAll = RemoteEvents:FindFirstChild("DebugGiveAll")
+		local debugSkipTutorial = RemoteEvents:FindFirstChild("DebugSkipTutorial")
+		local debugMaxRebirth = RemoteEvents:FindFirstChild("DebugMaxRebirth")
+		if not debugGiveAll then debugGiveAll = RemoteEvents:WaitForChild("DebugGiveAll", 5) end
+		if not debugSkipTutorial then debugSkipTutorial = RemoteEvents:WaitForChild("DebugSkipTutorial", 5) end
+		if not debugMaxRebirth then debugMaxRebirth = RemoteEvents:WaitForChild("DebugMaxRebirth", 5) end
+		if debugGiveAll and debugSkipTutorial and debugMaxRebirth then
+			local sg = Instance.new("ScreenGui")
+			sg.Name = "DebugGui"
+			sg.ResetOnSpawn = false
+			sg.DisplayOrder = 100
+			sg.Parent = playerGui
+
+			local container = Instance.new("Frame")
+			container.Name = "DebugPanel"
+			container.Size = UDim2.new(0, 170, 0, 122)
+			container.Position = UDim2.new(1, -180, 1, -132)
+			container.AnchorPoint = Vector2.new(1, 1)
+			container.BackgroundColor3 = Color3.fromRGB(30, 25, 45)
+			container.BackgroundTransparency = 0.3
+			container.BorderSizePixel = 0
+			container.Parent = sg
+			Instance.new("UICorner", container).CornerRadius = UDim.new(0, 8)
+
+			local list = Instance.new("UIListLayout")
+			list.Padding = UDim.new(0, 6)
+			list.VerticalAlignment = Enum.VerticalAlignment.Center
+			list.HorizontalAlignment = Enum.HorizontalAlignment.Center
+			list.Parent = container
+
+			local function makeBtn(text)
+				local btn = Instance.new("TextButton")
+				btn.Size = UDim2.new(0, 160, 0, 34)
+				btn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+				btn.Text = text
+				btn.TextColor3 = Color3.new(1, 1, 1)
+				btn.Font = Enum.Font.FredokaOne
+				btn.TextSize = 14
+				btn.BorderSizePixel = 0
+				Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
+				btn.Parent = container
+				return btn
+			end
+
+			local giveAllBtn = makeBtn("DEBUG: Give All")
+			giveAllBtn.MouseButton1Click:Connect(function()
+				giveAllBtn.Text = "Giving..."
+				debugGiveAll:FireServer()
+				task.delay(1.5, function()
+					if giveAllBtn and giveAllBtn.Parent then
+						giveAllBtn.Text = "DEBUG: Give All"
+					end
+				end)
+			end)
+
+			local skipBtn = makeBtn("DEBUG: Skip Tutorial")
+			skipBtn.MouseButton1Click:Connect(function()
+				TutorialController.ForceComplete()
+				debugSkipTutorial:FireServer()
+				skipBtn.Text = "Done!"
+				task.delay(1, function()
+					if skipBtn and skipBtn.Parent then skipBtn.Text = "DEBUG: Skip Tutorial" end
+				end)
+			end)
+
+			local maxRebirthBtn = makeBtn("DEBUG: Max Rebirth")
+			maxRebirthBtn.MouseButton1Click:Connect(function()
+				maxRebirthBtn.Text = "Applying..."
+				debugMaxRebirth:FireServer()
+				task.delay(1, function()
+					if maxRebirthBtn and maxRebirthBtn.Parent then
+						maxRebirthBtn.Text = "DEBUG: Max Rebirth"
+					end
+				end)
+			end)
+		end
+	end)
+end
 
 -------------------------------------------------
 -- HIDE PLAYER HEALTH BARS + MOVEMENT SPEED
@@ -563,7 +647,7 @@ local function closeAllModals(except)
 	if except ~= "Potion"      and PotionController.IsShopOpen()     then PotionController.CloseShop() end
 	if except ~= "GemShop"     and GemShopController.IsOpen()        then GemShopController.Close() end
 	if except ~= "Sacrifice"   and SacrificeController.IsOpen()      then SacrificeController.Close() end
-	if except ~= "EnhancedCase" then
+	if except ~= "EnhancedCase" and not SpinController.IsActive() then
 		SpinController.Hide()
 	end
 end
@@ -751,9 +835,6 @@ SpinController.OnSpinResult(function(data)
 		StorageController.Refresh()
 		pendingInventoryData = nil
 	end
-	if data and data.destination == "storage" then
-		showCenterToast("Hotbar is full... adding to storage", { centered = true })
-	end
 	if data.streamerId and data.destination ~= "storage" then
 		InventoryController.FlashNewItem(data.streamerId, data.effect)
 	end
@@ -841,6 +922,7 @@ end)
 -------------------------------------------------
 
 RemoteEvents:WaitForChild("OpenSpinStandGui").OnClientEvent:Connect(function()
+	if SpinController.IsActive() then return end
 	closeAllModals("SpinStand")
 end)
 RemoteEvents:WaitForChild("OpenSellStandGui").OnClientEvent:Connect(function()
@@ -874,7 +956,7 @@ end)
 local STALL_CLOSE_DISTANCE = 40
 
 local stallUIMap = {
-	{ stallName = "Stall_Spin",      isOpen = function() return SpinStandController.IsOpen() end, close = function() SpinStandController.Close(); SpinController.Hide() end },
+	{ stallName = "Stall_Spin",      isOpen = function() return SpinStandController.IsOpen() end, close = function() SpinStandController.Close(); if not SpinController.IsActive() then SpinController.Hide() end end },
 	{ stallName = "Stall_Sell",      isOpen = function() return SellStandController.IsOpen() end, close = function() SellStandController.Close() end },
 	{ stallName = "Stall_Upgrades",  isOpen = function() return UpgradeStandController.IsOpen() end, close = function() UpgradeStandController.Close() end },
 	{ stallName = "Stall_Potions",   isOpen = function() return PotionController.IsShopOpen() end, close = function() PotionController.CloseShop() end },

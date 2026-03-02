@@ -364,19 +364,20 @@ local function buildCaseRow(crateId, parent)
 
 	openBtn.MouseButton1Click:Connect(function()
 		if isTutorialActive() and crateId ~= 1 then return end
+		local SpinController = require(script.Parent.SpinController)
+		if SpinController.IsActive() then return end
 		local owned = getOwnedCount(crateId)
 		if owned <= 0 then
 			openBtnText.Text = "NONE!"
 			task.delay(1, function() updateAllCards() end)
 			return
 		end
-		SpinStandController.Close()
-		OpenOwnedCrate:FireServer(crateId)
-		local SpinController = require(script.Parent.SpinController)
 		SpinController.SetCurrentCost(0)
 		SpinController.SetCurrentCrateId(crateId)
 		SpinController.SetOwnedCrateMode(true)
 		SpinController.Show()
+		SpinStandController.Close()
+		OpenOwnedCrate:FireServer(crateId)
 		SpinController.WaitForResult()
 	end)
 
@@ -557,7 +558,7 @@ end
 
 function SpinStandController.Open()
 	local SpinController = require(script.Parent.SpinController)
-	if isOpen or SpinController.IsVisible() then return end
+	if isOpen or SpinController.IsVisible() or SpinController.IsActive() then return end
 	isOpen = true
 	GetCaseStock:FireServer()
 	updateAllCards()
@@ -791,7 +792,7 @@ function SpinStandController.Init()
 	-- Server event to open shop (block re-entry while shop or spin animation is active)
 	OpenSpinStandGui.OnClientEvent:Connect(function()
 		local SpinController = require(script.Parent.SpinController)
-		if isOpen or SpinController.IsVisible() then return end
+		if isOpen or SpinController.IsVisible() or SpinController.IsActive() then return end
 		SpinStandController.Open()
 	end)
 end

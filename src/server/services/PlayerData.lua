@@ -62,31 +62,35 @@ end
 PlayerData.HOTBAR_MAX  = 9
 PlayerData.STORAGE_MAX = 200
 
--- In Studio, DataStore API is blocked by default (StudioAccessToApisNotAllowed).
--- Use an in-memory mock so we never call the real API and no error is shown.
-local studioMemoryStore = {} -- key -> saved data (only when RunService:IsStudio())
+-- In Studio, DataStore is blocked by default (Enable Studio Access to API Services = off).
+-- Try real DataStore first; if it fails, use in-memory mock so no errors are shown.
+local studioMemoryStore = {} -- fallback when DataStore unavailable in Studio
 
 local dataStore
-if RunService:IsStudio() then
-	-- Avoid calling GetDataStore/GetAsync/SetAsync at all in Studio
-	dataStore = {
-		GetAsync = function(key)
-			return studioMemoryStore[key]
-		end,
-		SetAsync = function(key, value)
-			studioMemoryStore[key] = value
-		end,
-	}
-else
-	local ok, err = pcall(function()
-		dataStore = DataStoreService:GetDataStore("SpinTheStreamer_v2")
+do
+	local ok, ds = pcall(function()
+		return DataStoreService:GetDataStore("SpinTheStreamer_v2")
 	end)
-	if not ok then
-		print("[PlayerData] DataStore unavailable; using local data. " .. tostring(err))
+	if ok and ds then
+		dataStore = ds
+		if RunService:IsStudio() then
+			print("[PlayerData] Using real DataStore in Studio — settings & data persist across sessions")
+		end
+	else
+		-- Studio without API access, or DataStore failed
 		dataStore = {
-			GetAsync = function() return nil end,
-			SetAsync = function() end,
+			GetAsync = function(key)
+				return studioMemoryStore[key]
+			end,
+			SetAsync = function(key, value)
+				studioMemoryStore[key] = value
+			end,
 		}
+		if RunService:IsStudio() then
+			print("[PlayerData] Using in-memory mock in Studio — enable 'Studio Access to API Services' in Game Settings > Security to test persistence")
+		else
+			print("[PlayerData] DataStore unavailable; using local data. " .. tostring(ds))
+		end
 	end
 end
 
@@ -117,6 +121,8 @@ local DEFAULT_DATA = {
 	-- Sacrifice: one-time completed, charge slots (rechargeAt times)
 	sacrificeOneTime = {},
 	sacrificeCharges = { FiftyFifty = {}, FeelingLucky = {} },
+	sacrificeHolding = {},
+	sacrificeQueues = {},
 	tutorialComplete = false,
 	-- Pity system: tracks spins since last rarity hit
 	pityCounters = {
@@ -138,6 +144,12 @@ local DEFAULT_DATA = {
 	totalCashEarned = 0,
 	timePlayed = 0,
 	robuxSpent = 0,
+	-- User settings (music, SFX toggles)
+	settings = {
+		musicMuted = false,
+		sacrificeMusicMuted = false,
+		sfxEnabled = true,
+	},
 }
 
 local RemoteEvents = ReplicatedStorage:WaitForChild("RemoteEvents")
@@ -213,6 +225,16 @@ local function loadData(player)
 		end
 		-- Migration: ensure storage exists
 		if not data.storage then data.storage = {} end
+		-- Migration: ensure settings exists (for players who saved before settings were added)
+		if not data.settings or type(data.settings) ~= "table" then
+			data.settings = { musicMuted = false, sacrificeMusicMuted = false, sfxEnabled = true }
+		else
+			data.settings.musicMuted = data.settings.musicMuted == true
+			data.settings.sacrificeMusicMuted = data.settings.sacrificeMusicMuted == true
+			data.settings.sfxEnabled = data.settings.sfxEnabled ~= false
+		end
+		if not data.sacrificeHolding then data.sacrificeHolding = {} end
+		if not data.sacrificeQueues then data.sacrificeQueues = {} end
 		-- Migration: if inventory has more than HOTBAR_MAX items, move overflow to storage
 		if data.inventory and #data.inventory > PlayerData.HOTBAR_MAX then
 			local overflow = {}
@@ -282,6 +304,9 @@ local function buildFullPayload(player, data)
 			},
 		},
 		ownedCrates = data.ownedCrates or {},
+		sacrificeHolding = data.sacrificeHolding or {},
+		sacrificeQueues = data.sacrificeQueues or {},
+		settings = data.settings or { musicMuted = false, sacrificeMusicMuted = false, sfxEnabled = true },
 	}
 end
 
@@ -386,6 +411,16 @@ function PlayerData.IsTutorialComplete(player)
 	local data = PlayerData._cache[player.UserId]
 	if not data then return true end
 	return data.tutorialComplete ~= false
+end
+
+function PlayerData.UpdateSettings(player, settings)
+	local data = PlayerData._cache[player.UserId]
+	if not data then return end
+	if not data.settings then data.settings = {} end
+	if settings.musicMuted ~= nil then data.settings.musicMuted = settings.musicMuted == true end
+	if settings.sacrificeMusicMuted ~= nil then data.settings.sacrificeMusicMuted = settings.sacrificeMusicMuted == true end
+	if settings.sfxEnabled ~= nil then data.settings.sfxEnabled = settings.sfxEnabled ~= false end
+	PlayerData.Replicate(player)
 end
 
 -------------------------------------------------
@@ -679,6 +714,224 @@ function PlayerData.GetSacrificeNextRechargeAt(player, key: string, maxCharges: 
 		end
 	end
 	return nextAt
+end
+
+-------------------------------------------------
+-- SACRIFICE HOLDING (items moved here while queued for sacrifice)
+-------------------------------------------------
+
+local function itemMatchesIdentity(item, identity)
+	local id = type(item) == "table" and item.id or item
+	local eff = type(item) == "table" and item.effect or nil
+	return id == identity.id and (eff or "") == (identity.effect or "")
+end
+
+function PlayerData.FullSyncSacrificeHolding(player, wantedItems)
+	local data = PlayerData.Get(player)
+	if not data then return end
+	if not data.sacrificeHolding then data.sacrificeHolding = {} end
+
+	local wanted = {}
+	if wantedItems then
+		for _, w in ipairs(wantedItems) do
+			if type(w) == "table" and w.id then
+				table.insert(wanted, { id = w.id, effect = w.effect or "", matched = false })
+			end
+		end
+	end
+
+	local keepInHolding = {}
+	for _, hItem in ipairs(data.sacrificeHolding) do
+		local found = false
+		for _, w in ipairs(wanted) do
+			if not w.matched and itemMatchesIdentity(hItem, w) then
+				w.matched = true
+				found = true
+				break
+			end
+		end
+		if found then
+			table.insert(keepInHolding, hItem)
+		else
+			if #data.inventory < PlayerData.HOTBAR_MAX then
+				table.insert(data.inventory, hItem)
+			elseif data.storage and #data.storage < PlayerData.STORAGE_MAX then
+				table.insert(data.storage, hItem)
+			else
+				table.insert(keepInHolding, hItem)
+			end
+		end
+	end
+	data.sacrificeHolding = keepInHolding
+
+	local stillNeeded = {}
+	for _, w in ipairs(wanted) do
+		if not w.matched then
+			table.insert(stillNeeded, w)
+		end
+	end
+
+	for i = #data.inventory, 1, -1 do
+		if #stillNeeded == 0 then break end
+		for j = #stillNeeded, 1, -1 do
+			if itemMatchesIdentity(data.inventory[i], stillNeeded[j]) then
+				table.insert(data.sacrificeHolding, table.remove(data.inventory, i))
+				table.remove(stillNeeded, j)
+				break
+			end
+		end
+	end
+
+	if data.storage then
+		for i = #data.storage, 1, -1 do
+			if #stillNeeded == 0 then break end
+			for j = #stillNeeded, 1, -1 do
+				if itemMatchesIdentity(data.storage[i], stillNeeded[j]) then
+					table.insert(data.sacrificeHolding, table.remove(data.storage, i))
+					table.remove(stillNeeded, j)
+					break
+				end
+			end
+		end
+	end
+
+	PlayerData.Replicate(player)
+end
+
+
+function PlayerData.ReturnAllSacrificeHolding(player)
+	local data = PlayerData.Get(player)
+	if not data then return end
+	if not data.sacrificeHolding or #data.sacrificeHolding == 0 then return end
+
+	for _, item in ipairs(data.sacrificeHolding) do
+		if #data.inventory < PlayerData.HOTBAR_MAX then
+			table.insert(data.inventory, item)
+		elseif #data.storage < PlayerData.STORAGE_MAX then
+			table.insert(data.storage, item)
+		end
+	end
+	data.sacrificeHolding = {}
+	PlayerData.Replicate(player)
+end
+
+function PlayerData.ClearSacrificeHolding(player)
+	local data = PlayerData.Get(player)
+	if not data then return end
+	data.sacrificeHolding = {}
+end
+
+function PlayerData.RemoveFromHoldingIndices(player, indices: { number })
+	local data = PlayerData.Get(player)
+	if not data or not data.sacrificeHolding then return end
+	table.sort(indices, function(a, b) return a > b end)
+	for _, idx in ipairs(indices) do
+		if idx >= 1 and idx <= #data.sacrificeHolding then
+			table.remove(data.sacrificeHolding, idx)
+		end
+	end
+	PlayerData.Replicate(player)
+end
+
+function PlayerData.GetSacrificeHolding(player)
+	local data = PlayerData.Get(player)
+	if not data then return {} end
+	return data.sacrificeHolding or {}
+end
+
+-------------------------------------------------
+-- SACRIFICE QUEUES (persistent per-sacrifice-type item storage)
+-- Each queue is keyed by a string ID (e.g. "GemTrade_1", "OneTime_FatPeople")
+-- and contains an array of {id, effect?} items.
+-------------------------------------------------
+
+function PlayerData.GetSacrificeQueues(player)
+	local data = PlayerData.Get(player)
+	if not data then return {} end
+	if not data.sacrificeQueues then data.sacrificeQueues = {} end
+	return data.sacrificeQueues
+end
+
+function PlayerData.GetSacrificeQueue(player, queueId: string)
+	local queues = PlayerData.GetSacrificeQueues(player)
+	return queues[queueId] or {}
+end
+
+function PlayerData.AddToSacrificeQueue(player, queueId: string, sourceType: string, sourceIndex: number): boolean
+	local data = PlayerData.Get(player)
+	if not data then return false end
+	if not data.sacrificeQueues then data.sacrificeQueues = {} end
+	if not data.sacrificeQueues[queueId] then data.sacrificeQueues[queueId] = {} end
+
+	local item
+	if sourceType == "hotbar" then
+		if sourceIndex < 1 or sourceIndex > #data.inventory then return false end
+		item = table.remove(data.inventory, sourceIndex)
+	elseif sourceType == "storage" then
+		if not data.storage or sourceIndex < 1 or sourceIndex > #data.storage then return false end
+		item = table.remove(data.storage, sourceIndex)
+	else
+		return false
+	end
+
+	if not item then return false end
+	table.insert(data.sacrificeQueues[queueId], item)
+	PlayerData.Replicate(player)
+	return true
+end
+
+function PlayerData.RemoveFromSacrificeQueue(player, queueId: string, queueIndex: number): boolean
+	local data = PlayerData.Get(player)
+	if not data then return false end
+	if not data.sacrificeQueues or not data.sacrificeQueues[queueId] then return false end
+	local queue = data.sacrificeQueues[queueId]
+	if queueIndex < 1 or queueIndex > #queue then return false end
+
+	local item = table.remove(queue, queueIndex)
+	if not item then return false end
+
+	if #data.inventory < PlayerData.HOTBAR_MAX then
+		table.insert(data.inventory, item)
+	elseif data.storage and #data.storage < PlayerData.STORAGE_MAX then
+		table.insert(data.storage, item)
+	else
+		table.insert(queue, queueIndex, item)
+		PlayerData.Replicate(player)
+		return false
+	end
+
+	PlayerData.Replicate(player)
+	return true
+end
+
+function PlayerData.ClearSacrificeQueue(player, queueId: string)
+	local data = PlayerData.Get(player)
+	if not data then return end
+	if not data.sacrificeQueues or not data.sacrificeQueues[queueId] then return end
+	local queue = data.sacrificeQueues[queueId]
+
+	for i = #queue, 1, -1 do
+		local item = table.remove(queue, i)
+		if item then
+			if #data.inventory < PlayerData.HOTBAR_MAX then
+				table.insert(data.inventory, item)
+			elseif data.storage and #data.storage < PlayerData.STORAGE_MAX then
+				table.insert(data.storage, item)
+			end
+		end
+	end
+	data.sacrificeQueues[queueId] = {}
+	PlayerData.Replicate(player)
+end
+
+function PlayerData.ConsumeSacrificeQueue(player, queueId: string)
+	local data = PlayerData.Get(player)
+	if not data then return {} end
+	if not data.sacrificeQueues then return {} end
+	local queue = data.sacrificeQueues[queueId] or {}
+	data.sacrificeQueues[queueId] = {}
+	PlayerData.Replicate(player)
+	return queue
 end
 
 -------------------------------------------------

@@ -72,6 +72,8 @@ local onSpinResult = nil
 local isOwnedCrateOpen = false
 local currentGemCaseId = nil
 
+local spinSessionActive = false
+
 
 -- Carousel items
 local ITEM_WIDTH = 130
@@ -1479,6 +1481,7 @@ function SpinController.RequestSpin()
 end
 
 function SpinController.Show()
+	spinSessionActive = true
 	SetPlayerBusy:FireServer(true)
 	spinContainer.Visible = true
 	if currentSpinCost <= 0 then
@@ -1490,6 +1493,7 @@ function SpinController.Show()
 end
 
 function SpinController.Hide()
+	spinSessionActive = false
 	SetPlayerBusy:FireServer(false)
 	stopPreSpinVisual()
 	UIHelper.ScaleOut(spinContainer, 0.2)
@@ -1578,6 +1582,10 @@ end
 
 function SpinController.IsAnimating()
 	return isSpinning and not animationDone
+end
+
+function SpinController.IsActive()
+	return spinSessionActive
 end
 
 return SpinController

@@ -17,6 +17,8 @@ do
 		"GetCaseStock", "CaseStockUpdate",
 		"GetPotionStock", "PotionStockUpdate", "BuyPotionStock", "UseOwnedPotion",
 		"SetPlayerBusy",
+		"SettingsUpdate",
+		"SacrificeQueueAction",
 	}
 	for _, name in ipairs(newRemotes) do
 		if not remotes:FindFirstChild(name) then
@@ -410,6 +412,19 @@ do
 	end)
 end
 
+-- Settings update (persist user preferences)
+do
+	local SettingsUpdate = ReplicatedStorage.RemoteEvents:WaitForChild("SettingsUpdate")
+	SettingsUpdate.OnServerEvent:Connect(function(player, settings)
+		if type(settings) ~= "table" then return end
+		PlayerData.WithLock(player, function()
+			PlayerData.UpdateSettings(player, settings)
+		end)
+	end)
+end
+
+-- Sacrifice queue actions are now handled inside SacrificeService.Init
+
 -- Ensure new remote events exist before services init
 do
 	local remotes = ReplicatedStorage:WaitForChild("RemoteEvents")
@@ -445,5 +460,85 @@ CaseStockService.Init(PlayerData, SpinService, QuestService)
 LeaderboardService.Init(PlayerData)
 PotionService.SetQuestService(QuestService)
 
+
+-------------------------------------------------
+-- DEBUG: Give all streamers + Skip tutorial (Studio only)
+-------------------------------------------------
+do
+	local RunService = game:GetService("RunService")
+	if RunService:IsStudio() then
+		local Streamers = require(ReplicatedStorage.Shared.Config.Streamers)
+		local Effects = require(ReplicatedStorage.Shared.Config.Effects)
+		local remotes = ReplicatedStorage:WaitForChild("RemoteEvents")
+
+		-- DebugGiveAll: give all streamers (base + every effect type)
+		local debugGiveAll = remotes:FindFirstChild("DebugGiveAll")
+		if not debugGiveAll then
+			debugGiveAll = Instance.new("RemoteEvent")
+			debugGiveAll.Name = "DebugGiveAll"
+			debugGiveAll.Parent = remotes
+		end
+		debugGiveAll.OnServerEvent:Connect(function(player)
+			print("[DEBUG] Giving all streamers (base + effects) to " .. player.Name)
+			local count = 0
+			PlayerData.WithLock(player, function()
+				for _, s in ipairs(Streamers.List) do
+					PlayerData.AddToInventory(player, s.id, nil)
+					count += 1
+				end
+				for _, s in ipairs(Streamers.List) do
+					for _, e in ipairs(Effects.List) do
+						PlayerData.AddToInventory(player, s.id, e.name)
+						count += 1
+					end
+				end
+				PlayerData.Replicate(player)
+			end)
+			print("[DEBUG] Done — gave " .. count .. " streamers")
+		end)
+
+		-- DebugSkipTutorial: mark tutorial complete
+		local debugSkipTutorial = remotes:FindFirstChild("DebugSkipTutorial")
+		if not debugSkipTutorial then
+			debugSkipTutorial = Instance.new("RemoteEvent")
+			debugSkipTutorial.Name = "DebugSkipTutorial"
+			debugSkipTutorial.Parent = remotes
+		end
+		debugSkipTutorial.OnServerEvent:Connect(function(player)
+			print("[DEBUG] Skipping tutorial for " .. player.Name)
+			PlayerData.WithLock(player, function()
+				local data = PlayerData._cache[player.UserId]
+				if data then
+					data.tutorialComplete = true
+					PlayerData.Replicate(player)
+				end
+			end)
+		end)
+
+		-- DebugMaxRebirth: max rebirth + unlock everything (premium slot, VIP, 2x luck, 2x cash)
+		local Economy = require(ReplicatedStorage.Shared.Config.Economy)
+		local debugMaxRebirth = remotes:FindFirstChild("DebugMaxRebirth")
+		if not debugMaxRebirth then
+			debugMaxRebirth = Instance.new("RemoteEvent")
+			debugMaxRebirth.Name = "DebugMaxRebirth"
+			debugMaxRebirth.Parent = remotes
+		end
+		debugMaxRebirth.OnServerEvent:Connect(function(player)
+			print("[DEBUG] Max rebirth + unlock all for " .. player.Name)
+			PlayerData.WithLock(player, function()
+				PlayerData.SetRebirthCount(player, Economy.MaxRebirths)
+				PlayerData.SetPremiumSlot(player, true)
+				PlayerData.SetDoubleCash(player, true)
+				PlayerData.SetVIP(player, true)
+				PlayerData.SetX2Luck(player, true)
+			end)
+			-- Refresh base pad visuals so all 20 slots show as unlocked
+			BaseService.UpdateBasePads(player)
+			print("[DEBUG] Done — rebirth " .. Economy.MaxRebirths .. ", all 20 slots unlocked")
+		end)
+
+		print("[Server] Debug: DebugGiveAll + DebugSkipTutorial + DebugMaxRebirth active (Studio only)")
+	end
+end
 
 print("[Server] Spin the Streamer initialized! Map size: 400x1000 studs, 8 base slots")

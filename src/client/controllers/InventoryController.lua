@@ -34,9 +34,6 @@ local playerGui = player:WaitForChild("PlayerGui")
 local RemoteEvents = ReplicatedStorage:WaitForChild("RemoteEvents")
 local SellRequest = RemoteEvents:WaitForChild("SellRequest")
 
--- Lazy-loaded SacrificeController to check queued indices
-local SacrificeController = nil
-
 -- State
 local inventory = {}           -- mirror of server inventory
 local selectedIndex = nil      -- currently selected inventory index
@@ -162,11 +159,6 @@ end
 -------------------------------------------------
 
 local function updateSlotVisuals()
-	if not SacrificeController then
-		SacrificeController = require(script.Parent.SacrificeController)
-	end
-	local queuedSet = SacrificeController.GetQueuedIndices()
-
 	for i = 1, VISIBLE_SLOTS do
 		local slotData = slots[i]
 		if not slotData then continue end
@@ -175,21 +167,13 @@ local function updateSlotVisuals()
 		local streamerId = getItemId(item)
 		local effect = getItemEffect(item)
 		local stroke = slotData.frame:FindFirstChildOfClass("UIStroke")
-		local isQueued = streamerId and queuedSet[i]
 
 		local oldEffectTag = slotData.frame:FindFirstChild("EffectTag")
 		if oldEffectTag then oldEffectTag:Destroy() end
 		slotData.iconLabel.Position = UDim2.new(0.5, 0, 0.25, 0)
 		slotData.iconLabel.Size = UDim2.new(1, -4, 0.5, 0)
 
-		if isQueued then
-			slotData.iconLabel.Text = ""
-			slotData.rarityLabel.Text = ""
-			slotData.frame.BackgroundColor3 = EMPTY_SLOT_COLOR
-			if stroke then
-				stroke.Color = Color3.fromRGB(80, 75, 110); stroke.Thickness = 1.5
-			end
-		elseif streamerId then
+		if streamerId then
 			local info = Streamers.ById[streamerId]
 			local rarityColor = DesignConfig.RarityColors[info and info.rarity or "Common"]
 				or Color3.fromRGB(170, 170, 170)
@@ -378,12 +362,6 @@ function InventoryController.SelectSlot(slotIndex: number)
 	local now = os.clock()
 	if (now - lastSelectTime) < SELECT_COOLDOWN then return end
 	lastSelectTime = now
-
-	if not SacrificeController then
-		SacrificeController = require(script.Parent.SacrificeController)
-	end
-	local queuedSet = SacrificeController.GetQueuedIndices()
-	if queuedSet[slotIndex] then return end
 
 	if selectedIndex == slotIndex then
 		selectedIndex = nil

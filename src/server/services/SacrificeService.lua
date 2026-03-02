@@ -1,7 +1,13 @@
 --[[
 	SacrificeService.lua
 	Handles all sacrifice actions: gem trades, one-time quests,
-	50/50, Feeling Lucky, Don't do it, and elemental conversion.
+	and elemental conversion.
+
+	Queue-based flow:
+	- Players add streamers to a per-sacrifice queue (a persistent storage spot).
+	- Items leave inventory/storage and live in the queue until consumed or returned.
+	- When the queue is full, the player can exchange for gems.
+	- Queues persist across sessions via PlayerData.sacrificeQueues.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -19,186 +25,56 @@ local QuestService
 local RemoteEvents = ReplicatedStorage:WaitForChild("RemoteEvents")
 local SacrificeRequest = RemoteEvents:WaitForChild("SacrificeRequest")
 local SacrificeResult = RemoteEvents:WaitForChild("SacrificeResult")
+local SacrificeQueueAction = RemoteEvents:WaitForChild("SacrificeQueueAction")
 
 local STORAGE_OFFSET = 1000
 
-local function getSellPrice(item)
-	local id = type(item) == "table" and item.id or item
-	local effect = type(item) == "table" and item.effect or nil
+-------------------------------------------------
+-- HELPERS
+-------------------------------------------------
+
+local function getItemId(item)
+	if type(item) == "table" then return item.id end
+	if type(item) == "string" then return item end
+	return nil
+end
+
+local function getItemEffect(item)
+	if type(item) ~= "table" then return nil end
+	local e = item.effect
+	if e == nil or e == "" then return nil end
+	return e
+end
+
+local function itemMatchesRarity(item, rarity)
+	local id = getItemId(item)
 	local info = Streamers.ById[id]
-	if not info then return 0 end
-	local p = info.cashPerSecond or 0
-	if effect then
-		local ei = Effects.ByName[effect]
-		if ei and ei.cashMultiplier then p = p * ei.cashMultiplier end
-	end
-	return math.floor(p)
+	return info and info.rarity == rarity
 end
 
---- Build a combined list of {virtualIdx, item} from hotbar + storage
---- Hotbar items: virtualIdx = 1..#inv, storage items: virtualIdx = 1001..1000+#storage
-local function getCombined(player)
-	local inv = PlayerData.GetInventory(player)
-	local sto = PlayerData.GetStorage(player)
-	local combined = {}
-	for i, item in ipairs(inv) do
-		table.insert(combined, { vi = i, item = item })
-	end
-	for i, item in ipairs(sto) do
-		table.insert(combined, { vi = STORAGE_OFFSET + i, item = item })
-	end
-	return combined
-end
-
---- Remove items by virtual indices (hotbar < 1000, storage >= 1001)
-local function removeByVirtualIndices(player, vIndices)
-	local hotbarIndices = {}
-	local storageIndices = {}
-	for _, vi in ipairs(vIndices) do
-		if vi > STORAGE_OFFSET then
-			table.insert(storageIndices, vi - STORAGE_OFFSET)
-		else
-			table.insert(hotbarIndices, vi)
-		end
-	end
-	if #hotbarIndices > 0 then PlayerData.RemoveFromInventoryIndices(player, hotbarIndices) end
-	if #storageIndices > 0 then PlayerData.RemoveFromStorageIndices(player, storageIndices) end
-end
-
---- Count combined items matching rarity (and optional effect)
-local function countByRarity(combined, rarity, effect)
-	local n = 0
-	for _, entry in ipairs(combined) do
-		local item = entry.item
-		local id = type(item) == "table" and item.id or item
-		local e = type(item) == "table" and item.effect or nil
-		local info = Streamers.ById[id]
-		if info and info.rarity == rarity and (effect == nil or e == effect) then
-			n = n + 1
-		end
-	end
-	return n
-end
-
---- Collect virtual indices of up to `need` items matching rarity (and optional effect)
-local function indicesByRarity(combined, rarity, need, effect)
-	local list = {}
-	for _, entry in ipairs(combined) do
-		if need <= 0 then break end
-		local item = entry.item
-		local id = type(item) == "table" and item.id or item
-		local e = type(item) == "table" and item.effect or nil
-		local info = Streamers.ById[id]
-		if info and info.rarity == rarity and (effect == nil or e == effect) then
-			table.insert(list, entry.vi)
-			need = need - 1
-		end
-	end
-	return list
-end
-
---- Check and remove exact requirements: streamerId + effect + count (from combined)
-local function hasAndRemoveExact(player, reqList)
-	local combined = getCombined(player)
-	local toRemove = {}
-	local used = {}
-	for _, r in ipairs(reqList) do
-		local need = r.count or 1
-		for _, entry in ipairs(combined) do
-			if need <= 0 then break end
-			if not used[entry.vi] then
-				local item = entry.item
-				local id = type(item) == "table" and item.id or item
-				local e = type(item) == "table" and item.effect or nil
-				if r.streamerId and id == r.streamerId and (r.effect == nil or e == r.effect) then
-					table.insert(toRemove, entry.vi)
-					used[entry.vi] = true
-					need = need - 1
-				end
-			end
-		end
-		if need > 0 then return false end
-	end
-	removeByVirtualIndices(player, toRemove)
+local function itemMatchesExact(item, streamerId, effect)
+	local id = getItemId(item)
+	local eff = getItemEffect(item)
+	if id ~= streamerId then return false end
+	if effect ~= nil and eff ~= effect then return false end
 	return true
 end
 
---- Check and remove rarity-based requirements (e.g. 1 common, 1 rare, ...)
-local function hasAndRemoveByRarity(player, reqList)
-	local combined = getCombined(player)
-	for _, r in ipairs(reqList) do
-		if countByRarity(combined, r.rarity, nil) < (r.count or 1) then
-			return false
-		end
-	end
-	local allIndices = {}
-	for _, r in ipairs(reqList) do
-		local need = r.count or 1
-		local indices = indicesByRarity(combined, r.rarity, need, nil)
-		for _, idx in ipairs(indices) do
-			table.insert(allIndices, idx)
-		end
-	end
-	removeByVirtualIndices(player, allIndices)
-	return true
+local function itemMatchesEffect(item, effectName)
+	local eff = getItemEffect(item)
+	return eff == effectName
 end
 
---- Count combined items matching a specific effect (any rarity)
-local function countByEffect(combined, effect)
-	local n = 0
-	for _, entry in ipairs(combined) do
-		local e = type(entry.item) == "table" and entry.item.effect or nil
-		if e == effect then n = n + 1 end
-	end
-	return n
+local function itemMatchesRarityAndEffect(item, rarity, effectName)
+	local id = getItemId(item)
+	local eff = getItemEffect(item)
+	local info = Streamers.ById[id]
+	if not info or info.rarity ~= rarity then return false end
+	if effectName == nil then return eff == nil end
+	return eff == effectName
 end
 
---- Collect virtual indices of up to `need` items matching a specific effect
-local function indicesByEffect(combined, effect, need)
-	local list = {}
-	for _, entry in ipairs(combined) do
-		if need <= 0 then break end
-		local e = type(entry.item) == "table" and entry.item.effect or nil
-		if e == effect then
-			table.insert(list, entry.vi)
-			need = need - 1
-		end
-	end
-	return list
-end
-
---- Check and remove effect-based requirements (e.g. 20 Acid cards)
-local function hasAndRemoveByEffect(player, reqList)
-	local combined = getCombined(player)
-	for _, r in ipairs(reqList) do
-		if countByEffect(combined, r.effectReq) < (r.count or 1) then
-			return false
-		end
-	end
-	local allIndices = {}
-	for _, r in ipairs(reqList) do
-		local indices = indicesByEffect(combined, r.effectReq, r.count or 1)
-		for _, idx in ipairs(indices) do
-			table.insert(allIndices, idx)
-		end
-	end
-	removeByVirtualIndices(player, allIndices)
-	return true
-end
-
---- Get the virtual index of the highest earning item across hotbar+storage
-local function getHighestEarningIndex(player)
-	local combined = getCombined(player)
-	local bestVI, bestPrice = nil, -1
-	for _, entry in ipairs(combined) do
-		local p = getSellPrice(entry.item)
-		if p > bestPrice then bestVI = entry.vi; bestPrice = p end
-	end
-	return bestVI
-end
-
---- Pick random streamer of given rarity (optionally with effect)
-local function randomStreamerOfRarity(rarity, effect)
+local function randomStreamerOfRarity(rarity)
 	local list = Streamers.ByRarity[rarity]
 	if not list or #list == 0 then return nil end
 	return list[math.random(1, #list)].id
@@ -215,10 +91,122 @@ local function nextRarity(rarity)
 end
 
 -------------------------------------------------
+-- QUEUE MANAGEMENT (server-side)
+-- Players add/remove items via SacrificeQueueAction remote.
+-- Items are moved between inventory/storage and the queue.
+-------------------------------------------------
+
+local function handleQueueAdd(player, queueId, sourceType, sourceIndex)
+	if type(queueId) ~= "string" or type(sourceType) ~= "string" or type(sourceIndex) ~= "number" then
+		SacrificeResult:FireClient(player, { success = false, reason = "Invalid queue request." })
+		return
+	end
+	if sourceIndex ~= math.floor(sourceIndex) or sourceIndex < 1 then
+		SacrificeResult:FireClient(player, { success = false, reason = "Invalid index." })
+		return
+	end
+	if sourceType ~= "hotbar" and sourceType ~= "storage" then
+		SacrificeResult:FireClient(player, { success = false, reason = "Invalid source." })
+		return
+	end
+
+	local ok = PlayerData.AddToSacrificeQueue(player, queueId, sourceType, sourceIndex)
+	if not ok then
+		SacrificeResult:FireClient(player, { success = false, reason = "Could not add to queue." })
+		return
+	end
+	SacrificeResult:FireClient(player, { success = true, action = "queueAdd", queueId = queueId })
+end
+
+local function handleQueueRemove(player, queueId, queueIndex)
+	if type(queueId) ~= "string" or type(queueIndex) ~= "number" then
+		SacrificeResult:FireClient(player, { success = false, reason = "Invalid queue request." })
+		return
+	end
+	if queueIndex ~= math.floor(queueIndex) or queueIndex < 1 then
+		SacrificeResult:FireClient(player, { success = false, reason = "Invalid index." })
+		return
+	end
+
+	local ok = PlayerData.RemoveFromSacrificeQueue(player, queueId, queueIndex)
+	if not ok then
+		SacrificeResult:FireClient(player, { success = false, reason = "Could not remove from queue. Inventory/storage may be full." })
+		return
+	end
+	SacrificeResult:FireClient(player, { success = true, action = "queueRemove", queueId = queueId })
+end
+
+local function handleQueueClear(player, queueId)
+	if type(queueId) ~= "string" then
+		SacrificeResult:FireClient(player, { success = false, reason = "Invalid queue request." })
+		return
+	end
+	PlayerData.ClearSacrificeQueue(player, queueId)
+	SacrificeResult:FireClient(player, { success = true, action = "queueClear", queueId = queueId })
+end
+
+local function handleQueueAutoFill(player, queueId, filterType, filterArg1, filterArg2, maxCount)
+	if type(queueId) ~= "string" or type(filterType) ~= "string" then
+		SacrificeResult:FireClient(player, { success = false, reason = "Invalid auto-fill request." })
+		return
+	end
+	if type(maxCount) ~= "number" or maxCount < 1 then maxCount = 200 end
+	maxCount = math.min(maxCount, 200)
+
+	local data = PlayerData.Get(player)
+	if not data then return end
+	if not data.sacrificeQueues then data.sacrificeQueues = {} end
+	if not data.sacrificeQueues[queueId] then data.sacrificeQueues[queueId] = {} end
+
+	local queue = data.sacrificeQueues[queueId]
+	local added = 0
+	local remaining = maxCount - #queue
+	if remaining <= 0 then
+		SacrificeResult:FireClient(player, { success = true, action = "queueAutoFill", queueId = queueId, added = 0 })
+		return
+	end
+
+	local function matches(item)
+		if filterType == "rarity" then
+			return itemMatchesRarity(item, filterArg1)
+		elseif filterType == "effect" then
+			return itemMatchesEffect(item, filterArg1)
+		elseif filterType == "exact" then
+			return itemMatchesExact(item, filterArg1, filterArg2)
+		elseif filterType == "rarityEffect" then
+			return itemMatchesRarityAndEffect(item, filterArg1, filterArg2)
+		end
+		return false
+	end
+
+	for i = #data.inventory, 1, -1 do
+		if added >= remaining then break end
+		if matches(data.inventory[i]) then
+			local item = table.remove(data.inventory, i)
+			table.insert(queue, item)
+			added = added + 1
+		end
+	end
+
+	if added < remaining and data.storage then
+		for i = #data.storage, 1, -1 do
+			if added >= remaining then break end
+			if matches(data.storage[i]) then
+				local item = table.remove(data.storage, i)
+				table.insert(queue, item)
+				added = added + 1
+			end
+		end
+	end
+
+	PlayerData.Replicate(player)
+	SacrificeResult:FireClient(player, { success = true, action = "queueAutoFill", queueId = queueId, added = added })
+end
+
+-------------------------------------------------
 -- GEM TRADE (repeatable)
 -------------------------------------------------
 local function handleGemTrade(player, tradeIndex)
-	-- SECURITY FIX: Validate input
 	if type(tradeIndex) ~= "number" or tradeIndex ~= math.floor(tradeIndex) then
 		SacrificeResult:FireClient(player, { success = false, reason = "Invalid trade." })
 		return
@@ -228,14 +216,23 @@ local function handleGemTrade(player, tradeIndex)
 		SacrificeResult:FireClient(player, { success = false, reason = "Invalid trade." })
 		return
 	end
-	local combined = getCombined(player)
-	local count = countByRarity(combined, trade.rarity, nil)
-	if count < trade.count then
-		SacrificeResult:FireClient(player, { success = false, reason = ("Need %d %s (you have %d)."):format(trade.count, trade.rarity, count) })
+
+	local queueId = "GemTrade_" .. tradeIndex
+	local queue = PlayerData.GetSacrificeQueue(player, queueId)
+
+	if #queue < trade.count then
+		SacrificeResult:FireClient(player, { success = false, reason = ("Need %d %s in queue (you have %d)."):format(trade.count, trade.rarity, #queue) })
 		return
 	end
-	local indices = indicesByRarity(combined, trade.rarity, trade.count, nil)
-	removeByVirtualIndices(player, indices)
+
+	for _, item in ipairs(queue) do
+		if not itemMatchesRarity(item, trade.rarity) then
+			SacrificeResult:FireClient(player, { success = false, reason = "Queue contains items of the wrong rarity." })
+			return
+		end
+	end
+
+	PlayerData.ConsumeSacrificeQueue(player, queueId)
 	PlayerData.AddGems(player, trade.gems)
 	SacrificeResult:FireClient(player, { success = true, sacrificeType = "GemTrade", gems = trade.gems })
 	if QuestService then
@@ -247,7 +244,6 @@ end
 -- ONE-TIME
 -------------------------------------------------
 local function handleOneTime(player, oneTimeId)
-	-- SECURITY FIX: Validate input
 	if type(oneTimeId) ~= "string" then
 		SacrificeResult:FireClient(player, { success = false, reason = "Invalid request." })
 		return
@@ -261,26 +257,61 @@ local function handleOneTime(player, oneTimeId)
 		SacrificeResult:FireClient(player, { success = false, reason = "Already completed!" })
 		return
 	end
-	-- Requirements can be exact (streamerId), by rarity (Rainbow), or by effect (elemental one-time)
+
+	local queueId = "OneTime_" .. oneTimeId
+	local queue = PlayerData.GetSacrificeQueue(player, queueId)
+
 	local isEffectReq = cfg.req[1] and cfg.req[1].effectReq ~= nil
 	local isRarityReq = cfg.req[1] and cfg.req[1].rarity ~= nil
+
+	local totalNeeded = 0
+	for _, r in ipairs(cfg.req) do totalNeeded = totalNeeded + (r.count or 1) end
+
+	if #queue < totalNeeded then
+		SacrificeResult:FireClient(player, { success = false, reason = "Queue is not full yet." })
+		return
+	end
+
 	if isEffectReq then
-		if not hasAndRemoveByEffect(player, cfg.req) then
-			local r = cfg.req[1]
-			SacrificeResult:FireClient(player, { success = false, reason = ("Need %d %s cards (any rarity)."):format(r.count or 1, r.effectReq) })
+		local r = cfg.req[1]
+		local count = 0
+		for _, item in ipairs(queue) do
+			if itemMatchesEffect(item, r.effectReq) then count = count + 1 end
+		end
+		if count < (r.count or 1) then
+			SacrificeResult:FireClient(player, { success = false, reason = ("Need %d %s cards in queue."):format(r.count or 1, r.effectReq) })
 			return
 		end
 	elseif isRarityReq then
-		if not hasAndRemoveByRarity(player, cfg.req) then
-			SacrificeResult:FireClient(player, { success = false, reason = "You don't have the required streamers (1 of each rarity)." })
-			return
+		for _, r in ipairs(cfg.req) do
+			local count = 0
+			for _, item in ipairs(queue) do
+				if itemMatchesRarity(item, r.rarity) then count = count + 1 end
+			end
+			if count < (r.count or 1) then
+				SacrificeResult:FireClient(player, { success = false, reason = "Queue doesn't have the required streamers." })
+				return
+			end
 		end
 	else
-		if not hasAndRemoveExact(player, cfg.req) then
-			SacrificeResult:FireClient(player, { success = false, reason = "You don't have the required streamers." })
-			return
+		local used = {}
+		for _, r in ipairs(cfg.req) do
+			local need = r.count or 1
+			for qi, item in ipairs(queue) do
+				if need <= 0 then break end
+				if not used[qi] and itemMatchesExact(item, r.streamerId, r.effect) then
+					used[qi] = true
+					need = need - 1
+				end
+			end
+			if need > 0 then
+				SacrificeResult:FireClient(player, { success = false, reason = "Queue doesn't have the required streamers." })
+				return
+			end
 		end
 	end
+
+	PlayerData.ConsumeSacrificeQueue(player, queueId)
 	PlayerData.SetSacrificeOneTimeCompleted(player, oneTimeId)
 	PlayerData.AddGems(player, cfg.gems)
 	SacrificeResult:FireClient(player, { success = true, sacrificeType = "OneTime", oneTimeId = oneTimeId, gems = cfg.gems })
@@ -290,203 +321,9 @@ local function handleOneTime(player, oneTimeId)
 end
 
 -------------------------------------------------
--- 50/50
--------------------------------------------------
-local function handleFiftyFifty(player)
-	local cfg = Sacrifice.FiftyFifty
-	local rechargeSec = cfg.rechargeMinutes * 60
-	local charges = PlayerData.GetSacrificeChargeCount(player, "FiftyFifty", cfg.maxCharges, rechargeSec)
-	if charges <= 0 then
-		SacrificeResult:FireClient(player, { success = false, reason = "No charges! 1 charge every " .. cfg.rechargeMinutes .. " min." })
-		return
-	end
-	local combined = getCombined(player)
-	for _, r in ipairs(cfg.req) do
-		if countByRarity(combined, r.rarity, nil) < r.count then
-			SacrificeResult:FireClient(player, { success = false, reason = ("Need %d %s."):format(r.count, r.rarity) })
-			return
-		end
-	end
-	-- Consume resources and charge
-	for _, r in ipairs(cfg.req) do
-		local freshCombined = getCombined(player)
-		local indices = indicesByRarity(freshCombined, r.rarity, r.count, nil)
-		removeByVirtualIndices(player, indices)
-	end
-	PlayerData.UseSacrificeCharge(player, "FiftyFifty", rechargeSec, cfg.maxCharges)
-	-- Roll
-	local cash = PlayerData.GetCash(player)
-	local half = math.floor(cash / 2)
-	local double = cash * 2
-	if math.random() < 0.5 then
-		PlayerData.SpendCash(player, cash - half)
-		SacrificeResult:FireClient(player, { success = true, sacrificeType = "FiftyFifty", outcome = "half", newCash = half })
-		if QuestService then
-			QuestService.Increment(player, "sacrificesDone", 1)
-		end
-	else
-		PlayerData.AddCash(player, cash)
-		SacrificeResult:FireClient(player, { success = true, sacrificeType = "FiftyFifty", outcome = "double", newCash = double })
-		if QuestService then
-			QuestService.Increment(player, "sacrificesDone", 1)
-		end
-	end
-end
-
--------------------------------------------------
--- FEELING LUCKY
--------------------------------------------------
-local function handleFeelingLucky(player)
-	local cfg = Sacrifice.FeelingLucky
-	local rechargeSec = cfg.rechargeMinutes * 60
-	local charges = PlayerData.GetSacrificeChargeCount(player, "FeelingLucky", cfg.maxCharges, rechargeSec)
-	if charges <= 0 then
-		SacrificeResult:FireClient(player, { success = false, reason = "No charges! Recharges in " .. cfg.rechargeMinutes .. " min." })
-		return
-	end
-	local combined = getCombined(player)
-	for _, r in ipairs(cfg.req) do
-		if countByRarity(combined, r.rarity, nil) < r.count then
-			SacrificeResult:FireClient(player, { success = false, reason = ("Need %d %s."):format(r.count, r.rarity) })
-			return
-		end
-	end
-	for _, r in ipairs(cfg.req) do
-		local freshCombined = getCombined(player)
-		local indices = indicesByRarity(freshCombined, r.rarity, r.count, nil)
-		removeByVirtualIndices(player, indices)
-	end
-	PlayerData.UseSacrificeCharge(player, "FeelingLucky", rechargeSec, cfg.maxCharges)
-	local mult = math.random() < 0.5 and 2 or 0
-	PotionService.SetSacrificeLuck(player, mult, cfg.durationSeconds)
-	SacrificeResult:FireClient(player, { success = true, sacrificeType = "FeelingLucky", outcome = mult == 2 and "buff" or "debuff", duration = cfg.durationSeconds })
-	if QuestService then
-		QuestService.Increment(player, "sacrificesDone", 1)
-	end
-end
-
--------------------------------------------------
--- STREAMER SACRIFICE (formerly "Don't Do It")
--- Player picks which streamer to sacrifice.
--------------------------------------------------
-local function handleDontDoIt(player, chosenVI)
-	local cfg = Sacrifice.DontDoIt
-	if not chosenVI or type(chosenVI) ~= "number" then
-		SacrificeResult:FireClient(player, { success = false, reason = "Pick a streamer to sacrifice!" })
-		return
-	end
-	local item1
-	if chosenVI > STORAGE_OFFSET then
-		local sto = PlayerData.GetStorage(player)
-		item1 = sto[chosenVI - STORAGE_OFFSET]
-	else
-		local inv = PlayerData.GetInventory(player)
-		item1 = inv[chosenVI]
-	end
-	if not item1 then
-		SacrificeResult:FireClient(player, { success = false, reason = "Invalid streamer!" })
-		return
-	end
-	local id1 = type(item1) == "table" and item1.id or item1
-	local info1 = Streamers.ById[id1]
-	if not info1 then
-		SacrificeResult:FireClient(player, { success = false, reason = "Invalid streamer." })
-		return
-	end
-	-- Remove the player's chosen streamer
-	removeByVirtualIndices(player, { chosenVI })
-	local baseRarity = info1.rarity
-	local chance = cfg.upgradeChances[baseRarity]
-	if not chance then
-		SacrificeResult:FireClient(player, { success = true, sacrificeType = "DontDoIt", upgraded = false, reason = "Already Mythic!" })
-		if QuestService then
-			QuestService.Increment(player, "sacrificesDone", 1)
-		end
-		return
-	end
-	local roll = math.random(1, 100)
-	if roll > chance then
-		SacrificeResult:FireClient(player, { success = true, sacrificeType = "DontDoIt", upgraded = false })
-		if QuestService then
-			QuestService.Increment(player, "sacrificesDone", 1)
-		end
-		return
-	end
-	local nextR = nextRarity(baseRarity)
-	if not nextR then
-		SacrificeResult:FireClient(player, { success = true, sacrificeType = "DontDoIt", upgraded = false })
-		if QuestService then
-			QuestService.Increment(player, "sacrificesDone", 1)
-		end
-		return
-	end
-	-- Preserve effect (Acid, Void, etc.) from the sacrificed streamer
-	local baseEffect = type(item1) == "table" and item1.effect or nil
-	local newId = randomStreamerOfRarity(nextR, nil)
-	if newId then
-		PlayerData.AddToInventory(player, newId, baseEffect)
-		SacrificeResult:FireClient(player, { success = true, sacrificeType = "DontDoIt", upgraded = true, streamerId = newId, rarity = nextR, effect = baseEffect })
-		if QuestService then
-			QuestService.Increment(player, "sacrificesDone", 1)
-		end
-	else
-		SacrificeResult:FireClient(player, { success = true, sacrificeType = "DontDoIt", upgraded = false })
-		if QuestService then
-			QuestService.Increment(player, "sacrificesDone", 1)
-		end
-	end
-end
-
--------------------------------------------------
--- GEM ROULETTE (wager gems, 50/50 double or lose all)
--------------------------------------------------
-local function handleGemRoulette(player, wagerAmount)
-	if type(wagerAmount) ~= "number" or wagerAmount <= 0 or wagerAmount ~= math.floor(wagerAmount) then
-		SacrificeResult:FireClient(player, { success = false, reason = "Invalid wager amount." })
-		return
-	end
-	local cfg = Sacrifice.GemRoulette
-	local rechargeSec = cfg.rechargeMinutes * 60
-	local charges = PlayerData.GetSacrificeChargeCount(player, "GemRoulette", cfg.maxCharges, rechargeSec)
-	if charges <= 0 then
-		SacrificeResult:FireClient(player, { success = false, reason = "No charges! 1 charge every " .. cfg.rechargeMinutes .. " min." })
-		return
-	end
-	local data = PlayerData.Get(player)
-	if not data then
-		SacrificeResult:FireClient(player, { success = false, reason = "Data not loaded." })
-		return
-	end
-	if (data.gems or 0) < wagerAmount then
-		SacrificeResult:FireClient(player, { success = false, reason = "Not enough gems! You have " .. (data.gems or 0) .. "." })
-		return
-	end
-	-- Consume charge
-	PlayerData.UseSacrificeCharge(player, "GemRoulette", rechargeSec, cfg.maxCharges)
-	-- Roll 50/50
-	if math.random() < 0.5 then
-		-- DOUBLE: add wagerAmount more gems (player keeps original + gains same amount)
-		PlayerData.AddGems(player, wagerAmount)
-		SacrificeResult:FireClient(player, { success = true, sacrificeType = "GemRoulette", outcome = "double", wager = wagerAmount, newGems = (data.gems or 0) + wagerAmount })
-		if QuestService then
-			QuestService.Increment(player, "sacrificesDone", 1)
-		end
-	else
-		-- GONE: remove the wagered gems
-		data.gems = math.max(0, (data.gems or 0) - wagerAmount)
-		PlayerData.Replicate(player)
-		SacrificeResult:FireClient(player, { success = true, sacrificeType = "GemRoulette", outcome = "gone", wager = wagerAmount, newGems = data.gems })
-		if QuestService then
-			QuestService.Increment(player, "sacrificesDone", 1)
-		end
-	end
-end
-
--------------------------------------------------
--- ELEMENTAL (X of same effect+rarity → 1 random of that rarity+effect)
+-- ELEMENTAL (X of same effect+rarity -> 1 random of that rarity+effect)
 -------------------------------------------------
 local function handleElemental(player, effect, rarity)
-	-- SECURITY FIX: Validate inputs
 	if type(effect) ~= "string" or type(rarity) ~= "string" then
 		SacrificeResult:FireClient(player, { success = false, reason = "Invalid request." })
 		return
@@ -496,15 +333,24 @@ local function handleElemental(player, effect, rarity)
 		SacrificeResult:FireClient(player, { success = false, reason = "Mythic has no conversion." })
 		return
 	end
-	local combined = getCombined(player)
-	local count = countByRarity(combined, rarity, effect)
-	if count < need then
-		SacrificeResult:FireClient(player, { success = false, reason = ("Need %d %s %s (you have %d)."):format(need, effect or "Default", rarity, count) })
+
+	local queueId = "Elemental_" .. effect .. "_" .. rarity
+	local queue = PlayerData.GetSacrificeQueue(player, queueId)
+
+	if #queue < need then
+		SacrificeResult:FireClient(player, { success = false, reason = ("Need %d %s %s in queue (you have %d)."):format(need, effect, rarity, #queue) })
 		return
 	end
-	local indices = indicesByRarity(combined, rarity, need, effect)
-	removeByVirtualIndices(player, indices)
-	local newId = randomStreamerOfRarity(rarity, nil)
+
+	for _, item in ipairs(queue) do
+		if not itemMatchesRarityAndEffect(item, rarity, effect) then
+			SacrificeResult:FireClient(player, { success = false, reason = "Queue contains items that don't match." })
+			return
+		end
+	end
+
+	PlayerData.ConsumeSacrificeQueue(player, queueId)
+	local newId = randomStreamerOfRarity(rarity)
 	if newId then
 		PlayerData.AddToInventory(player, newId, effect)
 		SacrificeResult:FireClient(player, { success = true, sacrificeType = "Elemental", streamerId = newId, effect = effect, rarity = rarity })
@@ -520,7 +366,6 @@ end
 -- REQUEST HANDLER
 -------------------------------------------------
 local function onSacrificeRequest(player, sacrificeType, ...)
-	-- SECURITY FIX: Validate sacrificeType is a string
 	if type(sacrificeType) ~= "string" then
 		SacrificeResult:FireClient(player, { success = false, reason = "Invalid request." })
 		return
@@ -546,6 +391,32 @@ local function onSacrificeRequest(player, sacrificeType, ...)
 	end
 end
 
+local function onQueueAction(player, action, ...)
+	if type(action) ~= "string" then
+		SacrificeResult:FireClient(player, { success = false, reason = "Invalid request." })
+		return
+	end
+	if not PlayerData.IsTutorialComplete(player) then
+		SacrificeResult:FireClient(player, { success = false, reason = "Complete the tutorial first!" })
+		return
+	end
+	if action == "add" then
+		handleQueueAdd(player, ...)
+	elseif action == "remove" then
+		handleQueueRemove(player, ...)
+	elseif action == "clear" then
+		handleQueueClear(player, ...)
+	elseif action == "autoFill" then
+		handleQueueAutoFill(player, ...)
+	elseif action == "fullSync" then
+		-- Legacy: no-op
+	elseif action == "returnAll" then
+		-- Legacy: no-op
+	else
+		SacrificeResult:FireClient(player, { success = false, reason = "Unknown queue action." })
+	end
+end
+
 -------------------------------------------------
 -- INIT
 -------------------------------------------------
@@ -553,10 +424,15 @@ function SacrificeService.Init(playerDataModule, potionServiceModule, questServi
 	PlayerData = playerDataModule
 	PotionService = potionServiceModule
 	QuestService = questServiceModule
-	-- SECURITY FIX: Wrap sacrifice handler in per-player lock to prevent race conditions
+
 	SacrificeRequest.OnServerEvent:Connect(function(player, ...)
 		local args = {...}
 		PlayerData.WithLock(player, function() onSacrificeRequest(player, unpack(args)) end)
+	end)
+
+	SacrificeQueueAction.OnServerEvent:Connect(function(player, ...)
+		local args = {...}
+		PlayerData.WithLock(player, function() onQueueAction(player, unpack(args)) end)
 	end)
 end
 

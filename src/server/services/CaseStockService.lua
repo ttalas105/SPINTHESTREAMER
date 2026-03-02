@@ -2,10 +2,13 @@
 	CaseStockService.lua
 	Manages global case stock (shared across all players) with a 5-minute restock timer.
 	Handles buying cases into player inventory and opening owned cases (triggering spin).
+	Stock and restock timer persist across server restarts (leave/rejoin).
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
+local DataStoreService = game:GetService("DataStoreService")
+local RunService = game:GetService("RunService")
 
 local Economy = require(ReplicatedStorage.Shared.Config.Economy)
 
@@ -20,8 +23,37 @@ local RemoteEvents = ReplicatedStorage:WaitForChild("RemoteEvents")
 local stock = {}
 local lastRestockTime = 0
 
+local CASE_STOCK_KEY = "World_CaseStock"
+local worldDataStore
+local studioMemoryStore = {}
+do
+	local ok, ds = pcall(function()
+		return DataStoreService:GetDataStore("SpinTheStreamer_v2")
+	end)
+	if ok and ds then
+		worldDataStore = ds
+	else
+		worldDataStore = {
+			GetAsync = function(key) return studioMemoryStore[key] end,
+			SetAsync = function(key, value) studioMemoryStore[key] = value end,
+		}
+		if RunService:IsStudio() then
+			print("[CaseStock] Using in-memory mock — enable 'Studio Access to API Services' in Game Settings to persist stock")
+		end
+	end
+end
+
 local function getServerTime()
-	return workspace:GetServerTimeNow()
+	return os.time()
+end
+
+local function saveStock()
+	pcall(function()
+		worldDataStore:SetAsync(CASE_STOCK_KEY, {
+			stock = stock,
+			lastRestockTime = lastRestockTime,
+		})
+	end)
 end
 
 local function restockAll()
@@ -29,6 +61,24 @@ local function restockAll()
 		stock[i] = Economy.CrateMaxStock[i] or 50
 	end
 	lastRestockTime = getServerTime()
+	saveStock()
+end
+
+local function loadPersistedStock()
+	local ok, saved = pcall(function()
+		return worldDataStore:GetAsync(CASE_STOCK_KEY)
+	end)
+	if not ok or not saved or type(saved) ~= "table" then return false end
+	local savedStock = saved.stock
+	local savedTime = tonumber(saved.lastRestockTime)
+	if not savedStock or type(savedStock) ~= "table" then return false end
+	stock = {}
+	for i = 1, Economy.TotalCases do
+		local v = savedStock[i] or savedStock[tostring(i)]
+		stock[i] = (type(v) == "number" and v >= 0) and math.floor(v) or (Economy.CrateMaxStock[i] or 50)
+	end
+	lastRestockTime = (type(savedTime) == "number" and savedTime > 0) and savedTime or getServerTime()
+	return true
 end
 
 local function getSecondsUntilRestock()
@@ -130,6 +180,7 @@ local function handleBuyCrate(player, crateId, amount)
 	local totalCost = costPer * toBuy
 	data.cash = data.cash - totalCost
 	stock[crateId] = (stock[crateId] or 0) - toBuy
+	saveStock()
 
 	if not data.ownedCrates then data.ownedCrates = {} end
 	data.ownedCrates[crateId] = (data.ownedCrates[crateId] or 0) + toBuy
@@ -219,7 +270,9 @@ function CaseStockService.Init(playerDataModule, spinServiceModule, questService
 	SpinService = spinServiceModule
 	QuestService = questServiceModule
 
-	restockAll()
+	if not loadPersistedStock() then
+		restockAll()
+	end
 
 	local BuyCrateStock = RemoteEvents:WaitForChild("BuyCrateStock")
 	BuyCrateStock.OnServerEvent:Connect(function(player, crateId, amount)
