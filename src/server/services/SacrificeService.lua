@@ -141,7 +141,11 @@ local function handleQueueClear(player, queueId)
 		SacrificeResult:FireClient(player, { success = false, reason = "Invalid queue request." })
 		return
 	end
-	PlayerData.ClearSacrificeQueue(player, queueId)
+	local ok, overflow = PlayerData.ClearSacrificeQueue(player, queueId)
+	if not ok then
+		SacrificeResult:FireClient(player, { success = false, action = "queueClear", reason = ("Not enough space! Free up %d inventory/storage slot%s first."):format(overflow, overflow == 1 and "" or "s") })
+		return
+	end
 	SacrificeResult:FireClient(player, { success = true, action = "queueClear", queueId = queueId })
 end
 

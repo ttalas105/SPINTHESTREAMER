@@ -29,138 +29,355 @@ loadGui.Parent = playerGui
 local bg = Instance.new("Frame")
 bg.Name = "BG"
 bg.Size = UDim2.new(1, 0, 1, 0)
-bg.BackgroundColor3 = Color3.fromRGB(12, 10, 22)
+bg.BackgroundColor3 = Color3.fromRGB(20, 10, 50)
 bg.BorderSizePixel = 0
 bg.ZIndex = 1
 bg.Parent = loadGui
 
 local bgGrad = Instance.new("UIGradient")
 bgGrad.Color = ColorSequence.new({
-	ColorSequenceKeypoint.new(0, Color3.fromRGB(18, 14, 36)),
-	ColorSequenceKeypoint.new(0.5, Color3.fromRGB(12, 10, 22)),
-	ColorSequenceKeypoint.new(1, Color3.fromRGB(22, 16, 40)),
+	ColorSequenceKeypoint.new(0, Color3.fromRGB(40, 15, 80)),
+	ColorSequenceKeypoint.new(0.35, Color3.fromRGB(80, 30, 140)),
+	ColorSequenceKeypoint.new(0.65, Color3.fromRGB(30, 60, 160)),
+	ColorSequenceKeypoint.new(1, Color3.fromRGB(60, 20, 120)),
 })
 bgGrad.Rotation = 135
 bgGrad.Parent = bg
 
+-- Animated background gradient rotation
+task.spawn(function()
+	local rot = 135
+	while loadGui and loadGui.Parent do
+		rot = (rot + 0.3) % 360
+		bgGrad.Rotation = rot
+		RunService.Heartbeat:Wait()
+	end
+end)
+
+-- Floating sparkle particles
+local particleContainer = Instance.new("Frame")
+particleContainer.Name = "Particles"
+particleContainer.Size = UDim2.new(1, 0, 1, 0)
+particleContainer.BackgroundTransparency = 1
+particleContainer.ZIndex = 2
+particleContainer.ClipsDescendants = true
+particleContainer.Parent = bg
+
+local PARTICLE_COLORS = {
+	Color3.fromRGB(255, 200, 80),
+	Color3.fromRGB(120, 220, 255),
+	Color3.fromRGB(255, 120, 200),
+	Color3.fromRGB(180, 100, 255),
+	Color3.fromRGB(100, 255, 180),
+	Color3.fromRGB(255, 150, 100),
+}
+
+local particleFrames = {}
+task.spawn(function()
+	for i = 1, 30 do
+		if not (loadGui and loadGui.Parent) then break end
+		local p = Instance.new("Frame")
+		local sz = math.random(3, 8)
+		p.Size = UDim2.new(0, sz, 0, sz)
+		p.Position = UDim2.new(math.random() * 1.2 - 0.1, 0, 1.05, 0)
+		p.AnchorPoint = Vector2.new(0.5, 0.5)
+		p.BackgroundColor3 = PARTICLE_COLORS[math.random(#PARTICLE_COLORS)]
+		p.BackgroundTransparency = math.random() * 0.3 + 0.2
+		p.BorderSizePixel = 0
+		p.ZIndex = 2
+		p.Rotation = math.random(0, 360)
+		p.Parent = particleContainer
+		Instance.new("UICorner", p).CornerRadius = UDim.new(1, 0)
+		table.insert(particleFrames, p)
+
+		local dur = math.random(40, 80) / 10
+		local xDrift = math.random(-60, 60)
+		TweenService:Create(p, TweenInfo.new(dur, Enum.EasingStyle.Linear, Enum.EasingDirection.Out, -1), {
+			Position = UDim2.new(p.Position.X.Scale, xDrift, -0.1, 0),
+			Rotation = p.Rotation + math.random(-180, 180),
+		}):Play()
+		TweenService:Create(p, TweenInfo.new(dur * 0.4, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
+			BackgroundTransparency = math.random() * 0.4 + 0.5,
+		}):Play()
+
+		if i % 5 == 0 then task.wait(0.05) end
+	end
+end)
+
+-- Floating fun emoji icons
+local EMOJIS = { "🎰", "💎", "🔥", "⭐", "🎮", "🎬", "🏆", "💰", "✨", "🎲" }
+local emojiLabels = {}
+task.spawn(function()
+	for i = 1, 12 do
+		if not (loadGui and loadGui.Parent) then break end
+		local em = Instance.new("TextLabel")
+		em.Size = UDim2.new(0, 40, 0, 40)
+		em.Position = UDim2.new(math.random() * 0.9 + 0.05, 0, math.random() * 0.8 + 0.1, 0)
+		em.AnchorPoint = Vector2.new(0.5, 0.5)
+		em.BackgroundTransparency = 1
+		em.Text = EMOJIS[math.random(#EMOJIS)]
+		em.TextSize = math.random(24, 42)
+		em.TextTransparency = 0.5
+		em.Font = Enum.Font.GothamBold
+		em.ZIndex = 3
+		em.Rotation = math.random(-20, 20)
+		em.Parent = bg
+		table.insert(emojiLabels, em)
+
+		local floatDur = math.random(25, 50) / 10
+		local startY = em.Position.Y.Scale
+		TweenService:Create(em, TweenInfo.new(floatDur, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {
+			Position = UDim2.new(em.Position.X.Scale, 0, startY - 0.03, 0),
+			Rotation = em.Rotation + math.random(-10, 10),
+			TextTransparency = 0.7,
+		}):Play()
+	end
+end)
+
+-- Glowing ring behind the title
+local glowRing = Instance.new("Frame")
+glowRing.Name = "GlowRing"
+glowRing.Size = UDim2.new(0, 500, 0, 500)
+glowRing.Position = UDim2.new(0.5, 0, 0.35, 0)
+glowRing.AnchorPoint = Vector2.new(0.5, 0.5)
+glowRing.BackgroundColor3 = Color3.fromRGB(140, 80, 255)
+glowRing.BackgroundTransparency = 0.85
+glowRing.BorderSizePixel = 0
+glowRing.ZIndex = 3
+glowRing.Parent = bg
+Instance.new("UICorner", glowRing).CornerRadius = UDim.new(1, 0)
+
+task.spawn(function()
+	while loadGui and loadGui.Parent do
+		TweenService:Create(glowRing, TweenInfo.new(1.8, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {
+			Size = UDim2.new(0, 560, 0, 560),
+			BackgroundTransparency = 0.92,
+		}):Play()
+		task.wait(1.8)
+		if not (loadGui and loadGui.Parent) then break end
+		TweenService:Create(glowRing, TweenInfo.new(1.8, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {
+			Size = UDim2.new(0, 500, 0, 500),
+			BackgroundTransparency = 0.85,
+		}):Play()
+		task.wait(1.8)
+	end
+end)
+
+-- Title
 local titleLabel = Instance.new("TextLabel")
 titleLabel.Name = "Title"
-titleLabel.Size = UDim2.new(0, 600, 0, 80)
-titleLabel.Position = UDim2.new(0.5, 0, 0.35, 0)
+titleLabel.Size = UDim2.new(0, 800, 0, 120)
+titleLabel.Position = UDim2.new(0.5, 0, 0.32, 0)
 titleLabel.AnchorPoint = Vector2.new(0.5, 0.5)
 titleLabel.BackgroundTransparency = 1
 titleLabel.Text = "SPIN THE STREAMER"
 titleLabel.TextColor3 = Color3.new(1, 1, 1)
 titleLabel.Font = Enum.Font.FredokaOne
-titleLabel.TextSize = 52
+titleLabel.TextSize = 72
 titleLabel.TextScaled = true
-titleLabel.ZIndex = 5
+titleLabel.ZIndex = 10
 titleLabel.Parent = bg
+
 local titleStroke = Instance.new("UIStroke")
-titleStroke.Color = Color3.fromRGB(80, 40, 200)
-titleStroke.Thickness = 3
+titleStroke.Color = Color3.fromRGB(255, 180, 50)
+titleStroke.Thickness = 4
 titleStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
 titleStroke.Parent = titleLabel
 
 local titleGrad = Instance.new("UIGradient")
 titleGrad.Color = ColorSequence.new({
-	ColorSequenceKeypoint.new(0, Color3.fromRGB(120, 200, 255)),
-	ColorSequenceKeypoint.new(0.5, Color3.fromRGB(200, 140, 255)),
-	ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 100, 180)),
+	ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 220, 80)),
+	ColorSequenceKeypoint.new(0.3, Color3.fromRGB(255, 140, 200)),
+	ColorSequenceKeypoint.new(0.6, Color3.fromRGB(120, 200, 255)),
+	ColorSequenceKeypoint.new(1, Color3.fromRGB(200, 120, 255)),
 })
 titleGrad.Parent = titleLabel
 
+-- Animated title gradient shimmer
+task.spawn(function()
+	local offset = 0
+	while loadGui and loadGui.Parent do
+		offset = (offset + 0.005) % 1
+		titleGrad.Offset = Vector2.new(offset, 0)
+		RunService.Heartbeat:Wait()
+	end
+end)
+
+-- Title bounce animation
+task.spawn(function()
+	while loadGui and loadGui.Parent do
+		TweenService:Create(titleLabel, TweenInfo.new(0.8, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {
+			Position = UDim2.new(0.5, 0, 0.31, 0),
+		}):Play()
+		task.wait(0.8)
+		if not (loadGui and loadGui.Parent) then break end
+		TweenService:Create(titleLabel, TweenInfo.new(0.8, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {
+			Position = UDim2.new(0.5, 0, 0.33, 0),
+		}):Play()
+		task.wait(0.8)
+	end
+end)
+
+-- Subtitle
 local subtitleLabel = Instance.new("TextLabel")
 subtitleLabel.Name = "Subtitle"
-subtitleLabel.Size = UDim2.new(0, 400, 0, 28)
+subtitleLabel.Size = UDim2.new(0, 500, 0, 36)
 subtitleLabel.Position = UDim2.new(0.5, 0, 0.43, 0)
 subtitleLabel.AnchorPoint = Vector2.new(0.5, 0.5)
 subtitleLabel.BackgroundTransparency = 1
 subtitleLabel.Text = "Loading assets..."
-subtitleLabel.TextColor3 = Color3.fromRGB(180, 175, 200)
+subtitleLabel.TextColor3 = Color3.fromRGB(220, 210, 255)
 subtitleLabel.Font = Enum.Font.GothamBold
-subtitleLabel.TextSize = 18
-subtitleLabel.ZIndex = 5
+subtitleLabel.TextSize = 22
+subtitleLabel.ZIndex = 10
 subtitleLabel.Parent = bg
 
+local subtitleStroke = Instance.new("UIStroke")
+subtitleStroke.Color = Color3.fromRGB(60, 30, 120)
+subtitleStroke.Thickness = 1.5
+subtitleStroke.Parent = subtitleLabel
+
+-- Progress bar (wider and chunkier)
 local barBg = Instance.new("Frame")
 barBg.Name = "BarBG"
-barBg.Size = UDim2.new(0, 400, 0, 12)
+barBg.Size = UDim2.new(0, 500, 0, 20)
 barBg.Position = UDim2.new(0.5, 0, 0.50, 0)
 barBg.AnchorPoint = Vector2.new(0.5, 0.5)
-barBg.BackgroundColor3 = Color3.fromRGB(40, 35, 60)
+barBg.BackgroundColor3 = Color3.fromRGB(30, 20, 60)
 barBg.BorderSizePixel = 0
-barBg.ZIndex = 5
+barBg.ZIndex = 10
 barBg.Parent = bg
 Instance.new("UICorner", barBg).CornerRadius = UDim.new(1, 0)
+
 local barStroke = Instance.new("UIStroke")
-barStroke.Color = Color3.fromRGB(70, 60, 110)
-barStroke.Thickness = 1.5
+barStroke.Color = Color3.fromRGB(120, 80, 200)
+barStroke.Thickness = 2
 barStroke.Parent = barBg
 
 local barFill = Instance.new("Frame")
 barFill.Name = "Fill"
 barFill.Size = UDim2.new(0, 0, 1, 0)
-barFill.BackgroundColor3 = Color3.fromRGB(120, 80, 255)
+barFill.BackgroundColor3 = Color3.fromRGB(255, 180, 50)
 barFill.BorderSizePixel = 0
-barFill.ZIndex = 6
+barFill.ZIndex = 11
 barFill.Parent = barBg
 Instance.new("UICorner", barFill).CornerRadius = UDim.new(1, 0)
+
 local fillGrad = Instance.new("UIGradient")
 fillGrad.Color = ColorSequence.new({
-	ColorSequenceKeypoint.new(0, Color3.fromRGB(100, 180, 255)),
-	ColorSequenceKeypoint.new(1, Color3.fromRGB(180, 80, 255)),
+	ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 200, 60)),
+	ColorSequenceKeypoint.new(0.5, Color3.fromRGB(255, 120, 180)),
+	ColorSequenceKeypoint.new(1, Color3.fromRGB(140, 100, 255)),
 })
 fillGrad.Parent = barFill
 
+-- Animated bar glow
+local barGlow = Instance.new("Frame")
+barGlow.Name = "BarGlow"
+barGlow.Size = UDim2.new(1, 10, 1, 10)
+barGlow.Position = UDim2.new(0.5, 0, 0.5, 0)
+barGlow.AnchorPoint = Vector2.new(0.5, 0.5)
+barGlow.BackgroundColor3 = Color3.fromRGB(140, 80, 255)
+barGlow.BackgroundTransparency = 0.7
+barGlow.BorderSizePixel = 0
+barGlow.ZIndex = 9
+barGlow.Parent = barBg
+Instance.new("UICorner", barGlow).CornerRadius = UDim.new(1, 0)
+
+task.spawn(function()
+	while loadGui and loadGui.Parent do
+		TweenService:Create(barGlow, TweenInfo.new(1, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {
+			BackgroundTransparency = 0.85,
+			Size = UDim2.new(1, 16, 1, 16),
+		}):Play()
+		task.wait(1)
+		if not (loadGui and loadGui.Parent) then break end
+		TweenService:Create(barGlow, TweenInfo.new(1, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {
+			BackgroundTransparency = 0.7,
+			Size = UDim2.new(1, 10, 1, 10),
+		}):Play()
+		task.wait(1)
+	end
+end)
+
+-- Percent label
 local percentLabel = Instance.new("TextLabel")
 percentLabel.Name = "Percent"
-percentLabel.Size = UDim2.new(0, 100, 0, 20)
-percentLabel.Position = UDim2.new(0.5, 0, 0.55, 0)
+percentLabel.Size = UDim2.new(0, 120, 0, 28)
+percentLabel.Position = UDim2.new(0.5, 0, 0.555, 0)
 percentLabel.AnchorPoint = Vector2.new(0.5, 0.5)
 percentLabel.BackgroundTransparency = 1
 percentLabel.Text = "0%"
-percentLabel.TextColor3 = Color3.fromRGB(160, 150, 190)
-percentLabel.Font = Enum.Font.GothamBold
-percentLabel.TextSize = 14
-percentLabel.ZIndex = 5
+percentLabel.TextColor3 = Color3.fromRGB(255, 220, 140)
+percentLabel.Font = Enum.Font.FredokaOne
+percentLabel.TextSize = 20
+percentLabel.ZIndex = 10
 percentLabel.Parent = bg
 
+-- Tip label (bigger, with icon prefix)
 local tipLabel = Instance.new("TextLabel")
 tipLabel.Name = "Tip"
-tipLabel.Size = UDim2.new(0, 500, 0, 24)
-tipLabel.Position = UDim2.new(0.5, 0, 0.92, 0)
+tipLabel.Size = UDim2.new(0, 600, 0, 36)
+tipLabel.Position = UDim2.new(0.5, 0, 0.90, 0)
 tipLabel.AnchorPoint = Vector2.new(0.5, 0.5)
 tipLabel.BackgroundTransparency = 1
-tipLabel.TextColor3 = Color3.fromRGB(120, 115, 145)
+tipLabel.TextColor3 = Color3.fromRGB(200, 190, 255)
 tipLabel.Font = Enum.Font.GothamBold
-tipLabel.TextSize = 14
-tipLabel.ZIndex = 5
+tipLabel.TextSize = 18
+tipLabel.ZIndex = 10
 tipLabel.Parent = bg
 
+local tipStroke = Instance.new("UIStroke")
+tipStroke.Color = Color3.fromRGB(40, 20, 80)
+tipStroke.Thickness = 1
+tipStroke.Parent = tipLabel
+
 local TIPS = {
-	"Place streamers on your base to earn cash!",
-	"Rarer streamers earn way more cash per second.",
-	"Use potions to multiply your luck and earnings!",
-	"Sacrifice duplicate streamers for gems.",
-	"Check the Index to see which streamers you're missing.",
-	"VIP Pass gives you 1.5x cash forever!",
-	"Rebirth to unlock stronger potions and bonuses.",
-	"Divine Potions multiply EVERYTHING by 5x!",
+	"💰 Place streamers on your base to earn cash!",
+	"✨ Rarer streamers earn way more cash per second.",
+	"🧪 Use potions to multiply your luck and earnings!",
+	"💎 Sacrifice duplicate streamers for gems.",
+	"📖 Check the Index to see which streamers you're missing.",
+	"👑 VIP Pass gives you 1.5x cash forever!",
+	"🔄 Rebirth to unlock stronger potions and bonuses.",
+	"🌟 Divine Potions multiply EVERYTHING by 5x!",
+	"🎰 Spin the wheel for a chance at legendary streamers!",
+	"🏆 Compete on the leaderboard for bragging rights!",
+	"🔥 Stack potions for insane multiplier combos!",
+	"🎮 More streamers = more cash per second!",
 }
 tipLabel.Text = TIPS[math.random(#TIPS)]
 
+-- Rotating tips with fade animation
+task.spawn(function()
+	while loadGui and loadGui.Parent do
+		task.wait(3.5)
+		if not (loadGui and loadGui.Parent) then break end
+		TweenService:Create(tipLabel, TweenInfo.new(0.3), { TextTransparency = 1 }):Play()
+		task.wait(0.3)
+		if not (loadGui and loadGui.Parent) then break end
+		tipLabel.Text = TIPS[math.random(#TIPS)]
+		TweenService:Create(tipLabel, TweenInfo.new(0.3), { TextTransparency = 0 }):Play()
+	end
+end)
+
+-- Spinner dots (bigger, more colorful)
 local spinnerDots = {}
+local DOT_COLORS = {
+	Color3.fromRGB(255, 200, 60),
+	Color3.fromRGB(255, 120, 180),
+	Color3.fromRGB(120, 200, 255),
+}
 for i = 1, 3 do
 	local dot = Instance.new("Frame")
 	dot.Name = "Dot" .. i
-	dot.Size = UDim2.new(0, 8, 0, 8)
-	dot.Position = UDim2.new(0.5, (i - 2) * 18, 0.60, 0)
+	dot.Size = UDim2.new(0, 12, 0, 12)
+	dot.Position = UDim2.new(0.5, (i - 2) * 24, 0.62, 0)
 	dot.AnchorPoint = Vector2.new(0.5, 0.5)
-	dot.BackgroundColor3 = Color3.fromRGB(120, 80, 255)
-	dot.BackgroundTransparency = 0.6
+	dot.BackgroundColor3 = DOT_COLORS[i]
+	dot.BackgroundTransparency = 0.5
 	dot.BorderSizePixel = 0
-	dot.ZIndex = 5
+	dot.ZIndex = 10
 	dot.Parent = bg
 	Instance.new("UICorner", dot).CornerRadius = UDim.new(1, 0)
 	spinnerDots[i] = dot
@@ -171,10 +388,48 @@ task.spawn(function()
 	while loadGui and loadGui.Parent do
 		idx = (idx % 3) + 1
 		for i, dot in ipairs(spinnerDots) do
-			local target = (i == idx) and 0 or 0.6
-			TweenService:Create(dot, TweenInfo.new(0.25), { BackgroundTransparency = target }):Play()
+			if i == idx then
+				TweenService:Create(dot, TweenInfo.new(0.2, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+					BackgroundTransparency = 0,
+					Size = UDim2.new(0, 16, 0, 16),
+				}):Play()
+			else
+				TweenService:Create(dot, TweenInfo.new(0.2), {
+					BackgroundTransparency = 0.5,
+					Size = UDim2.new(0, 12, 0, 12),
+				}):Play()
+			end
 		end
-		task.wait(0.35)
+		task.wait(0.3)
+	end
+end)
+
+-- "Get ready to spin!" label under the dots
+local readyLabel = Instance.new("TextLabel")
+readyLabel.Name = "ReadyLabel"
+readyLabel.Size = UDim2.new(0, 400, 0, 30)
+readyLabel.Position = UDim2.new(0.5, 0, 0.67, 0)
+readyLabel.AnchorPoint = Vector2.new(0.5, 0.5)
+readyLabel.BackgroundTransparency = 1
+readyLabel.Text = "Get ready to spin!"
+readyLabel.TextColor3 = Color3.fromRGB(255, 200, 100)
+readyLabel.Font = Enum.Font.FredokaOne
+readyLabel.TextSize = 20
+readyLabel.TextTransparency = 0.3
+readyLabel.ZIndex = 10
+readyLabel.Parent = bg
+
+task.spawn(function()
+	while loadGui and loadGui.Parent do
+		TweenService:Create(readyLabel, TweenInfo.new(1, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {
+			TextTransparency = 0.6,
+		}):Play()
+		task.wait(1)
+		if not (loadGui and loadGui.Parent) then break end
+		TweenService:Create(readyLabel, TweenInfo.new(1, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut), {
+			TextTransparency = 0.2,
+		}):Play()
+		task.wait(1)
 	end
 end)
 
@@ -190,21 +445,32 @@ local function setLoadProgress(fraction, statusText)
 end
 
 local function dismissLoadingScreen()
-	setLoadProgress(1, "Ready!")
-	task.wait(0.4)
+	setLoadProgress(1, "Let's go!")
+	task.wait(0.5)
 
 	local fadeInfo = TweenInfo.new(0.6, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 	TweenService:Create(bg, fadeInfo, { BackgroundTransparency = 1 }):Play()
 	TweenService:Create(titleLabel, fadeInfo, { TextTransparency = 1 }):Play()
 	TweenService:Create(titleStroke, fadeInfo, { Transparency = 1 }):Play()
 	TweenService:Create(subtitleLabel, fadeInfo, { TextTransparency = 1 }):Play()
+	TweenService:Create(subtitleStroke, fadeInfo, { Transparency = 1 }):Play()
 	TweenService:Create(percentLabel, fadeInfo, { TextTransparency = 1 }):Play()
 	TweenService:Create(tipLabel, fadeInfo, { TextTransparency = 1 }):Play()
+	TweenService:Create(tipStroke, fadeInfo, { Transparency = 1 }):Play()
 	TweenService:Create(barBg, fadeInfo, { BackgroundTransparency = 1 }):Play()
 	TweenService:Create(barStroke, fadeInfo, { Transparency = 1 }):Play()
 	TweenService:Create(barFill, fadeInfo, { BackgroundTransparency = 1 }):Play()
+	TweenService:Create(barGlow, fadeInfo, { BackgroundTransparency = 1 }):Play()
+	TweenService:Create(glowRing, fadeInfo, { BackgroundTransparency = 1 }):Play()
+	TweenService:Create(readyLabel, fadeInfo, { TextTransparency = 1 }):Play()
 	for _, dot in ipairs(spinnerDots) do
 		TweenService:Create(dot, fadeInfo, { BackgroundTransparency = 1 }):Play()
+	end
+	for _, em in ipairs(emojiLabels) do
+		TweenService:Create(em, fadeInfo, { TextTransparency = 1 }):Play()
+	end
+	for _, p in ipairs(particleFrames) do
+		TweenService:Create(p, fadeInfo, { BackgroundTransparency = 1 }):Play()
 	end
 
 	task.wait(0.65)

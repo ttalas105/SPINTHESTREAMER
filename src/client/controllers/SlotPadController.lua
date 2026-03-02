@@ -8,6 +8,7 @@ local ProximityPromptService = game:GetService("ProximityPromptService")
 local SlotPadController = {}
 local player = Players.LocalPlayer
 local DisplayInteract = nil -- resolved in Init to avoid race with server dedup
+local BaseCashCollected = nil -- server-confirmed collect signal
 local TOUCH_SOUND_ID = "rbxassetid://7112275565"
 local TOUCH_SOUND_START_OFFSET = 0.28
 
@@ -26,7 +27,13 @@ local function getTouchSound()
 			return child
 		end
 	end
-	return nil
+	-- Create a reusable template so this sound always exists.
+	cachedTouchSound = Instance.new("Sound")
+	cachedTouchSound.Name = "BaseCashCollectSFX"
+	cachedTouchSound.SoundId = TOUCH_SOUND_ID
+	cachedTouchSound.Volume = 0.9
+	cachedTouchSound.Parent = SoundService
+	return cachedTouchSound
 end
 
 local function playCashTouchSound()
@@ -77,7 +84,7 @@ local function wireGreenTouch(part)
 		end
 		if isInside then return end
 		isInside = true
-		playCashTouchSound()
+		-- Audio now plays from server-confirmed collect events for reliability.
 	end)
 
 	part.TouchEnded:Connect(function(hit)
@@ -115,10 +122,20 @@ local function getDisplayInteract()
 	return DisplayInteract
 end
 
+local function getBaseCashCollected()
+	if BaseCashCollected and BaseCashCollected.Parent then
+		return BaseCashCollected
+	end
+	local remotes = ReplicatedStorage:WaitForChild("RemoteEvents")
+	BaseCashCollected = remotes:WaitForChild("BaseCashCollected", 5)
+	return BaseCashCollected
+end
+
 function SlotPadController.Init(_holdCtrl, _inventoryCtrl)
 	HoldController = _holdCtrl
 
 	task.defer(getDisplayInteract)
+	task.defer(getBaseCashCollected)
 
 	ProximityPromptService.PromptTriggered:Connect(function(prompt, _inputType)
 		if not prompt or prompt.Name ~= "BaseSingleSlotPrompt" then return end
@@ -168,6 +185,15 @@ function SlotPadController.Init(_holdCtrl, _inventoryCtrl)
 			end
 		end
 	end)
+
+	local cashCollectedRemote = getBaseCashCollected()
+	if cashCollectedRemote then
+		cashCollectedRemote.OnClientEvent:Connect(function(payload)
+			if type(payload) ~= "table" then return end
+			if type(payload.amount) ~= "number" or payload.amount <= 0 then return end
+			playCashTouchSound()
+		end)
+	end
 end
 
 function SlotPadController.SetBasePosition(pos)

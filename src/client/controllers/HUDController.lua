@@ -27,6 +27,7 @@ local activeCashTween
 local gemsLabel
 local luckLabel
 local moneyMultLabel
+local potionsLabel
 local GEM_GAIN_SOUND_ID = "rbxassetid://2650039396"
 local cachedGemGainSound = nil
 local hasSeenInitialGemValue = false
@@ -81,31 +82,42 @@ end
 
 local function formatCompactBalance(value)
 	local n = tonumber(value) or 0
-	local absN = math.abs(n)
-	if absN < 1e6 then
-		return tostring(math.floor(n + 0.5))
-	end
+	local rounded = math.floor(n + (n >= 0 and 0.5 or -0.5))
+	local absN = math.abs(rounded)
 
-	local suffixes = {
-		{ v = 1e15, s = "q" },
-		{ v = 1e12, s = "t" },
-		{ v = 1e9,  s = "b" },
-		{ v = 1e6,  s = "m" },
-	}
-
-	for _, entry in ipairs(suffixes) do
-		if absN >= entry.v then
-			local scaled = n / entry.v
-			local rounded = math.floor(scaled * 10 + (scaled >= 0 and 0.5 or -0.5)) / 10
-			local whole = math.floor(rounded)
-			if math.abs(rounded - whole) < 1e-9 then
-				return tostring(whole) .. entry.s
+	-- Use compact format from millions and above.
+	if absN >= 1e6 then
+		local suffixes = {
+			{ v = 1e15, s = "Q" },
+			{ v = 1e12, s = "T" },
+			{ v = 1e9, s = "B" },
+			{ v = 1e6, s = "M" },
+		}
+		for _, entry in ipairs(suffixes) do
+			if absN >= entry.v then
+				local scaled = rounded / entry.v
+				local oneDecimal = math.floor(scaled * 10 + (scaled >= 0 and 0.5 or -0.5)) / 10
+				local whole = math.floor(oneDecimal)
+				if math.abs(oneDecimal - whole) < 1e-9 then
+					return tostring(whole) .. entry.s
+				end
+				return string.format("%.1f%s", oneDecimal, entry.s)
 			end
-			return string.format("%.1f%s", rounded, entry.s)
 		end
 	end
 
-	return tostring(math.floor(n + 0.5))
+	-- Otherwise, show full number with commas.
+	local sign = rounded < 0 and "-" or ""
+	local s = tostring(absN)
+	local len = #s
+	local firstGroup = ((len - 1) % 3) + 1
+	local out = s:sub(1, firstGroup)
+	local i = firstGroup + 1
+	while i <= len do
+		out = out .. "," .. s:sub(i, i + 2)
+		i += 3
+	end
+	return sign .. out
 end
 
 -------------------------------------------------
@@ -123,7 +135,7 @@ function HUDController.Init()
 
 	local hudContainer = Instance.new("Frame")
 	hudContainer.Name = "HUDContainer"
-	hudContainer.Size = UDim2.new(0, 300, 0, 148)
+	hudContainer.Size = UDim2.new(0, 360, 0, 176)
 	hudContainer.Position = UDim2.new(0.5, -250, 0, 8)
 	hudContainer.AnchorPoint = Vector2.new(1, 0)
 	hudContainer.BackgroundTransparency = 1
@@ -169,17 +181,31 @@ function HUDController.Init()
 	gemsStroke.Thickness = 2
 	gemsStroke.Parent = gemsLabel
 
+	local statsStack = Instance.new("Frame")
+	statsStack.Name = "StatsStack"
+	statsStack.Size = UDim2.new(1, 0, 0, 78)
+	statsStack.Position = UDim2.new(0, 0, 0, 74)
+	statsStack.BackgroundTransparency = 1
+	statsStack.BorderSizePixel = 0
+	statsStack.Parent = hudContainer
+
+	local statsLayout = Instance.new("UIListLayout")
+	statsLayout.FillDirection = Enum.FillDirection.Vertical
+	statsLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	statsLayout.Padding = UDim.new(0, 2)
+	statsLayout.Parent = statsStack
+
 	luckLabel = Instance.new("TextLabel")
 	luckLabel.Name = "LuckLabel"
-	luckLabel.Size = UDim2.new(1, 0, 0, 28)
-	luckLabel.Position = UDim2.new(0, 0, 0, 72)
+	luckLabel.Size = UDim2.new(1, 0, 0, 24)
 	luckLabel.BackgroundTransparency = 1
 	luckLabel.TextColor3 = Color3.fromRGB(220, 200, 255)
 	luckLabel.Font = Enum.Font.FredokaOne
-	luckLabel.TextSize = 24
+	luckLabel.TextSize = 18
 	luckLabel.Text = "Luck: 0 (+0%)"
 	luckLabel.TextXAlignment = Enum.TextXAlignment.Left
-	luckLabel.Parent = hudContainer
+	luckLabel.LayoutOrder = 1
+	luckLabel.Parent = statsStack
 
 	local luckStroke = Instance.new("UIStroke")
 	luckStroke.Color = Color3.fromRGB(0, 0, 0)
@@ -188,20 +214,38 @@ function HUDController.Init()
 
 	moneyMultLabel = Instance.new("TextLabel")
 	moneyMultLabel.Name = "MoneyMultLabel"
-	moneyMultLabel.Size = UDim2.new(1, 0, 0, 26)
-	moneyMultLabel.Position = UDim2.new(0, 0, 0, 100)
+	moneyMultLabel.Size = UDim2.new(1, 0, 0, 24)
 	moneyMultLabel.BackgroundTransparency = 1
 	moneyMultLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
 	moneyMultLabel.Font = Enum.Font.FredokaOne
-	moneyMultLabel.TextSize = 22
+	moneyMultLabel.TextSize = 18
 	moneyMultLabel.Text = "Money: x1.0"
 	moneyMultLabel.TextXAlignment = Enum.TextXAlignment.Left
-	moneyMultLabel.Parent = hudContainer
+	moneyMultLabel.LayoutOrder = 2
+	moneyMultLabel.Parent = statsStack
 
 	local moneyMultStroke = Instance.new("UIStroke")
 	moneyMultStroke.Color = Color3.fromRGB(0, 0, 0)
 	moneyMultStroke.Thickness = 2
 	moneyMultStroke.Parent = moneyMultLabel
+
+	potionsLabel = Instance.new("TextLabel")
+	potionsLabel.Name = "PotionsLabel"
+	potionsLabel.Size = UDim2.new(1, 0, 0, 24)
+	potionsLabel.BackgroundTransparency = 1
+	potionsLabel.TextColor3 = Color3.fromRGB(120, 255, 180)
+	potionsLabel.Font = Enum.Font.FredokaOne
+	potionsLabel.TextSize = 18
+	potionsLabel.Text = ""
+	potionsLabel.TextXAlignment = Enum.TextXAlignment.Left
+	potionsLabel.Visible = false
+	potionsLabel.LayoutOrder = 3
+	potionsLabel.Parent = statsStack
+
+	local potionsStroke = Instance.new("UIStroke")
+	potionsStroke.Color = Color3.fromRGB(0, 0, 0)
+	potionsStroke.Thickness = 2
+	potionsStroke.Parent = potionsLabel
 
 	-- Listen for data updates from server
 	local RemoteEvents = ReplicatedStorage:WaitForChild("RemoteEvents")
@@ -311,30 +355,34 @@ function HUDController.UpdateData(payload)
 			local ok, mod = pcall(function() return require(script.Parent.PotionController) end)
 			if ok then PotionController = mod end
 		end
-		local potionMult = 1
-		local potionSource = ""
-		if PotionController and PotionController.ActivePotions then
-			local divineMult = (PotionController.ActivePotions.Divine and PotionController.ActivePotions.Divine.multiplier) or 0
-			local luckMult = (PotionController.ActivePotions.Luck and PotionController.ActivePotions.Luck.multiplier) or 0
-			if divineMult > 0 or luckMult > 0 then
-				potionMult = divineMult + luckMult
-				if divineMult > 0 and luckMult > 0 then
-					potionSource = "Divine+Luck"
-				elseif divineMult > 0 then
-					potionSource = "Divine"
-				else
-					potionSource = "Luck"
+		luckLabel.Text = ("Luck: %d (+%d%%)"):format(luck, percent)
+		luckLabel.TextColor3 = Color3.fromRGB(200, 180, 255) -- default purple
+
+		if potionsLabel then
+			local luckPotionMult = 1
+			local moneyPotionMult = 1
+			local divineActive = false
+			if PotionController and PotionController.ActivePotions then
+				local divineMult = (PotionController.ActivePotions.Divine and PotionController.ActivePotions.Divine.multiplier) or 0
+				local luckMult = (PotionController.ActivePotions.Luck and PotionController.ActivePotions.Luck.multiplier) or 0
+				local cashMult = (PotionController.ActivePotions.Cash and PotionController.ActivePotions.Cash.multiplier) or 0
+				divineActive = divineMult > 0
+				if divineMult > 0 or luckMult > 0 then
+					luckPotionMult = divineMult + luckMult
+				end
+				if divineMult > 0 or cashMult > 0 then
+					moneyPotionMult = divineMult + cashMult
 				end
 			end
-		end
-		if potionMult > 1 then
-			local potionLabel = (potionSource == "Divine+Luck") and "Potions" or potionSource
-			luckLabel.Text = ("Luck: %d (+%d%%)  |  %s: x%.1f"):format(luck, percent, potionLabel, potionMult)
-			luckLabel.TextColor3 = (potionSource == "Divine" or potionSource == "Divine+Luck")
-				and Color3.fromRGB(255, 150, 255) or Color3.fromRGB(80, 255, 100)
-		else
-			luckLabel.Text = ("Luck: %d (+%d%%)"):format(luck, percent)
-			luckLabel.TextColor3 = Color3.fromRGB(200, 180, 255) -- default purple
+
+			if luckPotionMult > 1 or moneyPotionMult > 1 then
+				potionsLabel.Text = ("Potions: Luck x%.1f  |  Money x%.1f"):format(luckPotionMult, moneyPotionMult)
+				potionsLabel.TextColor3 = divineActive and Color3.fromRGB(255, 150, 255) or Color3.fromRGB(120, 255, 180)
+				potionsLabel.Visible = true
+			else
+				potionsLabel.Visible = false
+				potionsLabel.Text = ""
+			end
 		end
 	end
 

@@ -7,9 +7,11 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
+local StarterGui = game:GetService("StarterGui")
 
 local Quests = require(ReplicatedStorage.Shared.Config.Quests)
 local UIHelper = require(script.Parent.UIHelper)
+local RightSideNavController = require(script.Parent.RightSideNavController)
 
 local QuestController = {}
 
@@ -23,6 +25,7 @@ local screenGui, overlay, modalFrame, scrollFrame
 local isOpen = false
 local currentTab = "Daily"
 local questData = { progress = {}, claimed = {} }
+local hasReceivedInitialQuestSync = false
 
 local FONT = Enum.Font.FredokaOne
 local FONT_SUB = Enum.Font.GothamBold
@@ -42,6 +45,58 @@ local function fmtNum(n)
 	elseif n >= 1e3 then return string.format("%.1fK", n / 1e3)
 	end
 	return tostring(n)
+end
+
+local function notifyQuest(titleText, bodyText)
+	pcall(function()
+		StarterGui:SetCore("SendNotification", {
+			Title = titleText,
+			Text = bodyText,
+			Duration = 4,
+		})
+	end)
+end
+
+local function findNewCompletions(prevProgress, nextProgress, claimed)
+	local completedIds = {}
+	for questId, quest in pairs(Quests.ById) do
+		local prev = prevProgress[questId] or 0
+		local nextVal = nextProgress[questId] or 0
+		local wasComplete = prev >= quest.goal
+		local isComplete = nextVal >= quest.goal
+		local isClaimed = claimed[questId] == true
+		if (not wasComplete) and isComplete and (not isClaimed) then
+			table.insert(completedIds, questId)
+		end
+	end
+	return completedIds
+end
+
+local function findNewClaims(prevClaimed, nextClaimed)
+	local claimedIds = {}
+	for questId, isClaimed in pairs(nextClaimed) do
+		if isClaimed == true and not prevClaimed[questId] then
+			table.insert(claimedIds, questId)
+		end
+	end
+	return claimedIds
+end
+
+local function countClaimableQuests(progress, claimed)
+	local total = 0
+	for questId, quest in pairs(Quests.ById) do
+		local isClaimed = claimed[questId] == true
+		local amount = progress[questId] or 0
+		if (not isClaimed) and amount >= quest.goal then
+			total += 1
+		end
+	end
+	return total
+end
+
+local function updateQuestNavBadge(progress, claimed)
+	local claimableCount = countClaimableQuests(progress or {}, claimed or {})
+	RightSideNavController.SetBadge("Quests", claimableCount)
 end
 
 local function getQuestList()
@@ -350,8 +405,34 @@ function QuestController.Init()
 
 	-- Listen for quest updates
 	QuestUpdate.OnClientEvent:Connect(function(data)
-		if data.progress then questData.progress = data.progress end
-		if data.claimed then questData.claimed = data.claimed end
+		local previousProgress = questData.progress or {}
+		local previousClaimed = questData.claimed or {}
+		local nextProgress = data.progress or previousProgress
+		local nextClaimed = data.claimed or previousClaimed
+
+		if hasReceivedInitialQuestSync then
+			local newCompletions = findNewCompletions(previousProgress, nextProgress, nextClaimed)
+			for _, questId in ipairs(newCompletions) do
+				local quest = Quests.ById[questId]
+				if quest then
+					notifyQuest("Quest Complete!", quest.name .. " is ready to claim.")
+				end
+			end
+
+			local newClaims = findNewClaims(previousClaimed, nextClaimed)
+			for _, questId in ipairs(newClaims) do
+				local quest = Quests.ById[questId]
+				if quest then
+					notifyQuest("Quest Reward Claimed", quest.name)
+				end
+			end
+		else
+			hasReceivedInitialQuestSync = true
+		end
+
+		questData.progress = nextProgress
+		questData.claimed = nextClaimed
+		updateQuestNavBadge(nextProgress, nextClaimed)
 		if isOpen then refreshQuests() end
 	end)
 

@@ -904,11 +904,20 @@ function PlayerData.RemoveFromSacrificeQueue(player, queueId: string, queueIndex
 	return true
 end
 
-function PlayerData.ClearSacrificeQueue(player, queueId: string)
+function PlayerData.ClearSacrificeQueue(player, queueId: string): (boolean, number)
 	local data = PlayerData.Get(player)
-	if not data then return end
-	if not data.sacrificeQueues or not data.sacrificeQueues[queueId] then return end
+	if not data then return false, 0 end
+	if not data.sacrificeQueues or not data.sacrificeQueues[queueId] then return true, 0 end
 	local queue = data.sacrificeQueues[queueId]
+	if #queue == 0 then return true, 0 end
+
+	local invSpace = PlayerData.HOTBAR_MAX - #data.inventory
+	local stoSpace = (data.storage and (PlayerData.STORAGE_MAX - #data.storage)) or 0
+	local totalSpace = invSpace + stoSpace
+
+	if totalSpace < #queue then
+		return false, #queue - totalSpace
+	end
 
 	for i = #queue, 1, -1 do
 		local item = table.remove(queue, i)
@@ -922,6 +931,7 @@ function PlayerData.ClearSacrificeQueue(player, queueId: string)
 	end
 	data.sacrificeQueues[queueId] = {}
 	PlayerData.Replicate(player)
+	return true, 0
 end
 
 function PlayerData.ConsumeSacrificeQueue(player, queueId: string)

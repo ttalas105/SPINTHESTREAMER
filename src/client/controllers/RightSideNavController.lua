@@ -121,6 +121,15 @@ function RightSideNavController.Init()
 		buttons[item.name] = iconBtn
 		table.insert(btnFrames, iconBtn)
 
+		-- Keep Quests notification bubble outside the icon box (top-right corner)
+		if item.name == "Quests" then
+			local badge = iconBtn:FindFirstChild("Badge")
+			if badge then
+				badge.Position = UDim2.new(1, 8, 0, -10)
+				badge.AnchorPoint = Vector2.new(1, 0)
+			end
+		end
+
 		clickZone.MouseEnter:Connect(function()
 			UISounds.PlayHover()
 		end)
@@ -149,6 +158,19 @@ end
 
 function RightSideNavController.OnClick(buttonName: string, callback)
 	onButtonClicked[buttonName] = callback
+end
+
+function RightSideNavController.SetBadge(buttonName: string, count: number)
+	local btn = buttons[buttonName]
+	if not btn then return end
+	local badge = btn:FindFirstChild("Badge")
+	if badge then
+		badge.Visible = count > 0
+		local countLabel = badge:FindFirstChild("Count")
+		if countLabel then
+			countLabel.Text = tostring(count)
+		end
+	end
 end
 
 return RightSideNavController

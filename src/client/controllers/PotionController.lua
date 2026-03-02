@@ -333,12 +333,22 @@ end
 local function applyIndicatorContainerPlacement(moveToLeftHud)
 	if not indicatorContainer then return end
 
+	local layout = indicatorContainer:FindFirstChildOfClass("UIListLayout")
+
 	if moveToLeftHud then
-		indicatorContainer.AnchorPoint = Vector2.new(1, 0)
-		indicatorContainer.Position = UDim2.new(0.5, -250, 0, 160)
+		-- HUD container: AnchorPoint(1,0) at (0.5, -250), width 360.
+		-- Its left edge = 0.5 scale, -610 offset. Match that exactly.
+		indicatorContainer.AnchorPoint = Vector2.new(0, 0)
+		indicatorContainer.Position = UDim2.new(0.5, -610, 0, 160)
+		if layout then
+			layout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+		end
 	else
 		indicatorContainer.AnchorPoint = Vector2.new(1, 1)
 		indicatorContainer.Position = UDim2.new(1, -INDICATOR_MARGIN, 1, -INDICATOR_MARGIN)
+		if layout then
+			layout.HorizontalAlignment = Enum.HorizontalAlignment.Right
+		end
 	end
 end
 
@@ -1265,7 +1275,8 @@ function PotionController.Init()
 		updateIndicator(divineIndicator, payload.Divine, true)
 		local divineActive = payload and payload.Divine and payload.Divine.remaining and payload.Divine.remaining > 0
 		local luckActive = payload and payload.Luck and payload.Luck.remaining and payload.Luck.remaining > 0
-		indicatorsPinnedLeft = divineActive or luckActive
+		local cashActive = payload and payload.Cash and payload.Cash.remaining and payload.Cash.remaining > 0
+		indicatorsPinnedLeft = divineActive or luckActive or cashActive
 		applyIndicatorContainerPlacement(indicatorsPinnedLeft)
 
 		-- Update divine count in shop

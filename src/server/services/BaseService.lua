@@ -21,6 +21,7 @@ local RemoteEvents = ReplicatedStorage:WaitForChild("RemoteEvents")
 local BaseReady = nil
 local EquipResult = nil
 local UnequipResult = nil
+local BaseCashCollected = nil
 local DisplayInteract -- resolved in Init
 
 local BaseService = {}
@@ -263,10 +264,17 @@ local function tryCollectMoney(player: Player, padSlot: number)
 	local pendingBySlot = getNestedTable(BaseService._pendingMoney, userId)
 	local amount = pendingBySlot[padSlot] or 0
 	if amount > 0 then
-		PlayerData.AddCash(player, math.floor(amount))
+		local collected = math.floor(amount)
+		PlayerData.AddCash(player, collected)
 		pendingBySlot[padSlot] = 0
 		resetSlotIncomeTimer(userId, padSlot)
 		updateMoneyText(player, padSlot)
+		if BaseCashCollected then
+			BaseCashCollected:FireClient(player, {
+				padSlot = padSlot,
+				amount = collected,
+			})
+		end
 	end
 
 	task.delay(0.25, function()
@@ -1146,6 +1154,12 @@ function BaseService.Init(playerDataModule, potionServiceModule)
 	BaseReady = RemoteEvents:WaitForChild("BaseReady")
 	EquipResult = RemoteEvents:WaitForChild("EquipResult")
 	UnequipResult = RemoteEvents:WaitForChild("UnequipResult")
+	BaseCashCollected = RemoteEvents:FindFirstChild("BaseCashCollected")
+	if not BaseCashCollected then
+		BaseCashCollected = Instance.new("RemoteEvent")
+		BaseCashCollected.Name = "BaseCashCollected"
+		BaseCashCollected.Parent = RemoteEvents
+	end
 
 	Players.PlayerAdded:Connect(function(player)
 		task.wait(1)
@@ -1265,7 +1279,14 @@ function BaseService.Init(playerDataModule, potionServiceModule)
 					local ok = PlayerData.UnequipFromPad(player, slot)
 					if ok then
 						if pending > 0 then
-							PlayerData.AddCash(player, math.floor(pending))
+							local collected = math.floor(pending)
+							PlayerData.AddCash(player, collected)
+							if BaseCashCollected then
+								BaseCashCollected:FireClient(player, {
+									padSlot = slot,
+									amount = collected,
+								})
+							end
 						end
 						clearPlacedModel(player, slot)
 						pendingBySlot[slot] = 0
@@ -1301,7 +1322,14 @@ function BaseService.Init(playerDataModule, potionServiceModule)
 							local pendingBySlot = getNestedTable(BaseService._pendingMoney, userId)
 							local pending = pendingBySlot[orphanedSlot] or 0
 							if pending > 0 then
-								PlayerData.AddCash(player, math.floor(pending))
+								local collected = math.floor(pending)
+								PlayerData.AddCash(player, collected)
+								if BaseCashCollected then
+									BaseCashCollected:FireClient(player, {
+										padSlot = orphanedSlot,
+										amount = collected,
+									})
+								end
 							end
 							clearPlacedModel(player, orphanedSlot)
 							pendingBySlot[orphanedSlot] = 0

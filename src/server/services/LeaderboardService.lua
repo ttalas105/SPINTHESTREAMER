@@ -15,9 +15,11 @@ local LeaderboardService = {}
 
 local PlayerData
 
-local PUSH_INTERVAL   = 30
-local FETCH_INTERVAL  = 30
+local PUSH_INTERVAL   = 15
+local FETCH_INTERVAL  = 10
 local TIME_TICK       = 10
+local LOCAL_REFRESH_INTERVAL = 3
+local GLOBAL_STALE_SECONDS = 20
 local MAX_ENTRIES     = 50
 local DISPLAY_ROWS    = 10
 
@@ -172,6 +174,7 @@ end
 -------------------------------------------------
 
 local datastoreAvailable = false
+local lastGlobalRefreshAt = 0
 
 local function pushAllPlayerStats()
 	for _, player in ipairs(Players:GetPlayers()) do
@@ -218,6 +221,8 @@ local function fetchAndDisplay()
 
 	if not anyData then
 		refreshLocal()
+	else
+		lastGlobalRefreshAt = os.clock()
 	end
 end
 
@@ -294,11 +299,12 @@ function LeaderboardService.Init(playerDataModule)
 		end
 	end)
 
-	-- Periodic local refresh (every 5s) to keep boards up to date with live data
+	-- Periodic local refresh to keep boards live if global data is unavailable/stale
 	task.spawn(function()
 		while true do
-			task.wait(5)
-			if not datastoreAvailable then
+			task.wait(LOCAL_REFRESH_INTERVAL)
+			local staleGlobal = (os.clock() - lastGlobalRefreshAt) >= GLOBAL_STALE_SECONDS
+			if (not datastoreAvailable) or staleGlobal then
 				pcall(refreshLocal)
 			end
 		end
