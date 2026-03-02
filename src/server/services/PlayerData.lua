@@ -16,6 +16,7 @@ local SlotsConfig = require(ReplicatedStorage.Shared.Config.SlotsConfig)
 
 local PlayerData = {}
 PlayerData._cache = {} -- userId -> data table
+PlayerData._sacrificeQueueCount = {} -- userId -> number of hotbar items queued for sacrifice (transient)
 
 -------------------------------------------------
 -- SECURITY FIX: Per-player operation mutex/queue
@@ -348,6 +349,7 @@ function PlayerData.Init()
 		PlayerData._cache[player.UserId] = nil
 		playerLocks[player.UserId] = nil
 		lastReplicated[player.UserId] = nil
+		PlayerData._sacrificeQueueCount[player.UserId] = nil
 	end)
 
 	-- Auto-save every 120 seconds
@@ -386,6 +388,21 @@ function PlayerData.IsTutorialComplete(player)
 	local data = PlayerData._cache[player.UserId]
 	if not data then return true end
 	return data.tutorialComplete ~= false
+end
+
+function PlayerData.SetSacrificeQueueCount(player, count: number)
+	PlayerData._sacrificeQueueCount[player.UserId] = math.max(0, math.floor(count))
+end
+
+function PlayerData.FillHotbarFromStorage(player)
+	local data = PlayerData.Get(player)
+	if not data or not data.storage then return end
+	while #data.inventory < PlayerData.HOTBAR_MAX and #data.storage > 0 do
+		local item = table.remove(data.storage, 1)
+		table.insert(data.inventory, item)
+	end
+	PlayerData._sacrificeQueueCount[player.UserId] = 0
+	PlayerData.Replicate(player)
 end
 
 -------------------------------------------------
@@ -438,8 +455,10 @@ function PlayerData.AddToInventory(player, streamerId: string, effect: string?):
 	local item = { id = streamerId }
 	if effect then item.effect = effect end
 	if not data.storage then data.storage = {} end
+	local queuedCount = PlayerData._sacrificeQueueCount[player.UserId] or 0
+	local effectiveHotbar = math.max(0, #data.inventory - queuedCount)
 	local dest
-	if #data.inventory < PlayerData.HOTBAR_MAX then
+	if effectiveHotbar < PlayerData.HOTBAR_MAX then
 		table.insert(data.inventory, item)
 		dest = "hotbar"
 	elseif #data.storage < PlayerData.STORAGE_MAX then

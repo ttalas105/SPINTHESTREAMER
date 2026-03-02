@@ -16,6 +16,7 @@ do
 		"BuyCrateStock", "BuyCrateResult", "OpenOwnedCrate", "OpenCrateResult",
 		"GetCaseStock", "CaseStockUpdate",
 		"GetPotionStock", "PotionStockUpdate", "BuyPotionStock", "UseOwnedPotion",
+		"SacrificeQueueSync",
 	}
 	for _, name in ipairs(newRemotes) do
 		if not remotes:FindFirstChild(name) then
@@ -399,6 +400,7 @@ do
 		"BuyCrateStock", "BuyCrateResult", "OpenOwnedCrate", "OpenCrateResult",
 		"GetCaseStock", "CaseStockUpdate",
 		"GetPotionStock", "PotionStockUpdate", "BuyPotionStock", "UseOwnedPotion",
+		"SacrificeQueueSync",
 	}
 	for _, name in ipairs(newRemotes) do
 		if not remotes:FindFirstChild(name) then
@@ -407,6 +409,15 @@ do
 			re.Parent = remotes
 		end
 	end
+end
+
+-- Sacrifice queue sync: client tells server how many hotbar items are queued
+do
+	local SacrificeQueueSync = ReplicatedStorage.RemoteEvents:WaitForChild("SacrificeQueueSync")
+	SacrificeQueueSync.OnServerEvent:Connect(function(player, hotbarQueuedCount)
+		if type(hotbarQueuedCount) ~= "number" then return end
+		PlayerData.SetSacrificeQueueCount(player, hotbarQueuedCount)
+	end)
 end
 
 local QuestService = require(services.QuestService)

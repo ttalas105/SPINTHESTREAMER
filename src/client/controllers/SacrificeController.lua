@@ -27,6 +27,7 @@ local RemoteEvents     = ReplicatedStorage:WaitForChild("RemoteEvents")
 local OpenSacrificeGui = RemoteEvents:WaitForChild("OpenSacrificeGui")
 local SacrificeRequest = RemoteEvents:WaitForChild("SacrificeRequest")
 local SacrificeResult  = RemoteEvents:WaitForChild("SacrificeResult")
+local SacrificeQueueSync = RemoteEvents:WaitForChild("SacrificeQueueSync")
 
 local screenGui, modalFrame
 local contentFrame
@@ -151,6 +152,13 @@ end
 -- Queue-change callbacks (must be defined before any content builder that calls fireQueueChanged)
 local onQueueChanged = {}
 local function fireQueueChanged()
+	local queued = allQueuedIndices()
+	local hotbarCount = 0
+	for vi in pairs(queued) do
+		if vi < 1000 then hotbarCount = hotbarCount + 1 end
+	end
+	SacrificeQueueSync:FireServer(hotbarCount)
+
 	for _, cb in ipairs(onQueueChanged) do
 		task.spawn(cb)
 	end

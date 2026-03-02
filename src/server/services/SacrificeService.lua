@@ -63,6 +63,9 @@ local function removeByVirtualIndices(player, vIndices)
 	end
 	if #hotbarIndices > 0 then PlayerData.RemoveFromInventoryIndices(player, hotbarIndices) end
 	if #storageIndices > 0 then PlayerData.RemoveFromStorageIndices(player, storageIndices) end
+	if #hotbarIndices > 0 then
+		PlayerData.FillHotbarFromStorage(player)
+	end
 end
 
 --- Count combined items matching rarity (and optional effect)
