@@ -209,21 +209,13 @@ local function buildCarousel(parent)
 	for i, streamer in ipairs(allStreamers) do
 		local eff = allCosmetics[i]
 		local rarityColor = Rarities.ByName[streamer.rarity] and Rarities.ByName[streamer.rarity].color or Color3.fromRGB(100, 100, 100)
-		local bgColor = rarityColor
-		if eff then
-			bgColor = Color3.fromRGB(
-				math.floor(bgColor.R * 255 * 0.5 + eff.color.R * 255 * 0.5),
-				math.floor(bgColor.G * 255 * 0.5 + eff.color.G * 255 * 0.5),
-				math.floor(bgColor.B * 255 * 0.5 + eff.color.B * 255 * 0.5)
-			)
-		end
 
 		local card = Instance.new("Frame")
 		card.Name = "Card_" .. i
 		card.Size = UDim2.new(0, ITEM_WIDTH, 0, ITEM_HEIGHT)
 		card.Position = UDim2.new(0, (i - 1) * ITEM_STEP, 0.5, 0)
 		card.AnchorPoint = Vector2.new(0, 0.5)
-		card.BackgroundColor3 = bgColor
+		card.BackgroundColor3 = rarityColor
 		card.BorderSizePixel = 0
 		card.Parent = carouselContainer
 
@@ -291,8 +283,8 @@ local function buildCarousel(parent)
 		nameLabel.Position = UDim2.new(0.5, 0, nameY, 0)
 		nameLabel.AnchorPoint = Vector2.new(0.5, 0)
 		nameLabel.BackgroundTransparency = 1
-		nameLabel.Text = eff and (eff.prefix .. " " .. streamer.displayName) or streamer.displayName
-		nameLabel.TextColor3 = eff and eff.color or Color3.new(1, 1, 1)
+		nameLabel.Text = streamer.displayName
+		nameLabel.TextColor3 = Color3.new(1, 1, 1)
 		nameLabel.Font = FONT
 		nameLabel.TextSize = 16
 		nameLabel.TextScaled = false
@@ -523,15 +515,7 @@ local function applyEffectToCard(cardIndex, effectName)
 
 	entry.effect = effectInfo
 
-	if effectInfo then
-		card.BackgroundColor3 = Color3.fromRGB(
-			math.floor(rarityColor.R * 255 * 0.5 + effectInfo.color.R * 255 * 0.5),
-			math.floor(rarityColor.G * 255 * 0.5 + effectInfo.color.G * 255 * 0.5),
-			math.floor(rarityColor.B * 255 * 0.5 + effectInfo.color.B * 255 * 0.5)
-		)
-	else
-		card.BackgroundColor3 = rarityColor
-	end
+	card.BackgroundColor3 = rarityColor
 
 	local existingBadge = card:FindFirstChild("EffectTag")
 	if effectInfo then
@@ -580,15 +564,9 @@ local function applyEffectToCard(cardIndex, effectName)
 
 	local nameLabel = card:FindFirstChild("StreamerName")
 	if nameLabel then
-		if effectInfo then
-			nameLabel.Text = effectInfo.prefix .. " " .. streamer.displayName
-			nameLabel.TextColor3 = effectInfo.color
-			nameLabel.Position = UDim2.new(0.5, 0, 0.18, 0)
-		else
-			nameLabel.Text = streamer.displayName
-			nameLabel.TextColor3 = Color3.new(1, 1, 1)
-			nameLabel.Position = UDim2.new(0.5, 0, 0.10, 0)
-		end
+		nameLabel.Text = streamer.displayName
+		nameLabel.TextColor3 = Color3.new(1, 1, 1)
+		nameLabel.Position = UDim2.new(0.5, 0, effectInfo and 0.18 or 0.10, 0)
 	end
 end
 
@@ -777,7 +755,6 @@ local function showResult(data)
 	local rarityInfo = Rarities.ByName[data.rarity]
 	local rarityColor = rarityInfo and rarityInfo.color or Color3.fromRGB(170, 170, 170)
 	local effectInfo = data.effect and Effects.ByName[data.effect] or nil
-	local displayColor = effectInfo and effectInfo.color or rarityColor
 
 	local nameLabel = resultFrame:FindFirstChild("StreamerName")
 	local rarityLabel = resultFrame:FindFirstChild("RarityLabel")
@@ -785,28 +762,54 @@ local function showResult(data)
 
 	if resultLabel then
 		resultLabel.Text = "YOU RECEIVED:"
-		resultLabel.TextColor3 = displayColor
+		resultLabel.TextColor3 = rarityColor
 	end
 	if nameLabel then
-		local fullName = data.displayName or "Unknown"
-		if effectInfo and not string.find(fullName, effectInfo.prefix, 1, true) then
-			fullName = effectInfo.prefix .. " " .. fullName
+		local baseName = data.displayName or "Unknown"
+		if effectInfo and string.find(baseName, effectInfo.prefix, 1, true) then
+			baseName = string.gsub(baseName, effectInfo.prefix .. " ", "", 1)
 		end
-		nameLabel.Text = fullName
-		nameLabel.TextColor3 = displayColor
+		nameLabel.Text = baseName
+		nameLabel.TextColor3 = rarityColor
 	end
 	if rarityLabel then
 		local rarityText = (data.rarity or "Common"):upper()
-		if effectInfo then rarityText = effectInfo.prefix:upper() .. " " .. rarityText end
 		rarityLabel.Text = rarityText
-		rarityLabel.TextColor3 = displayColor
+		rarityLabel.TextColor3 = rarityColor
+	end
+
+	-- Show effect prefix separately in its own color
+	local effectLabel = resultFrame:FindFirstChild("EffectResultLabel")
+	if effectInfo then
+		if not effectLabel then
+			effectLabel = Instance.new("TextLabel")
+			effectLabel.Name = "EffectResultLabel"
+			effectLabel.Size = UDim2.new(1, -20, 0, 22)
+			effectLabel.BackgroundTransparency = 1
+			effectLabel.Font = Enum.Font.GothamBold
+			effectLabel.TextSize = 16
+			effectLabel.Parent = resultFrame
+			local eStroke = Instance.new("UIStroke")
+			eStroke.Color = Color3.fromRGB(0, 0, 0)
+			eStroke.Thickness = 1.5
+			eStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+			eStroke.Parent = effectLabel
+		end
+		effectLabel.Text = effectInfo.prefix:upper()
+		effectLabel.TextColor3 = effectInfo.color
+		effectLabel.Visible = true
+		if rarityLabel then
+			effectLabel.Position = UDim2.new(rarityLabel.Position.X.Scale, rarityLabel.Position.X.Offset, rarityLabel.Position.Y.Scale, rarityLabel.Position.Y.Offset + 20)
+		end
+	elseif effectLabel then
+		effectLabel.Visible = false
 	end
 
 	local oddsText = data.odds and formatOdds(data.odds) or ""
 	local oddsLabel = resultFrame:FindFirstChild("OddsLabel")
 	if oddsLabel and oddsText ~= "" then
 		oddsLabel.Text = oddsText
-		oddsLabel.TextColor3 = displayColor
+		oddsLabel.TextColor3 = rarityColor
 		oddsLabel.Visible = true
 	elseif oddsLabel then
 		oddsLabel.Visible = false
@@ -840,7 +843,7 @@ local function showResult(data)
 	rmCorner.Parent = receivedMessage
 
 	local rmStroke = Instance.new("UIStroke")
-	rmStroke.Color = displayColor
+	rmStroke.Color = rarityColor
 	rmStroke.Thickness = 1.5
 	rmStroke.Transparency = 0.25
 	rmStroke.Parent = receivedMessage
@@ -897,9 +900,9 @@ local function showResult(data)
 
 	-- Text section
 	local textYStart = hasModel and 250 or 14
-	local resultFullName = data.displayName or "Unknown"
-	if effectInfo and not string.find(resultFullName, effectInfo.prefix, 1, true) then
-		resultFullName = effectInfo.prefix .. " " .. resultFullName
+	local baseName = data.displayName or "Unknown"
+	if effectInfo and string.find(baseName, effectInfo.prefix, 1, true) then
+		baseName = string.gsub(baseName, effectInfo.prefix .. " ", "", 1)
 	end
 
 	-- Title "YOU RECEIVED:"
@@ -916,14 +919,32 @@ local function showResult(data)
 		ZIndex = 21,
 	})
 
-	-- Streamer name (big, colorful)
+	-- Effect badge (above name, in effect color)
+	local nameYOffset = textYStart + 24
+	if effectInfo then
+		addOutlinedText(receivedMessage, {
+			Name = "RecEffect",
+			Size = UDim2.new(1, -20, 0, 18),
+			Position = UDim2.new(0.5, 0, 0, textYStart + 22),
+			AnchorPoint = Vector2.new(0.5, 0),
+			Text = effectInfo.prefix:upper(),
+			Color = effectInfo.color,
+			Font = FONT_SUB,
+			TextSize = 14,
+			StrokeThickness = 1.5,
+			ZIndex = 21,
+		})
+		nameYOffset = textYStart + 40
+	end
+
+	-- Streamer name (big, rarity colored)
 	addOutlinedText(receivedMessage, {
 		Name = "RecName",
 		Size = UDim2.new(1, -20, 0, 34),
-		Position = UDim2.new(0.5, 0, 0, textYStart + 24),
+		Position = UDim2.new(0.5, 0, 0, nameYOffset),
 		AnchorPoint = Vector2.new(0.5, 0),
-		Text = resultFullName,
-		Color = displayColor,
+		Text = baseName,
+		Color = rarityColor,
 		Font = FONT,
 		TextSize = 26,
 		StrokeThickness = 1.5,
@@ -931,15 +952,14 @@ local function showResult(data)
 	})
 
 	-- Rarity
-	local rarityText = (data.rarity or "Common"):upper()
-	if effectInfo then rarityText = effectInfo.prefix:upper() .. " " .. rarityText end
+	local rarityYOffset = nameYOffset + 36
 	addOutlinedText(receivedMessage, {
 		Name = "RecRarity",
 		Size = UDim2.new(1, -20, 0, 22),
-		Position = UDim2.new(0.5, 0, 0, textYStart + 60),
+		Position = UDim2.new(0.5, 0, 0, rarityYOffset),
 		AnchorPoint = Vector2.new(0.5, 0),
-		Text = rarityText,
-		Color = displayColor,
+		Text = (data.rarity or "Common"):upper(),
+		Color = rarityColor,
 		Font = FONT,
 		TextSize = 16,
 		StrokeThickness = 2,
@@ -947,6 +967,7 @@ local function showResult(data)
 	})
 
 	-- Cash per second
+	local cashYOffset = rarityYOffset + 24
 	local streamerCfg = Streamers.ById[data.streamerId or ""]
 	local cashLine = ""
 	if streamerCfg then
@@ -962,7 +983,7 @@ local function showResult(data)
 		addOutlinedText(receivedMessage, {
 			Name = "RecCash",
 			Size = UDim2.new(1, -20, 0, 26),
-			Position = UDim2.new(0.5, 0, 0, textYStart + 84),
+			Position = UDim2.new(0.5, 0, 0, cashYOffset),
 			AnchorPoint = Vector2.new(0.5, 0),
 			Text = cashLine,
 			Color = Color3.fromRGB(80, 255, 130),
@@ -975,10 +996,11 @@ local function showResult(data)
 
 	-- Odds
 	if oddsText ~= "" then
+		local oddsYOffset = cashLine ~= "" and (cashYOffset + 28) or (rarityYOffset + 24)
 		addOutlinedText(receivedMessage, {
 			Name = "RecOdds",
 			Size = UDim2.new(1, -20, 0, 20),
-			Position = UDim2.new(0.5, 0, 0, textYStart + (cashLine ~= "" and 112 or 86)),
+			Position = UDim2.new(0.5, 0, 0, oddsYOffset),
 			AnchorPoint = Vector2.new(0.5, 0),
 			Text = oddsText,
 			Color = Color3.fromRGB(255, 220, 80),
@@ -994,7 +1016,7 @@ local function showResult(data)
 	-- Glow carousel border
 	local stroke = carouselFrame:FindFirstChild("BorderStroke")
 	if stroke then
-		TweenService:Create(stroke, TweenInfo.new(0.3), { Color = displayColor, Thickness = 3 }):Play()
+		TweenService:Create(stroke, TweenInfo.new(0.3), { Color = rarityColor, Thickness = 3 }):Play()
 		task.delay(2, function()
 			if stroke and stroke.Parent then
 				TweenService:Create(stroke, TweenInfo.new(0.5), { Color = CAROUSEL_STROKE, Thickness = 3 }):Play()
@@ -1005,7 +1027,7 @@ local function showResult(data)
 	if items[currentTargetIndex] and items[currentTargetIndex].frame then
 		local winGlow = items[currentTargetIndex].frame:FindFirstChild("WinGlow")
 		if winGlow then
-			TweenService:Create(winGlow, TweenInfo.new(0.3), { Color = displayColor, Thickness = 6 }):Play()
+			TweenService:Create(winGlow, TweenInfo.new(0.3), { Color = rarityColor, Thickness = 6 }):Play()
 		end
 	end
 
@@ -1016,7 +1038,7 @@ local function showResult(data)
 		local flash = Instance.new("Frame")
 		flash.Name = "Flash"
 		flash.Size = UDim2.new(1, 0, 1, 0)
-		flash.BackgroundColor3 = displayColor
+		flash.BackgroundColor3 = rarityColor
 		flash.BackgroundTransparency = 0.5
 		flash.ZIndex = 100
 		flash.Parent = screenGui

@@ -167,13 +167,13 @@ local function buildGrid()
 		if si == selectedStorageIdx then
 			stroke.Color = Color3.fromRGB(255, 220, 80); stroke.Thickness = 3
 		else
-			stroke.Color = displayColor; stroke.Thickness = 1
+			stroke.Color = rarityColor; stroke.Thickness = 1
 		end
 
 		-- Rarity bar at top
 		local topBar = Instance.new("Frame")
 		topBar.Size = UDim2.new(1, 0, 0, 4)
-		topBar.BackgroundColor3 = displayColor; topBar.BorderSizePixel = 0
+		topBar.BackgroundColor3 = rarityColor; topBar.BorderSizePixel = 0
 		topBar.Parent = card
 		Instance.new("UICorner", topBar).CornerRadius = UDim.new(0, 2)
 
@@ -195,8 +195,8 @@ local function buildGrid()
 		nameLabel.Position = UDim2.new(0.5, 0, 0, effectInfo and 20 or 10)
 		nameLabel.AnchorPoint = Vector2.new(0.5, 0)
 		nameLabel.BackgroundTransparency = 1
-		nameLabel.Text = displayName
-		nameLabel.TextColor3 = displayColor
+		nameLabel.Text = info.displayName or id
+		nameLabel.TextColor3 = rarityColor
 		nameLabel.Font = FONT; nameLabel.TextSize = 12; nameLabel.TextWrapped = true
 		nameLabel.Parent = card
 
@@ -293,7 +293,7 @@ local function createDragGhost(si)
 	Instance.new("UICorner", ghost).CornerRadius = UDim.new(0, 10)
 
 	local ghostStroke = Instance.new("UIStroke", ghost)
-	ghostStroke.Color = displayColor
+	ghostStroke.Color = rarityColor
 	ghostStroke.Thickness = 2
 
 	local text = Instance.new("TextLabel")
@@ -302,7 +302,7 @@ local function createDragGhost(si)
 	text.AnchorPoint = Vector2.new(0.5, 0.5)
 	text.BackgroundTransparency = 1
 	text.Text = (effectInfo and (effectInfo.prefix .. " ") or "") .. (info.displayName or id)
-	text.TextColor3 = displayColor
+	text.TextColor3 = rarityColor
 	text.TextWrapped = true
 	text.TextScaled = true
 	text.Font = FONT
@@ -387,7 +387,7 @@ local function buildHotbarPreview()
 		hotbarSlotButtons[i] = slot
 		Instance.new("UICorner", slot).CornerRadius = UDim.new(0, 8)
 		local sStroke = Instance.new("UIStroke", slot)
-		sStroke.Color = item and displayColor or Color3.fromRGB(50, 50, 70)
+		sStroke.Color = item and rarityColor or Color3.fromRGB(50, 50, 70)
 		sStroke.Thickness = 1
 
 		-- Slot number
@@ -421,8 +421,8 @@ local function buildHotbarPreview()
 			nl.Position = UDim2.new(0.5, 0, 0.3, 0)
 			nl.AnchorPoint = Vector2.new(0.5, 0)
 			nl.BackgroundTransparency = 1
-			nl.Text = string.sub(displayName, 1, 7)
-			nl.TextColor3 = displayColor
+			nl.Text = string.sub(info.displayName or id, 1, 7)
+			nl.TextColor3 = rarityColor
 			nl.Font = FONT; nl.TextScaled = true
 			nl.Parent = slot
 

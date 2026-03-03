@@ -194,7 +194,7 @@ local function buildItemCard(item, originalIndex, source, parent)
 	Instance.new("UICorner", card).CornerRadius = UDim.new(0, 12)
 
 	local cardStroke = Instance.new("UIStroke")
-	cardStroke.Color = displayColor
+	cardStroke.Color = rarityColor
 	cardStroke.Thickness = 1.5
 	cardStroke.Transparency = 0.5
 	cardStroke.Parent = card
@@ -212,7 +212,7 @@ local function buildItemCard(item, originalIndex, source, parent)
 	preview.Parent = card
 	Instance.new("UICorner", preview).CornerRadius = UDim.new(0, 10)
 	local pStroke = Instance.new("UIStroke")
-	pStroke.Color = displayColor
+	pStroke.Color = rarityColor
 	pStroke.Thickness = 1.5
 	pStroke.Transparency = 0.35
 	pStroke.Parent = preview
@@ -222,8 +222,8 @@ local function buildItemCard(item, originalIndex, source, parent)
 	previewText.Position = UDim2.new(0.5, 0, 0.5, 0)
 	previewText.AnchorPoint = Vector2.new(0.5, 0.5)
 	previewText.BackgroundTransparency = 1
-	previewText.Text = string.upper(string.sub(displayName, 1, 2))
-	previewText.TextColor3 = displayColor
+	previewText.Text = string.upper(string.sub(info.displayName or streamerId, 1, 2))
+	previewText.TextColor3 = rarityColor
 	previewText.Font = FONT
 	previewText.TextSize = 28
 	previewText.Parent = preview
@@ -259,8 +259,8 @@ local function buildItemCard(item, originalIndex, source, parent)
 	nameLabel.Size = UDim2.new(0, 240, 0, 28)
 	nameLabel.Position = UDim2.new(0, textX, 0, nameY)
 	nameLabel.BackgroundTransparency = 1
-	nameLabel.Text = displayName
-	nameLabel.TextColor3 = displayColor
+	nameLabel.Text = info.displayName
+	nameLabel.TextColor3 = rarityColor
 	nameLabel.Font = FONT
 	nameLabel.TextSize = 20
 	nameLabel.TextXAlignment = Enum.TextXAlignment.Left

@@ -302,7 +302,7 @@ local function showPicker(title, filterFn, queueId, onDone)
 		cell.BackgroundColor3 = Color3.fromRGB(50, 42, 80); cell.BorderSizePixel = 0
 		cell.Text = ""; cell.LayoutOrder = order; cell.ZIndex = 42; cell.Parent = scroll
 		Instance.new("UICorner", cell).CornerRadius = UDim.new(0, sx(12))
-		local cs = Instance.new("UIStroke", cell); cs.Color = displayColor; cs.Thickness = 2; cs.Transparency = 0.2
+		local cs = Instance.new("UIStroke", cell); cs.Color = rColor; cs.Thickness = 2; cs.Transparency = 0.2
 
 		local pvpS = sx(48)
 		local pvp = Instance.new("Frame")
@@ -325,7 +325,7 @@ local function showPicker(title, filterFn, queueId, onDone)
 		local nl2 = Instance.new("TextLabel")
 		nl2.Size = UDim2.new(1, -sx(8), 0, sx(18)); nl2.Position = UDim2.new(0.5, 0, 0, nameY)
 		nl2.AnchorPoint = Vector2.new(0.5, 0); nl2.BackgroundTransparency = 1
-		nl2.Text = info and info.displayName or id; nl2.TextColor3 = displayColor
+		nl2.Text = info and info.displayName or id; nl2.TextColor3 = rColor
 		nl2.Font = FONT; nl2.TextSize = sx(12); nl2.TextTruncate = Enum.TextTruncate.AtEnd
 		nl2.ZIndex = 43; nl2.Parent = cell
 

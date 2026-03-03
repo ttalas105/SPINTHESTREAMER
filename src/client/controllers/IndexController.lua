@@ -254,7 +254,7 @@ local function buildStreamerCard(info, effect, parent, cardIndex)
 	cCorner.Parent = card
 
 	local cStroke = Instance.new("UIStroke")
-	cStroke.Color = isUnlocked and displayColor or Color3.fromRGB(80, 65, 120)
+	cStroke.Color = isUnlocked and rarityColor or Color3.fromRGB(80, 65, 120)
 	cStroke.Thickness = isUnlocked and 2.5 or 2
 	cStroke.Transparency = isUnlocked and 0.1 or 0.4
 	cStroke.Parent = card
@@ -282,7 +282,7 @@ local function buildStreamerCard(info, effect, parent, cardIndex)
 	vpCorner.CornerRadius = UDim.new(0, 14)
 	vpCorner.Parent = viewport
 	local vpStroke = Instance.new("UIStroke")
-	vpStroke.Color = isUnlocked and displayColor or Color3.fromRGB(60, 50, 90)
+	vpStroke.Color = isUnlocked and rarityColor or Color3.fromRGB(60, 50, 90)
 	vpStroke.Thickness = 1.5
 	vpStroke.Transparency = 0.5
 	vpStroke.Parent = viewport
@@ -351,18 +351,35 @@ local function buildStreamerCard(info, effect, parent, cardIndex)
 		ph.Parent = viewport
 	end
 
-	-- Name
-	local nameText = isUnlocked and info.displayName or "???"
+	-- Effect badge (above name)
+	local nameOffset = vpSize + 14
 	if isUnlocked and effectInfo then
-		nameText = effectInfo.prefix .. " " .. nameText
+		local effBadge = Instance.new("TextLabel")
+		effBadge.Size = UDim2.new(1, -10, 0, 14)
+		effBadge.Position = UDim2.new(0.5, 0, 0, vpSize + 10)
+		effBadge.AnchorPoint = Vector2.new(0.5, 0)
+		effBadge.BackgroundTransparency = 1
+		effBadge.Text = effectInfo.prefix:upper()
+		effBadge.TextColor3 = effectInfo.color
+		effBadge.Font = Enum.Font.GothamBold
+		effBadge.TextSize = 11
+		effBadge.Parent = card
+		local ebStroke = Instance.new("UIStroke")
+		ebStroke.Color = Color3.fromRGB(0, 0, 0)
+		ebStroke.Thickness = 1
+		ebStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+		ebStroke.Parent = effBadge
+		nameOffset = vpSize + 24
 	end
+
+	-- Name
 	local nameLabel = Instance.new("TextLabel")
 	nameLabel.Size = UDim2.new(1, -10, 0, 24)
-	nameLabel.Position = UDim2.new(0.5, 0, 0, vpSize + 14)
+	nameLabel.Position = UDim2.new(0.5, 0, 0, nameOffset)
 	nameLabel.AnchorPoint = Vector2.new(0.5, 0)
 	nameLabel.BackgroundTransparency = 1
-	nameLabel.Text = nameText
-	nameLabel.TextColor3 = isUnlocked and displayColor or Color3.fromRGB(100, 85, 140)
+	nameLabel.Text = isUnlocked and info.displayName or "???"
+	nameLabel.TextColor3 = isUnlocked and rarityColor or Color3.fromRGB(100, 85, 140)
 	nameLabel.Font = FONT
 	nameLabel.TextSize = 17
 	nameLabel.TextTruncate = Enum.TextTruncate.AtEnd

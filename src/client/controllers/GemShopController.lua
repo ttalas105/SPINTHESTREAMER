@@ -758,7 +758,6 @@ local function showCaseOpenAnimation(caseData, resultData)
 		local rInfo2 = Rarities.ByName[resultData.rarity or "Common"]
 		local rColor2 = rInfo2 and rInfo2.color or Color3.new(1, 1, 1)
 		local effInfo2 = resultData.effect and Effects.ByName[resultData.effect]
-		local displayColor = effInfo2 and effInfo2.color or rColor2
 
 		local popup = Instance.new("Frame")
 		popup.Size = UDim2.new(0.7, 0, 0, 100)
@@ -767,10 +766,13 @@ local function showCaseOpenAnimation(caseData, resultData)
 		popup.BackgroundColor3 = Color3.fromRGB(40, 35, 60)
 		popup.BorderSizePixel = 0; popup.ZIndex = 26; popup.Parent = aOverlay
 		Instance.new("UICorner", popup).CornerRadius = UDim.new(0, 16)
-		Instance.new("UIStroke", popup).Color = displayColor
+		Instance.new("UIStroke", popup).Color = rColor2
 
-		local displayName = resultData.displayName or "???"
-		local fullText = "You got: " .. displayName .. "!\n" .. (resultData.rarity or ""):upper()
+		local baseName = resultData.displayName or "???"
+		if effInfo2 and string.find(baseName, effInfo2.prefix, 1, true) then
+			baseName = string.gsub(baseName, effInfo2.prefix .. " ", "", 1)
+		end
+		local fullText = "You got: " .. baseName .. "!\n" .. (resultData.rarity or ""):upper()
 		if effInfo2 then
 			fullText = fullText .. "\n" .. effInfo2.prefix:upper() .. " (x" .. effInfo2.cashMultiplier .. " cash)"
 		end
@@ -780,8 +782,8 @@ local function showCaseOpenAnimation(caseData, resultData)
 		ppL.Position = UDim2.new(0.5, 0, 0.5, 0)
 		ppL.AnchorPoint = Vector2.new(0.5, 0.5)
 		ppL.BackgroundTransparency = 1
-		ppL.Text = fullText; ppL.TextColor3 = displayColor
-		ppL.Font = FONT; ppL.TextSize = 18; ppL.TextWrapped = true
+		ppL.Text = fullText; ppL.TextColor3 = rColor2
+		ppL.Font = FONT; ppL.TextSize = 18; ppL.TextWrapped = true; ppL.RichText = true
 		ppL.ZIndex = 27; ppL.Parent = popup
 		addStroke(ppL, Color3.new(0, 0, 0), 1.5)
 
