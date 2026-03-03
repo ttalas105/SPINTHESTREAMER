@@ -56,9 +56,35 @@ local function saveStock()
 	end)
 end
 
+local function rollStock18()
+	local r = math.random()
+	if r < 0.20 then return 0
+	elseif r < 0.60 then return 6
+	elseif r < 0.80 then return 12
+	else return 18 end
+end
+
+local function rollStock12()
+	local r = math.random()
+	if r < 0.20 then return 0
+	elseif r < 0.40 then return 4
+	elseif r < 0.60 then return 6
+	elseif r < 0.80 then return 8
+	else return 12 end
+end
+
 local function restockAll()
 	for i = 1, Economy.TotalCases do
-		stock[i] = Economy.CrateMaxStock[i] or 50
+		local maxStock = Economy.CrateMaxStock[i] or 50
+		if i <= 6 then
+			stock[i] = maxStock
+		elseif maxStock == 18 then
+			stock[i] = rollStock18()
+		elseif maxStock == 12 then
+			stock[i] = rollStock12()
+		else
+			stock[i] = maxStock
+		end
 	end
 	lastRestockTime = getServerTime()
 	saveStock()
@@ -272,6 +298,8 @@ function CaseStockService.Init(playerDataModule, spinServiceModule, questService
 
 	if not loadPersistedStock() then
 		restockAll()
+	else
+		checkAutoRestock()
 	end
 
 	local BuyCrateStock = RemoteEvents:WaitForChild("BuyCrateStock")
