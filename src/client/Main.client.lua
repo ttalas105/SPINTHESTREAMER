@@ -523,9 +523,9 @@ local centerToastGui = nil
 local centerToastLabel = nil
 local centerToastStroke = nil
 local centerToastToken = 0
-local hasSeenCaseStockSnapshot = false
-local lastCaseRestockIn = nil
 local cachedRestockSound = nil
+local lastUnifiedRestockToastAt = 0
+local RESTOCK_TOAST_COOLDOWN = 1.25
 
 local function playRestockSound()
 	if not cachedRestockSound or not cachedRestockSound.Parent then
@@ -557,7 +557,7 @@ local function showSystemToast(titleText, bodyText)
 	end)
 end
 
-local function showCenterToast(messageText, options)
+local function showCenterToast(messageText)
 	local playerGui = Players.LocalPlayer:WaitForChild("PlayerGui")
 	if not centerToastGui or not centerToastGui.Parent then
 		centerToastGui = Instance.new("ScreenGui")
@@ -570,50 +570,55 @@ local function showCenterToast(messageText, options)
 	if not centerToastLabel or not centerToastLabel.Parent then
 		centerToastLabel = Instance.new("TextLabel")
 		centerToastLabel.Name = "CenterToastLabel"
-		centerToastLabel.Size = UDim2.new(0, 560, 0, 82)
-		-- Default placement near top nav.
-		centerToastLabel.Position = UDim2.new(0.5, 0, 0, 24)
-		centerToastLabel.AnchorPoint = Vector2.new(0.5, 0)
-		centerToastLabel.BackgroundColor3 = Color3.fromRGB(6, 22, 56)
-		centerToastLabel.BackgroundTransparency = 0.12
+		centerToastLabel.Size = UDim2.new(0, 760, 0, 122)
+		centerToastLabel.Position = UDim2.new(0.5, 0, 0.5, 0)
+		centerToastLabel.AnchorPoint = Vector2.new(0.5, 0.5)
+		centerToastLabel.BackgroundColor3 = Color3.fromRGB(20, 45, 120)
+		centerToastLabel.BackgroundTransparency = 0.06
 		centerToastLabel.BorderSizePixel = 0
-		centerToastLabel.TextColor3 = Color3.fromRGB(235, 250, 255)
+		centerToastLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 		centerToastLabel.Font = Enum.Font.FredokaOne
-		centerToastLabel.TextSize = 40
+		centerToastLabel.TextSize = 52
 		centerToastLabel.TextWrapped = true
-		centerToastLabel.TextStrokeColor3 = Color3.fromRGB(0, 145, 255)
-		centerToastLabel.TextStrokeTransparency = 0.35
+		centerToastLabel.TextStrokeColor3 = Color3.fromRGB(50, 200, 255)
+		centerToastLabel.TextStrokeTransparency = 0.12
 		centerToastLabel.Visible = false
 		centerToastLabel.Parent = centerToastGui
-		Instance.new("UICorner", centerToastLabel).CornerRadius = UDim.new(0, 12)
+		Instance.new("UICorner", centerToastLabel).CornerRadius = UDim.new(0, 18)
 		local stroke = Instance.new("UIStroke")
-		stroke.Color = Color3.fromRGB(35, 180, 255)
-		stroke.Thickness = 2
-		stroke.Transparency = 0.05
+		stroke.Color = Color3.fromRGB(120, 220, 255)
+		stroke.Thickness = 3
+		stroke.Transparency = 0
 		stroke.Parent = centerToastLabel
 		centerToastStroke = stroke
+		local gradient = Instance.new("UIGradient")
+		gradient.Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, Color3.fromRGB(65, 115, 255)),
+			ColorSequenceKeypoint.new(0.5, Color3.fromRGB(40, 210, 255)),
+			ColorSequenceKeypoint.new(1, Color3.fromRGB(110, 70, 255)),
+		})
+		gradient.Rotation = 25
+		gradient.Parent = centerToastLabel
 	end
 
 	centerToastToken += 1
 	local token = centerToastToken
-	local isCentered = type(options) == "table" and options.centered == true
-	if isCentered then
-		centerToastLabel.Position = UDim2.new(0.5, 0, 0, 24)
-		centerToastLabel.AnchorPoint = Vector2.new(0.5, 0)
-	else
-		-- Place near the top nav, left of the SHOP area.
-		centerToastLabel.Position = UDim2.new(0.5, -380, 0, 24)
-		centerToastLabel.AnchorPoint = Vector2.new(0, 0)
-	end
+	centerToastLabel.Position = UDim2.new(0.5, 0, 0.5, 0)
+	centerToastLabel.AnchorPoint = Vector2.new(0.5, 0.5)
 	centerToastLabel.Text = messageText or ""
-	centerToastLabel.BackgroundTransparency = 0.12
+	centerToastLabel.BackgroundTransparency = 0.06
 	centerToastLabel.TextTransparency = 0
+	centerToastLabel.Size = UDim2.new(0, 760, 0, 122)
 	if centerToastStroke then
 		centerToastStroke.Transparency = 0
 	end
 	centerToastLabel.Visible = true
+	local pop = TweenService:Create(centerToastLabel, TweenInfo.new(0.24, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+		Size = UDim2.new(0, 800, 0, 134),
+	})
+	pop:Play()
 
-	task.delay(3.6, function()
+	task.delay(2.7, function()
 		if token ~= centerToastToken or not centerToastLabel then return end
 		TweenService:Create(centerToastLabel, TweenInfo.new(0.45, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 			BackgroundTransparency = 1,
@@ -631,6 +636,16 @@ local function showCenterToast(messageText, options)
 	end)
 end
 
+local function announceUnifiedRestock()
+	local now = os.clock()
+	if now - lastUnifiedRestockToastAt < RESTOCK_TOAST_COOLDOWN then
+		return
+	end
+	lastUnifiedRestockToastAt = now
+	playRestockSound()
+	showCenterToast("POTIONS + CASES HAVE RESTOCKED!")
+end
+
 local function shouldShowBaseSlotErrorToast(reasonText)
 	if type(reasonText) ~= "string" then return false end
 	local r = string.lower(reasonText)
@@ -645,14 +660,8 @@ local function handleCaseStockPayload(payload)
 	if type(restockIn) ~= "number" then return end
 
 	if payload.restocked == true then
-		playRestockSound()
-		showCenterToast("Cases have been restocked")
+		announceUnifiedRestock()
 	end
-
-	local previousRestockIn = lastCaseRestockIn
-	lastCaseRestockIn = restockIn
-
-	hasSeenCaseStockSnapshot = true
 end
 
 local function handlePotionStockPayload(payload)
@@ -660,8 +669,7 @@ local function handlePotionStockPayload(payload)
 	local restockIn = payload.restockIn
 	if type(restockIn) ~= "number" then return end
 	if payload.restocked == true then
-		playRestockSound()
-		showCenterToast("Potion stock has been restocked!")
+		announceUnifiedRestock()
 	end
 end
 

@@ -110,7 +110,7 @@ local function updatePadVisuals(player: Player, padSlot: number)
 	end
 end
 
---- Effective cash/sec for a streamer item including effect, cash upgrade, potion, and VIP
+--- Effective cash/sec for a streamer item including rebirth, effect, cash upgrade, potion, VIP, and double cash
 local function getEffectiveCps(player: Player, streamerItem): number
 	local streamerId = type(streamerItem) == "table" and streamerItem.id or streamerItem
 	local effectName = type(streamerItem) == "table" and streamerItem.effect or nil
@@ -123,10 +123,13 @@ local function getEffectiveCps(player: Player, streamerItem): number
 			cps = cps * eff.cashMultiplier
 		end
 	end
+	local rebirthCount = PlayerData and PlayerData.GetRebirthCount(player) or 0
+	local rebirthMult = Economy.GetRebirthCoinMultiplier(rebirthCount)
 	local cashUpgradeMult = PlayerData and PlayerData.GetCashUpgradeMultiplier(player) or 1
 	local potionMult = PotionService and PotionService.GetCashMultiplier(player) or 1
 	local vipCashMult = (PlayerData and PlayerData.HasVIP(player)) and (Economy.VIPCashMultiplier or 1.5) or 1
-	return cps * cashUpgradeMult * potionMult * vipCashMult
+	local doubleCashMult = (PlayerData and PlayerData.HasDoubleCash(player)) and (Economy.DoubleCashMultiplier or 2) or 1
+	return cps * rebirthMult * cashUpgradeMult * potionMult * vipCashMult * doubleCashMult
 end
 
 local function buildBillboardText(info, streamerId, effectName, rarityColor, cps)
@@ -1268,8 +1271,10 @@ function BaseService.Init(playerDataModule, potionServiceModule)
 				local key = tostring(slot)
 				local equipped = data.equippedPads[key]
 				if equipped then
-					if #data.inventory >= PlayerData.HOTBAR_MAX then
-						EquipResult:FireClient(player, { success = false, reason = "Inventory is full. Free a hotbar slot first." })
+					local hasHotbarSpace = #data.inventory < PlayerData.HOTBAR_MAX
+					local hasStorageSpace = data.storage and #data.storage < PlayerData.STORAGE_MAX
+					if not hasHotbarSpace and not hasStorageSpace then
+						EquipResult:FireClient(player, { success = false, reason = "Inventory and storage are full!" })
 						return
 					end
 					local streamerId = type(equipped) == "table" and equipped.id or equipped
@@ -1314,8 +1319,10 @@ function BaseService.Init(playerDataModule, potionServiceModule)
 						local orphanItem = data.equippedPads[orphanKey]
 						local orphanId = type(orphanItem) == "table" and orphanItem.id or orphanItem
 						local orphanEffect = type(orphanItem) == "table" and orphanItem.effect or nil
-						if #data.inventory >= PlayerData.HOTBAR_MAX then
-							EquipResult:FireClient(player, { success = false, reason = "Inventory is full. Free a hotbar slot first." })
+						local hasHotbarSpace2 = #data.inventory < PlayerData.HOTBAR_MAX
+						local hasStorageSpace2 = data.storage and #data.storage < PlayerData.STORAGE_MAX
+						if not hasHotbarSpace2 and not hasStorageSpace2 then
+							EquipResult:FireClient(player, { success = false, reason = "Inventory and storage are full!" })
 							return
 						end
 						if orphanItem and PlayerData.UnequipFromPad(player, orphanedSlot) then

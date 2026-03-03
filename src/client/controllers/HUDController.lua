@@ -346,76 +346,112 @@ function HUDController.UpdateData(payload)
 		hasSeenInitialGemValue = true
 	end
 
-	-- Update luck display (1 luck = +1%) with potion boost shown
-	if luckLabel then
-		local luck = HUDController.Data.luck or 0
-		local percent = luck  -- 1 luck = 1%
-		-- Check for active luck potion
-		if not PotionController then
-			local ok, mod = pcall(function() return require(script.Parent.PotionController) end)
-			if ok then PotionController = mod end
+	-- Lazy-require PotionController once
+	if not PotionController then
+		local ok, mod = pcall(function() return require(script.Parent.PotionController) end)
+		if ok then PotionController = mod end
+	end
+
+	-- Gather potion multipliers (matches server PotionService stacking)
+	local luckPotionMult = 1
+	local cashPotionMult = 1
+	local sacrificeLuckActive = false
+	if PotionController and PotionController.ActivePotions then
+		local ap = PotionController.ActivePotions
+		local divineMult = (ap.Divine and ap.Divine.multiplier) or 0
+		local luckMult = (ap.Luck and ap.Luck.multiplier) or 0
+		local cashMult = (ap.Cash and ap.Cash.multiplier) or 0
+
+		if ap.SacrificeLuck and ap.SacrificeLuck.multiplier and ap.SacrificeLuck.remaining and ap.SacrificeLuck.remaining > 0 then
+			luckPotionMult = ap.SacrificeLuck.multiplier
+			sacrificeLuckActive = true
+		elseif divineMult > 0 or luckMult > 0 then
+			luckPotionMult = divineMult + luckMult
 		end
-		luckLabel.Text = ("Luck: %d (+%d%%)"):format(luck, percent)
-		luckLabel.TextColor3 = Color3.fromRGB(200, 180, 255) -- default purple
 
-		if potionsLabel then
-			local luckPotionMult = 1
-			local moneyPotionMult = 1
-			local divineActive = false
-			if PotionController and PotionController.ActivePotions then
-				local divineMult = (PotionController.ActivePotions.Divine and PotionController.ActivePotions.Divine.multiplier) or 0
-				local luckMult = (PotionController.ActivePotions.Luck and PotionController.ActivePotions.Luck.multiplier) or 0
-				local cashMult = (PotionController.ActivePotions.Cash and PotionController.ActivePotions.Cash.multiplier) or 0
-				divineActive = divineMult > 0
-				if divineMult > 0 or luckMult > 0 then
-					luckPotionMult = divineMult + luckMult
-				end
-				if divineMult > 0 or cashMult > 0 then
-					moneyPotionMult = divineMult + cashMult
-				end
-			end
-
-			if luckPotionMult > 1 or moneyPotionMult > 1 then
-				potionsLabel.Text = ("Potions: Luck x%.1f  |  Money x%.1f"):format(luckPotionMult, moneyPotionMult)
-				potionsLabel.TextColor3 = divineActive and Color3.fromRGB(255, 150, 255) or Color3.fromRGB(120, 255, 180)
-				potionsLabel.Visible = true
-			else
-				potionsLabel.Visible = false
-				potionsLabel.Text = ""
-			end
+		if divineMult > 0 or cashMult > 0 then
+			cashPotionMult = divineMult + cashMult
 		end
 	end
 
-	-- Update money multiplier display
+	-- Update luck display: show total effective luck multiplier (matches SpinService formula)
+	if luckLabel then
+		local rebirthCount = HUDController.Data.rebirthCount or 0
+		local rebirthLuck = 1 + (rebirthCount * 0.02)
+		local baseLuck = HUDController.Data.luck or 0
+		local playerLuckFactor = 1 + (baseLuck / 100)
+		local vipLuck = HUDController.Data.hasVIP and 1.5 or 1
+		local x2Luck = HUDController.Data.hasX2Luck and 2 or 1
+		local totalLuckMult = rebirthLuck * playerLuckFactor * luckPotionMult * vipLuck * x2Luck
+
+		if totalLuckMult > 1.005 then
+			luckLabel.Text = ("Luck: x%.2f"):format(totalLuckMult)
+			luckLabel.TextColor3 = sacrificeLuckActive and Color3.fromRGB(255, 100, 100) or Color3.fromRGB(200, 180, 255)
+		else
+			luckLabel.Text = "Luck: x1.00"
+			luckLabel.TextColor3 = Color3.fromRGB(160, 160, 180)
+		end
+	end
+
+	-- Update money multiplier display: rebirth + cash upgrade + VIP + double cash + potions
 	if moneyMultLabel then
-		local mult = 1
+		local rebirthCount = HUDController.Data.rebirthCount or 0
+		local rebirthBonusPercent = 0
+		local REBIRTH_BONUS_PER_LEVEL = { 5, 5, 5, 5, 5, 8, 8, 8, 8, 8, 12, 12, 12, 12, 12, 20, 20, 20, 20 }
+		for i = 1, math.min(rebirthCount, 19) do
+			rebirthBonusPercent = rebirthBonusPercent + (REBIRTH_BONUS_PER_LEVEL[i] or 5)
+		end
+		local rebirthMult = 1 + (rebirthBonusPercent / 100)
+
 		local cashUpgrade = HUDController.Data.cashUpgrade or 0
-		mult = mult * (1 + cashUpgrade * 0.02)
+		local cashUpgradeMult = 1 + cashUpgrade * 0.02
+
+		local mult = rebirthMult * cashUpgradeMult
 		if HUDController.Data.hasVIP then
 			mult = mult * 1.5
 		end
 		if HUDController.Data.doubleCash then
 			mult = mult * 2
 		end
-		if not PotionController then
-			local ok, mod = pcall(function() return require(script.Parent.PotionController) end)
-			if ok then PotionController = mod end
-		end
-		if PotionController and PotionController.ActivePotions then
-			local divineMult = (PotionController.ActivePotions.Divine and PotionController.ActivePotions.Divine.multiplier) or 0
-			local cashPotMult = (PotionController.ActivePotions.Cash and PotionController.ActivePotions.Cash.multiplier) or 0
-			local potionTotal = divineMult + cashPotMult
-			if potionTotal > 0 then
-				mult = mult * potionTotal
-			end
+		if cashPotionMult > 1 then
+			mult = mult * cashPotionMult
 		end
 
-		if mult > 1 then
-			moneyMultLabel.Text = ("Money: x%.1f"):format(mult)
+		if mult > 1.005 then
+			moneyMultLabel.Text = ("Money: x%.2f"):format(mult)
 			moneyMultLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
 		else
-			moneyMultLabel.Text = "Money: x1.0"
+			moneyMultLabel.Text = "Money: x1.00"
 			moneyMultLabel.TextColor3 = Color3.fromRGB(160, 160, 180)
+		end
+	end
+
+	-- Potions label: show active potion names/timers as a compact summary
+	if potionsLabel then
+		local parts = {}
+		if PotionController and PotionController.ActivePotions then
+			local ap = PotionController.ActivePotions
+			if ap.Divine and ap.Divine.remaining and ap.Divine.remaining > 0 then
+				table.insert(parts, ("Divine %d:%02d"):format(math.floor(ap.Divine.remaining / 60), ap.Divine.remaining % 60))
+			end
+			if ap.Luck and ap.Luck.remaining and ap.Luck.remaining > 0 then
+				table.insert(parts, ("Luck %d:%02d"):format(math.floor(ap.Luck.remaining / 60), ap.Luck.remaining % 60))
+			end
+			if ap.Cash and ap.Cash.remaining and ap.Cash.remaining > 0 then
+				table.insert(parts, ("Cash %d:%02d"):format(math.floor(ap.Cash.remaining / 60), ap.Cash.remaining % 60))
+			end
+			if sacrificeLuckActive then
+				local rem = ap.SacrificeLuck.remaining or 0
+				table.insert(parts, ("Sacrifice %d:%02d"):format(math.floor(rem / 60), rem % 60))
+			end
+		end
+		if #parts > 0 then
+			potionsLabel.Text = "Potions: " .. table.concat(parts, " | ")
+			potionsLabel.TextColor3 = Color3.fromRGB(120, 255, 180)
+			potionsLabel.Visible = true
+		else
+			potionsLabel.Visible = false
+			potionsLabel.Text = ""
 		end
 	end
 

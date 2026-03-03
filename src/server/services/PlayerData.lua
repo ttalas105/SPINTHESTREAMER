@@ -995,8 +995,14 @@ function PlayerData.UnequipFromPad(player, padSlot: number): boolean
 	local item = data.equippedPads[key]
 	if not item then return false end
 
-	-- Move back to inventory
-	table.insert(data.inventory, item)
+	-- Move back to hotbar if space, otherwise storage
+	if #data.inventory < PlayerData.HOTBAR_MAX then
+		table.insert(data.inventory, item)
+	elseif data.storage and #data.storage < PlayerData.STORAGE_MAX then
+		table.insert(data.storage, item)
+	else
+		return false
+	end
 	data.equippedPads[key] = nil
 	task.defer(function()
 		PlayerData.Replicate(player)

@@ -32,8 +32,8 @@ local STORAGE_OFFSET = 1000
 -- SELL HELPERS
 -------------------------------------------------
 
--- Sell price = 10 seconds of income (cashPerSecond * effect multiplier * 10)
-local function getSellPrice(item)
+-- Base sell price = 10 seconds of raw income (cashPerSecond * effect multiplier * 10)
+local function getBaseSellPrice(item)
 	local streamerId = type(item) == "table" and item.id or item
 	local effect = type(item) == "table" and item.effect or nil
 	local info = Streamers.ById[streamerId]
@@ -45,6 +45,22 @@ local function getSellPrice(item)
 		if ei and ei.cashMultiplier then income = income * ei.cashMultiplier end
 	end
 	return math.floor(income * 10)
+end
+
+-- Apply all player multipliers to a base price: rebirth, cash upgrade, potion, VIP, double cash
+local function applyAllMultipliers(player, basePrice)
+	local price = basePrice
+	local rebirthCount = PlayerData.GetRebirthCount(player)
+	price = price * Economy.GetRebirthCoinMultiplier(rebirthCount)
+	price = price * (PlayerData.GetCashUpgradeMultiplier(player) or 1)
+	price = price * (PotionService and PotionService.GetCashMultiplier(player) or 1)
+	if PlayerData.HasVIP(player) then
+		price = price * (Economy.VIPCashMultiplier or 1.5)
+	end
+	if PlayerData.HasDoubleCash(player) then
+		price = price * (Economy.DoubleCashMultiplier or 2)
+	end
+	return math.floor(price)
 end
 
 local function normalizeQueuedSet(raw): { [number]: boolean }
@@ -81,11 +97,11 @@ local function handleSell(player, streamerId: string)
 	-- Find item in inventory to calculate price before removing
 	local data = PlayerData.Get(player)
 	if not data then return end
-	local price = 0
+	local basePrice = 0
 	for i, item in ipairs(data.inventory) do
 		local id = type(item) == "table" and item.id or item
 		if id == streamerId then
-			price = getSellPrice(item)
+			basePrice = getBaseSellPrice(item)
 			break
 		end
 	end
@@ -96,12 +112,7 @@ local function handleSell(player, streamerId: string)
 		return
 	end
 
-	if PlayerData.HasDoubleCash(player) then
-		price = price * Economy.DoubleCashMultiplier
-	end
-	if PlayerData.HasVIP(player) then
-		price = math.floor(price * (Economy.VIPCashMultiplier or 1.5))
-	end
+	local price = applyAllMultipliers(player, basePrice)
 
 	PlayerData.AddCash(player, price)
 	PlayerData.IncrementStat(player, "totalCashEarned", price)
@@ -155,19 +166,13 @@ local function handleSellByIndex(player, itemIndex: number, source: string?, que
 		item = data.inventory[itemIndex]
 		removed = PlayerData.RemoveFromInventory(player, itemIndex)
 	end
-	local price = getSellPrice(item)
 
 	if not removed then
 		SellResult:FireClient(player, { success = false, reason = "Could not sell item." })
 		return
 	end
 
-	if PlayerData.HasDoubleCash(player) then
-		price = price * Economy.DoubleCashMultiplier
-	end
-	if PlayerData.HasVIP(player) then
-		price = math.floor(price * (Economy.VIPCashMultiplier or 1.5))
-	end
+	local price = applyAllMultipliers(player, getBaseSellPrice(item))
 
 	PlayerData.AddCash(player, price)
 	PlayerData.IncrementStat(player, "totalCashEarned", price)
@@ -201,7 +206,7 @@ local function handleSellAll(player, source: string?, queuedSetRaw)
 	local section = (source == "storage") and "storage" or "hotbar"
 	local queuedSet = normalizeQueuedSet(queuedSetRaw)
 
-	local totalCash = 0
+	local baseCashTotal = 0
 	local count = 0
 	local indicesToSell = {}
 
@@ -213,7 +218,7 @@ local function handleSellAll(player, source: string?, queuedSetRaw)
 		for i, item in ipairs(data.storage) do
 			if not queuedSet[STORAGE_OFFSET + i] then
 				count += 1
-				totalCash += getSellPrice(item)
+				baseCashTotal += getBaseSellPrice(item)
 				table.insert(indicesToSell, i)
 			end
 		end
@@ -225,7 +230,7 @@ local function handleSellAll(player, source: string?, queuedSetRaw)
 		for i, item in ipairs(data.inventory) do
 			if not queuedSet[i] then
 				count += 1
-				totalCash += getSellPrice(item)
+				baseCashTotal += getBaseSellPrice(item)
 				table.insert(indicesToSell, i)
 			end
 		end
@@ -235,12 +240,7 @@ local function handleSellAll(player, source: string?, queuedSetRaw)
 		return
 	end
 
-	if PlayerData.HasDoubleCash(player) then
-		totalCash = totalCash * Economy.DoubleCashMultiplier
-	end
-	if PlayerData.HasVIP(player) then
-		totalCash = math.floor(totalCash * (Economy.VIPCashMultiplier or 1.5))
-	end
+	local totalCash = applyAllMultipliers(player, baseCashTotal)
 
 	-- Clear only sellable items from the requested section.
 	table.sort(indicesToSell, function(a, b) return a > b end)
@@ -379,12 +379,12 @@ function EconomyService.Init(playerDataModule, potionServiceModule, questService
 end
 
 -- Expose income calculation for UI or other services
--- (streamer income is now handled by BaseService key accumulation)
+-- Returns total effective income/sec across all equipped pads (with all multipliers)
 function EconomyService.GetPlayerBaseIncome(player): number
 	if not PlayerData then return 0 end
 	local data = PlayerData.Get(player)
 	if not data then return 0 end
-	local total = 0
+	local rawTotal = 0
 	for _, item in pairs(data.equippedPads) do
 		local streamerId = type(item) == "table" and item.id or item
 		local effect = type(item) == "table" and item.effect or nil
@@ -397,10 +397,10 @@ function EconomyService.GetPlayerBaseIncome(player): number
 					income = income * effectInfo.cashMultiplier
 				end
 			end
-			total = total + income
+			rawTotal = rawTotal + income
 		end
 	end
-	return total
+	return applyAllMultipliers(player, rawTotal)
 end
 
 return EconomyService
