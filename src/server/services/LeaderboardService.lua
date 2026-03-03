@@ -8,7 +8,6 @@
 
 local DataStoreService = game:GetService("DataStoreService")
 local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 
 local LeaderboardService = {}
@@ -31,7 +30,8 @@ local CATEGORIES = {
 }
 
 local nameCache = {}
-local isStudio = RunService:IsStudio()
+local cachedGlobalEntries = {}
+local hasEverShownGlobal = false
 
 -------------------------------------------------
 -- FORMATTING
@@ -212,6 +212,7 @@ local function fetchAndDisplay()
 			end)
 			if ok2 and entries and #entries > 0 then
 				anyData = true
+				cachedGlobalEntries[cat.key] = entries
 				updateBoard(cat, entries)
 			end
 		else
@@ -220,8 +221,18 @@ local function fetchAndDisplay()
 	end
 
 	if not anyData then
-		refreshLocal()
+		if hasEverShownGlobal then
+			for _, cat in ipairs(CATEGORIES) do
+				local entries = cachedGlobalEntries[cat.key]
+				if entries and #entries > 0 then
+					updateBoard(cat, entries)
+				end
+			end
+		else
+			refreshLocal()
+		end
 	else
+		hasEverShownGlobal = true
 		lastGlobalRefreshAt = os.clock()
 	end
 end
@@ -251,10 +262,14 @@ function LeaderboardService.Init(playerDataModule)
 
 	Players.PlayerAdded:Connect(function(player)
 		nameCache[player.UserId] = player.DisplayName or player.Name
-		task.delay(2, refreshLocal)
+		if not hasEverShownGlobal then
+			task.delay(2, refreshLocal)
+		end
 	end)
 	Players.PlayerRemoving:Connect(function(player)
-		task.delay(1, refreshLocal)
+		if not hasEverShownGlobal then
+			task.delay(1, refreshLocal)
+		end
 	end)
 
 	-- Immediate local display so boards are never empty
@@ -263,32 +278,26 @@ function LeaderboardService.Init(playerDataModule)
 		print("[LeaderboardService] Initial local board refresh done")
 	end)
 
-	-- OrderedDataStore loops are disabled in Studio by default (API access is commonly off),
-	-- which avoids noisy 403/GetSortedAsync spam while keeping local fallback boards active.
-	if not isStudio then
-		-- Push stats loop
-		task.spawn(function()
-			task.wait(10)
-			pcall(pushAllPlayerStats)
-			while true do
-				task.wait(PUSH_INTERVAL)
-				local ok, err = pcall(pushAllPlayerStats)
-				if not ok then warn("[LeaderboardService] Push cycle error: " .. tostring(err)) end
-			end
-		end)
+	-- Push stats loop (enabled in all environments; failures are safely pcalled)
+	task.spawn(function()
+		task.wait(10)
+		pcall(pushAllPlayerStats)
+		while true do
+			task.wait(PUSH_INTERVAL)
+			local ok, err = pcall(pushAllPlayerStats)
+			if not ok then warn("[LeaderboardService] Push cycle error: " .. tostring(err)) end
+		end
+	end)
 
-		-- Fetch + display loop
-		task.spawn(function()
-			task.wait(15)
-			while true do
-				local ok, err = pcall(fetchAndDisplay)
-				if not ok then warn("[LeaderboardService] Fetch cycle error: " .. tostring(err)) end
-				task.wait(FETCH_INTERVAL)
-			end
-		end)
-	else
-		print("[LeaderboardService] Studio mode: using local leaderboard fallback only")
-	end
+	-- Fetch + display loop (always prefer global totals)
+	task.spawn(function()
+		task.wait(15)
+		while true do
+			local ok, err = pcall(fetchAndDisplay)
+			if not ok then warn("[LeaderboardService] Fetch cycle error: " .. tostring(err)) end
+			task.wait(FETCH_INTERVAL)
+		end
+	end)
 
 	-- Time played tick (every 10 seconds)
 	task.spawn(function()
@@ -304,7 +313,7 @@ function LeaderboardService.Init(playerDataModule)
 		while true do
 			task.wait(LOCAL_REFRESH_INTERVAL)
 			local staleGlobal = (os.clock() - lastGlobalRefreshAt) >= GLOBAL_STALE_SECONDS
-			if (not datastoreAvailable) or staleGlobal then
+			if (not hasEverShownGlobal) and ((not datastoreAvailable) or staleGlobal) then
 				pcall(refreshLocal)
 			end
 		end

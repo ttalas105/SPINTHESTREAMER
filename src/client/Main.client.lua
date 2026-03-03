@@ -772,6 +772,8 @@ setLoadProgress(0.95, "Finishing up...")
 -- DEBUG: Give all streamers + Skip tutorial (Studio only)
 -- Buttons in bottom-right corner to avoid overlapping other UI
 -------------------------------------------------
+-- Launch build: debug client buttons disabled.
+--[[
 if RunService:IsStudio() then
 	task.defer(function()
 		local debugGiveAll = RemoteEvents:FindFirstChild("DebugGiveAll")
@@ -852,6 +854,7 @@ if RunService:IsStudio() then
 		end
 	end)
 end
+]]
 
 -------------------------------------------------
 -- HIDE PLAYER HEALTH BARS + MOVEMENT SPEED

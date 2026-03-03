@@ -464,6 +464,8 @@ PotionService.SetQuestService(QuestService)
 -------------------------------------------------
 -- DEBUG: Give all streamers + Skip tutorial (Studio only)
 -------------------------------------------------
+-- Launch build: debug server remotes disabled.
+--[[
 do
 	local RunService = game:GetService("RunService")
 	if RunService:IsStudio() then
@@ -540,5 +542,6 @@ do
 		print("[Server] Debug: DebugGiveAll + DebugSkipTutorial + DebugMaxRebirth active (Studio only)")
 	end
 end
+]]
 
 print("[Server] Spin the Streamer initialized! Map size: 400x1000 studs, 8 base slots")
