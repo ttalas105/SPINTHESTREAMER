@@ -208,7 +208,16 @@ local function broadcastPotionStock(justRestocked)
 end
 
 local function loadPotionState(player)
-	local data = PlayerData and PlayerData.Get(player)
+	if not PlayerData then return end
+	local data = PlayerData.Get(player)
+	if not data then
+		-- PlayerData can still be loading on fresh join; wait briefly to avoid dropping restores.
+		for _ = 1, 50 do
+			task.wait(0.1)
+			data = PlayerData.Get(player)
+			if data then break end
+		end
+	end
 	if not data then return end
 
 	local userId = player.UserId
@@ -534,10 +543,10 @@ function PotionService.Init(playerDataModule)
 	end
 
 	Players.PlayerAdded:Connect(function(player)
-		loadPotionState(player)
+		task.spawn(loadPotionState, player)
 	end)
 	for _, player in ipairs(Players:GetPlayers()) do
-		loadPotionState(player)
+		task.spawn(loadPotionState, player)
 	end
 
 	BuyPotionRequest.OnServerEvent:Connect(function(player, potionType, tier)

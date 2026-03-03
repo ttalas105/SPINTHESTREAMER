@@ -132,6 +132,25 @@ local function broadcastStock(justRestocked)
 	end
 end
 
+local function getOwnedCrateCount(data, crateId)
+	if not data or not data.ownedCrates then return 0 end
+	return (data.ownedCrates[crateId] or data.ownedCrates[tostring(crateId)] or 0)
+end
+
+local function setOwnedCrateCount(data, crateId, count)
+	if not data then return end
+	if not data.ownedCrates then data.ownedCrates = {} end
+	local keyNum = crateId
+	local keyStr = tostring(crateId)
+	if count > 0 then
+		data.ownedCrates[keyNum] = count
+		data.ownedCrates[keyStr] = nil
+	else
+		data.ownedCrates[keyNum] = nil
+		data.ownedCrates[keyStr] = nil
+	end
+end
+
 -------------------------------------------------
 -- BUY CRATE (into player's ownedCrates)
 -------------------------------------------------
@@ -156,19 +175,6 @@ local function handleBuyCrate(player, crateId, amount)
 
 	local data = PlayerData.Get(player)
 	if not data then return end
-
-	local rebirthReq = Economy.GetCrateRebirthRequirement(crateId)
-	if (data.rebirthCount or 0) < rebirthReq then
-		local BuyCrateResult = RemoteEvents:FindFirstChild("BuyCrateResult")
-		if BuyCrateResult then
-			BuyCrateResult:FireClient(player, {
-				success = false,
-				crateId = crateId,
-				reason = "Requires Rebirth " .. rebirthReq .. "!",
-			})
-		end
-		return
-	end
 
 	checkAutoRestock()
 
@@ -208,8 +214,8 @@ local function handleBuyCrate(player, crateId, amount)
 	stock[crateId] = (stock[crateId] or 0) - toBuy
 	saveStock()
 
-	if not data.ownedCrates then data.ownedCrates = {} end
-	data.ownedCrates[crateId] = (data.ownedCrates[crateId] or 0) + toBuy
+	local ownedNow = getOwnedCrateCount(data, crateId)
+	setOwnedCrateCount(data, crateId, ownedNow + toBuy)
 
 	PlayerData.Replicate(player)
 	broadcastStock(false)
@@ -244,7 +250,8 @@ local function handleOpenCrate(player, crateId)
 		return
 	end
 
-	if not data.ownedCrates or (data.ownedCrates[crateId] or 0) <= 0 then
+	local ownedNow = getOwnedCrateCount(data, crateId)
+	if ownedNow <= 0 then
 		local OpenCrateResult = RemoteEvents:FindFirstChild("OpenCrateResult")
 		if OpenCrateResult then
 			OpenCrateResult:FireClient(player, { success = false, reason = "You don't own any of this case!" })
@@ -262,10 +269,7 @@ local function handleOpenCrate(player, crateId)
 		return
 	end
 
-	data.ownedCrates[crateId] = data.ownedCrates[crateId] - 1
-	if data.ownedCrates[crateId] <= 0 then
-		data.ownedCrates[crateId] = nil
-	end
+	setOwnedCrateCount(data, crateId, ownedNow - 1)
 
 	PlayerData.Replicate(player)
 
