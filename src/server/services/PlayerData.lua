@@ -407,6 +407,33 @@ function PlayerData.Get(player)
 	return PlayerData._cache[player.UserId]
 end
 
+-- Admin utility: reset a player's save to DEFAULT_DATA.
+-- If token is provided, reset is applied only once per token for that player.
+function PlayerData.ResetToDefault(player, token: string?): boolean
+	local userId = player.UserId
+	local current = PlayerData._cache[userId]
+	if not current then return false end
+
+	if token and token ~= "" then
+		local flags = current.adminOneTimeResets
+		if type(flags) == "table" and flags[token] == true then
+			return false
+		end
+	end
+
+	local fresh = deepCopy(DEFAULT_DATA)
+	if token and token ~= "" then
+		fresh.adminOneTimeResets = {}
+		fresh.adminOneTimeResets[token] = true
+	end
+
+	PlayerData._cache[userId] = fresh
+	lastReplicated[userId] = nil
+	PlayerData.Replicate(player)
+	saveData(player)
+	return true
+end
+
 function PlayerData.IsTutorialComplete(player)
 	local data = PlayerData._cache[player.UserId]
 	if not data then return true end

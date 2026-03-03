@@ -7,6 +7,7 @@
 local services = script.Parent.services
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
+local Players = game:GetService("Players")
 
 -- Ensure RemoteEvents exist as early as possible (before heavy world build/service init).
 do
@@ -445,6 +446,35 @@ end
 
 -- Initialize services (order matters: PlayerData first, then BaseService)
 PlayerData.Init()
+
+-- One-time manual reset for a specific account (applies once globally via token).
+do
+	local TARGET_USER_ID = 7538347577
+	local RESET_TOKEN = "manual_default_reset_7538347577_v1"
+
+	local function tryApplyOneTimeReset(player)
+		if not player or player.UserId ~= TARGET_USER_ID then return end
+		task.spawn(function()
+			for _ = 1, 40 do
+				if PlayerData.Get(player) then break end
+				task.wait(0.25)
+			end
+			if not PlayerData.Get(player) then return end
+			PlayerData.WithLock(player, function()
+				local didReset = PlayerData.ResetToDefault(player, RESET_TOKEN)
+				if didReset then
+					print("[Server] Applied one-time default reset for userId " .. tostring(TARGET_USER_ID))
+				end
+			end)
+		end)
+	end
+
+	Players.PlayerAdded:Connect(tryApplyOneTimeReset)
+	for _, p in ipairs(Players:GetPlayers()) do
+		tryApplyOneTimeReset(p)
+	end
+end
+
 PotionService.Init(PlayerData)
 BaseService.Init(PlayerData, PotionService)
 QuestService.Init(PlayerData)
