@@ -374,18 +374,24 @@ local function addSpinningViewport(parent, streamerId, width, height, speed)
 	return viewport
 end
 
-local function computeEffectPercentages(compression)
+local function computeEffectPercentages(compression, excludeRarities)
 	local weights, total = {}, 0
 	for i, s in ipairs(Streamers.List) do
-		local w = (1 / s.odds) ^ compression
-		weights[i] = w; total = total + w
+		if excludeRarities and excludeRarities[s.rarity] then
+			weights[i] = 0
+		else
+			local w = (1 / s.odds) ^ compression
+			weights[i] = w; total = total + w
+		end
 	end
 	local result = {}
 	for i, s in ipairs(Streamers.List) do
-		result[i] = {
-			streamerId = s.id, displayName = s.displayName,
-			rarity = s.rarity, percent = (weights[i] / total) * 100,
-		}
+		if not (excludeRarities and excludeRarities[s.rarity]) then
+			table.insert(result, {
+				streamerId = s.id, displayName = s.displayName,
+				rarity = s.rarity, percent = (weights[i] / total) * 100,
+			})
+		end
 	end
 	return result
 end
@@ -455,7 +461,7 @@ local function openDropRatePopup(caseData)
 
 	Instance.new("UIPadding", scroll).PaddingTop = UDim.new(0, 4)
 
-	local items = computeEffectPercentages(caseData.compression)
+	local items = computeEffectPercentages(caseData.compression, caseData.excludeRarities)
 	for idx, item in ipairs(items) do
 		local rarInfo = Rarities.ByName[item.rarity]
 		local rarColor = rarInfo and rarInfo.color or Color3.fromRGB(170, 170, 170)
@@ -543,12 +549,14 @@ local function showCaseOpenAnimation(caseData, resultData)
 		end
 	elseif caseData.compression then
 		for _, s in ipairs(Streamers.List) do
-			table.insert(pool, {
-				streamerId = s.id,
-				displayName = caseData.effect .. " " .. s.displayName,
-				rarity = s.rarity,
-				effect = caseData.effect,
-			})
+			if not (caseData.excludeRarities and caseData.excludeRarities[s.rarity]) then
+				table.insert(pool, {
+					streamerId = s.id,
+					displayName = caseData.effect .. " " .. s.displayName,
+					rarity = s.rarity,
+					effect = caseData.effect,
+				})
+			end
 		end
 	end
 	if #pool == 0 then return end

@@ -42,13 +42,18 @@ end
 
 -- Compression-based roll for effect cases
 -- weight = (1/odds) ^ compression   (lower compression = flatter distribution)
-local function rollEffectCase(compression)
+-- excludeRarities: optional table { Common = true, Rare = true } to skip those tiers
+local function rollEffectCase(compression, excludeRarities)
 	local weights = {}
 	local totalWeight = 0
 	for i, s in ipairs(Streamers.List) do
-		local w = (1 / s.odds) ^ compression
-		weights[i] = w
-		totalWeight = totalWeight + w
+		if excludeRarities and excludeRarities[s.rarity] then
+			weights[i] = 0
+		else
+			local w = (1 / s.odds) ^ compression
+			weights[i] = w
+			totalWeight = totalWeight + w
+		end
 	end
 	local roll = math.random() * totalWeight
 	local cumulative = 0
@@ -63,13 +68,17 @@ end
 
 -- Compute percentage for a given streamer in a compression pool (used client-side too)
 -- Exported as a utility
-function GemShopService.ComputeEffectPercentages(compression)
+function GemShopService.ComputeEffectPercentages(compression, excludeRarities)
 	local weights = {}
 	local totalWeight = 0
 	for i, s in ipairs(Streamers.List) do
-		local w = (1 / s.odds) ^ compression
-		weights[i] = w
-		totalWeight = totalWeight + w
+		if excludeRarities and excludeRarities[s.rarity] then
+			weights[i] = 0
+		else
+			local w = (1 / s.odds) ^ compression
+			weights[i] = w
+			totalWeight = totalWeight + w
+		end
 	end
 	local result = {}
 	for i, s in ipairs(Streamers.List) do
@@ -122,7 +131,7 @@ local function handleBuyGemCase(player, caseId)
 	-- Determine case type
 	if caseData.compression then
 		-- EFFECT CASE (compression-based, all streamers with specific effect)
-		local won = rollEffectCase(caseData.compression)
+		local won = rollEffectCase(caseData.compression, caseData.excludeRarities)
 		wonStreamerId  = won.id
 		wonDisplayName = caseData.effect .. " " .. won.displayName
 		wonRarity      = won.rarity

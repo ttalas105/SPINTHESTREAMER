@@ -251,10 +251,9 @@ Economy.BoostedLuckMultiplier = 2  -- 2x with boost
 
 -------------------------------------------------
 -- PERSONAL LUCK UPGRADE (at Upgrade stand; 1 luck = +1% drop luck)
--- First = 1,000, then 3x each time (gentler than 4x)
 -------------------------------------------------
-Economy.LuckUpgradeCostFirst  = 5000
-Economy.LuckUpgradeCostMultiplier = 4
+Economy.LuckUpgradeCostFirst  = 25000
+Economy.LuckUpgradeCostMultiplier = 6
 
 --- Cost to buy the next +5 luck
 function Economy.GetLuckUpgradeCost(currentLuck: number): number
@@ -264,10 +263,9 @@ end
 
 -------------------------------------------------
 -- CASH UPGRADE (coin multiplier at Upgrade stand; +2% cash per upgrade)
--- First = 1,000, then 3x each time
 -------------------------------------------------
-Economy.CashUpgradeCostFirst  = 5000
-Economy.CashUpgradeCostMultiplier = 4
+Economy.CashUpgradeCostFirst  = 25000
+Economy.CashUpgradeCostMultiplier = 6
 
 --- Cost for the next cash multiplier upgrade
 function Economy.GetCashUpgradeCost(currentLevel: number): number
