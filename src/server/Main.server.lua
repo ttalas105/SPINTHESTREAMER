@@ -118,7 +118,8 @@ do
 		prompt.ActionText = "Open"
 		prompt.ObjectText = "Spin Stand"
 		prompt.KeyboardKeyCode = Enum.KeyCode.E
-		prompt.MaxActivationDistance = 14
+		prompt.MaxActivationDistance = 20
+		prompt.RequiresLineOfSight = false
 		prompt.HoldDuration = 0
 		prompt.Parent = frontAnchor
 
@@ -161,7 +162,8 @@ do
 		prompt.ActionText = "Open"
 		prompt.ObjectText = "Upgrades"
 		prompt.KeyboardKeyCode = Enum.KeyCode.E
-		prompt.MaxActivationDistance = 14
+		prompt.MaxActivationDistance = 20
+		prompt.RequiresLineOfSight = false
 		prompt.HoldDuration = 0
 		prompt.Parent = frontAnchor
 		local OpenUpgradeStandGui = ReplicatedStorage.RemoteEvents:WaitForChild("OpenUpgradeStandGui")
@@ -202,7 +204,8 @@ do
 		prompt.ActionText = "Open"
 		prompt.ObjectText = "Sell Stand"
 		prompt.KeyboardKeyCode = Enum.KeyCode.E
-		prompt.MaxActivationDistance = 14
+		prompt.MaxActivationDistance = 20
+		prompt.RequiresLineOfSight = false
 		prompt.HoldDuration = 0
 		prompt.Parent = frontAnchor
 		local OpenSellStandGui = ReplicatedStorage.RemoteEvents:WaitForChild("OpenSellStandGui")
@@ -245,7 +248,8 @@ do
 		prompt.ActionText = "Open"
 		prompt.ObjectText = "Potions"
 		prompt.KeyboardKeyCode = Enum.KeyCode.E
-		prompt.MaxActivationDistance = 14
+		prompt.MaxActivationDistance = 20
+		prompt.RequiresLineOfSight = false
 		prompt.HoldDuration = 0
 		prompt.Parent = frontAnchor
 		local OpenPotionStandGui = ReplicatedStorage.RemoteEvents:WaitForChild("OpenPotionStandGui")
@@ -286,7 +290,8 @@ do
 		prompt.ActionText = "Open"
 		prompt.ObjectText = "Gem Shop"
 		prompt.KeyboardKeyCode = Enum.KeyCode.E
-		prompt.MaxActivationDistance = 14
+		prompt.MaxActivationDistance = 20
+		prompt.RequiresLineOfSight = false
 		prompt.HoldDuration = 0
 		prompt.Parent = frontAnchor
 		local OpenGemShopGui = ReplicatedStorage.RemoteEvents:WaitForChild("OpenGemShopGui")
@@ -327,7 +332,8 @@ do
 		prompt.ActionText = "Open"
 		prompt.ObjectText = "Sacrifice"
 		prompt.KeyboardKeyCode = Enum.KeyCode.E
-		prompt.MaxActivationDistance = 14
+		prompt.MaxActivationDistance = 20
+		prompt.RequiresLineOfSight = false
 		prompt.HoldDuration = 0
 		prompt.Parent = frontAnchor
 		local OpenSacrificeGui = ReplicatedStorage.RemoteEvents:WaitForChild("OpenSacrificeGui")
