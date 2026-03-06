@@ -46,14 +46,15 @@ local lastSpinTime = {} -- [userId] = os.clock()
 -- So 200 luck + Case7(250%) => luckMultiplier = 1 + 2.0 + 2.5 = 5.5
 --
 -- Rarity scaling (L = luckMultiplier):
---   Common:    baseWeight / L^3   (gets CRUSHED by luck)
---   Rare:      baseWeight * L^1   (scales up linearly)
---   Epic:      baseWeight * L^2   (scales up fast)
---   Legendary: baseWeight * L^3   (scales up very fast)
---   Mythic:    baseWeight * L^4   (scales up extremely fast)
+--   Common:    1000 / L^3   (gets CRUSHED by luck)
+--   Rare:      100  * L^1   (scales up linearly)
+--   Epic:      10   * L^2   (scales up fast)
+--   Legendary: 1    * L^3   (scales up very fast)
+--   Mythic:    0.1  * L^4   (scales up extremely fast)
 --
--- At 0 luck (L=1): Common ~90%, Rare ~9%, Epic ~0.9%, Leg ~0.09%, Mythic ~0.009%
--- At 2000 luck + Case7 (L=5.5): Common ~0.4%, Rare ~39%, Epic ~27%, Leg ~18%, Mythic ~15%
+-- At 0 luck (L=1):   Common ~90%, Rare ~9%,  Epic ~0.9%, Leg ~0.09%, Mythic ~0.009%
+-- At Radiant (L~1.9): Common ~30%, Rare ~56%, Epic ~11%,  Leg ~2.1%,  Mythic ~0.4%
+-- At high luck (L=5): Common ~0.5%,Rare ~42%, Epic ~29%,  Leg ~17%,   Mythic ~12%
 -------------------------------------------------
 
 local rng = Random.new()
@@ -69,11 +70,11 @@ local RARITY_BASE_WEIGHTS = {
 local RARITY_ORDER = { "Common", "Rare", "Epic", "Legendary", "Mythic" }
 
 local RARITY_EXPONENTS = {
-	Common    = -0.5,
-	Rare      =  0.2,
-	Epic      =  0.5,
-	Legendary =  0.8,
-	Mythic    =  1.0,
+	Common    = -2.3,
+	Rare      =  0.85,
+	Epic      =  1.6,
+	Legendary =  2.3,
+	Mythic    =  3.1,
 }
 
 local function pickStreamerByOdds(luckMultiplier: number)
@@ -380,16 +381,6 @@ local function handleCrateSpin(player, crateId: number)
 	local hasStorageSpace = (#(data.storage or {}) < PlayerData.STORAGE_MAX)
 	if not hasInventorySpace and not hasStorageSpace then
 		SpinResult:FireClient(player, { success = false, reason = "Inventory and storage are full!" })
-		return
-	end
-
-	-- Check rebirth requirement
-	local rebirthReq = Economy.GetCrateRebirthRequirement(crateId)
-	if (data.rebirthCount or 0) < rebirthReq then
-		SpinResult:FireClient(player, {
-			success = false,
-			reason = "You must be Rebirth " .. rebirthReq .. " to use this case!",
-		})
 		return
 	end
 

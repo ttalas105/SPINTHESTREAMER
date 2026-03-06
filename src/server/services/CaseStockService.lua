@@ -132,25 +132,6 @@ local function broadcastStock(justRestocked)
 	end
 end
 
-local function getOwnedCrateCount(data, crateId)
-	if not data or not data.ownedCrates then return 0 end
-	return (data.ownedCrates[crateId] or data.ownedCrates[tostring(crateId)] or 0)
-end
-
-local function setOwnedCrateCount(data, crateId, count)
-	if not data then return end
-	if not data.ownedCrates then data.ownedCrates = {} end
-	local keyNum = crateId
-	local keyStr = tostring(crateId)
-	if count > 0 then
-		data.ownedCrates[keyNum] = count
-		data.ownedCrates[keyStr] = nil
-	else
-		data.ownedCrates[keyNum] = nil
-		data.ownedCrates[keyStr] = nil
-	end
-end
-
 -------------------------------------------------
 -- BUY CRATE (into player's ownedCrates)
 -------------------------------------------------
@@ -214,8 +195,9 @@ local function handleBuyCrate(player, crateId, amount)
 	stock[crateId] = (stock[crateId] or 0) - toBuy
 	saveStock()
 
-	local ownedNow = getOwnedCrateCount(data, crateId)
-	setOwnedCrateCount(data, crateId, ownedNow + toBuy)
+	if not data.ownedCrates then data.ownedCrates = {} end
+	local key = tostring(crateId)
+	data.ownedCrates[key] = (data.ownedCrates[key] or 0) + toBuy
 
 	PlayerData.Replicate(player)
 	broadcastStock(false)
@@ -250,8 +232,10 @@ local function handleOpenCrate(player, crateId)
 		return
 	end
 
-	local ownedNow = getOwnedCrateCount(data, crateId)
-	if ownedNow <= 0 then
+	if not data.ownedCrates then data.ownedCrates = {} end
+	local key = tostring(crateId)
+
+	if (data.ownedCrates[key] or 0) <= 0 then
 		local OpenCrateResult = RemoteEvents:FindFirstChild("OpenCrateResult")
 		if OpenCrateResult then
 			OpenCrateResult:FireClient(player, { success = false, reason = "You don't own any of this case!" })
@@ -269,7 +253,10 @@ local function handleOpenCrate(player, crateId)
 		return
 	end
 
-	setOwnedCrateCount(data, crateId, ownedNow - 1)
+	data.ownedCrates[key] = data.ownedCrates[key] - 1
+	if data.ownedCrates[key] <= 0 then
+		data.ownedCrates[key] = nil
+	end
 
 	PlayerData.Replicate(player)
 

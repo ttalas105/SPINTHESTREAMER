@@ -136,7 +136,7 @@ function HUDController.Init()
 	local hudContainer = Instance.new("Frame")
 	hudContainer.Name = "HUDContainer"
 	hudContainer.Size = UDim2.new(0, 360, 0, 176)
-	hudContainer.Position = UDim2.new(0.5, -250, 0, 8)
+	hudContainer.Position = UDim2.new(1, -12, 0, 8)
 	hudContainer.AnchorPoint = Vector2.new(1, 0)
 	hudContainer.BackgroundTransparency = 1
 	hudContainer.BorderSizePixel = 0
@@ -151,7 +151,7 @@ function HUDController.Init()
 	cashLabel.Font = Enum.Font.FredokaOne
 	cashLabel.TextSize = 34
 	cashLabel.Text = "$0"
-	cashLabel.TextXAlignment = Enum.TextXAlignment.Left
+	cashLabel.TextXAlignment = Enum.TextXAlignment.Right
 	cashLabel.Parent = hudContainer
 
 	cashPopScale = Instance.new("UIScale")
@@ -173,7 +173,7 @@ function HUDController.Init()
 	gemsLabel.Font = Enum.Font.FredokaOne
 	gemsLabel.TextSize = 26
 	gemsLabel.Text = "\u{1F48E} 0 Gems"
-	gemsLabel.TextXAlignment = Enum.TextXAlignment.Left
+	gemsLabel.TextXAlignment = Enum.TextXAlignment.Right
 	gemsLabel.Parent = hudContainer
 
 	local gemsStroke = Instance.new("UIStroke")
@@ -203,7 +203,7 @@ function HUDController.Init()
 	luckLabel.Font = Enum.Font.FredokaOne
 	luckLabel.TextSize = 18
 	luckLabel.Text = "Luck: 0 (+0%)"
-	luckLabel.TextXAlignment = Enum.TextXAlignment.Left
+	luckLabel.TextXAlignment = Enum.TextXAlignment.Right
 	luckLabel.LayoutOrder = 1
 	luckLabel.Parent = statsStack
 
@@ -220,7 +220,7 @@ function HUDController.Init()
 	moneyMultLabel.Font = Enum.Font.FredokaOne
 	moneyMultLabel.TextSize = 18
 	moneyMultLabel.Text = "Money: x1.0"
-	moneyMultLabel.TextXAlignment = Enum.TextXAlignment.Left
+	moneyMultLabel.TextXAlignment = Enum.TextXAlignment.Right
 	moneyMultLabel.LayoutOrder = 2
 	moneyMultLabel.Parent = statsStack
 
@@ -237,7 +237,7 @@ function HUDController.Init()
 	potionsLabel.Font = Enum.Font.FredokaOne
 	potionsLabel.TextSize = 18
 	potionsLabel.Text = ""
-	potionsLabel.TextXAlignment = Enum.TextXAlignment.Left
+	potionsLabel.TextXAlignment = Enum.TextXAlignment.Right
 	potionsLabel.Visible = false
 	potionsLabel.LayoutOrder = 3
 	potionsLabel.Parent = statsStack

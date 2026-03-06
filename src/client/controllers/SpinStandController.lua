@@ -178,7 +178,7 @@ local function updateAllCards()
 	for crateId, refs in pairs(cardRefs) do
 		local locked = tutorialLock and crateId ~= 1
 
-		-- Lock overlay
+		-- Lock overlay (tutorial only)
 		if locked then
 			refs.lockOverlay.Visible = true
 			refs.card.BackgroundColor3 = CARD_LOCKED

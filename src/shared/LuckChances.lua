@@ -17,11 +17,11 @@ local RARITY_BASE_WEIGHTS = {
 local RARITY_ORDER = { "Common", "Rare", "Epic", "Legendary", "Mythic" }
 
 local RARITY_EXPONENTS = {
-	Common    = -3,
-	Rare      =  1,
-	Epic      =  2,
-	Legendary =  3,
-	Mythic    =  4,
+	Common    = -2.3,
+	Rare      =  0.85,
+	Epic      =  1.6,
+	Legendary =  2.3,
+	Mythic    =  3.1,
 }
 
 function LuckChances.GetRarityChances(luckMultiplier: number): { [string]: number }

@@ -235,6 +235,17 @@ local function loadData(player)
 		end
 		if not data.sacrificeHolding then data.sacrificeHolding = {} end
 		if not data.sacrificeQueues then data.sacrificeQueues = {} end
+		-- Migration: normalize ownedCrates to string keys (avoids sparse-array serialization bugs in RemoteEvents)
+		if data.ownedCrates and next(data.ownedCrates) then
+			local normalized = {}
+			for k, v in pairs(data.ownedCrates) do
+				local strKey = tostring(k)
+				if type(v) == "number" and v > 0 then
+					normalized[strKey] = (normalized[strKey] or 0) + v
+				end
+			end
+			data.ownedCrates = normalized
+		end
 		-- Migration: if inventory has more than HOTBAR_MAX items, move overflow to storage
 		if data.inventory and #data.inventory > PlayerData.HOTBAR_MAX then
 			local overflow = {}
