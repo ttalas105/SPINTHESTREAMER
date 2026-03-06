@@ -120,10 +120,8 @@ local function addStroke(parent, color, thickness)
 end
 
 local function getCardBaseColor(crateId)
-	local rebirthReq = Economy.GetCrateRebirthRequirement(crateId)
 	local tutorialLock = isTutorialActive() and crateId ~= 1
-	local rebirthLock = getRebirthCount() < rebirthReq
-	if tutorialLock or rebirthLock then
+	if tutorialLock then
 		return CARD_LOCKED
 	end
 	return CARD_BG
@@ -179,10 +177,9 @@ local function updateAllCards()
 	local tutorialLock = isTutorialActive()
 
 	for crateId, refs in pairs(cardRefs) do
-		local rebirthReq = Economy.GetCrateRebirthRequirement(crateId)
-		local locked = currentRebirth < rebirthReq or (tutorialLock and crateId ~= 1)
+		local locked = tutorialLock and crateId ~= 1
 
-		-- Lock overlay
+		-- Lock overlay (tutorial only)
 		if locked then
 			refs.lockOverlay.Visible = true
 			refs.card.BackgroundColor3 = CARD_LOCKED
@@ -514,7 +511,7 @@ local function buildCaseRow(crateId, parent)
 	lockText.Position = UDim2.new(0.5, 30, 0.5, 0)
 	lockText.AnchorPoint = Vector2.new(0.5, 0.5)
 	lockText.BackgroundTransparency = 1
-	lockText.Text = "Rebirth " .. Economy.GetCrateRebirthRequirement(crateId) .. " Required"
+	lockText.Text = "Complete Tutorial First"
 	lockText.TextColor3 = Color3.fromRGB(255, 180, 80)
 	lockText.Font = FONT
 	lockText.TextSize = 20

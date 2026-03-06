@@ -157,19 +157,6 @@ local function handleBuyCrate(player, crateId, amount)
 	local data = PlayerData.Get(player)
 	if not data then return end
 
-	local rebirthReq = Economy.GetCrateRebirthRequirement(crateId)
-	if (data.rebirthCount or 0) < rebirthReq then
-		local BuyCrateResult = RemoteEvents:FindFirstChild("BuyCrateResult")
-		if BuyCrateResult then
-			BuyCrateResult:FireClient(player, {
-				success = false,
-				crateId = crateId,
-				reason = "Requires Rebirth " .. rebirthReq .. "!",
-			})
-		end
-		return
-	end
-
 	checkAutoRestock()
 
 	local available = stock[crateId] or 0
@@ -209,7 +196,8 @@ local function handleBuyCrate(player, crateId, amount)
 	saveStock()
 
 	if not data.ownedCrates then data.ownedCrates = {} end
-	data.ownedCrates[crateId] = (data.ownedCrates[crateId] or 0) + toBuy
+	local key = tostring(crateId)
+	data.ownedCrates[key] = (data.ownedCrates[key] or 0) + toBuy
 
 	PlayerData.Replicate(player)
 	broadcastStock(false)
@@ -244,7 +232,10 @@ local function handleOpenCrate(player, crateId)
 		return
 	end
 
-	if not data.ownedCrates or (data.ownedCrates[crateId] or 0) <= 0 then
+	if not data.ownedCrates then data.ownedCrates = {} end
+	local key = tostring(crateId)
+
+	if (data.ownedCrates[key] or 0) <= 0 then
 		local OpenCrateResult = RemoteEvents:FindFirstChild("OpenCrateResult")
 		if OpenCrateResult then
 			OpenCrateResult:FireClient(player, { success = false, reason = "You don't own any of this case!" })
@@ -262,9 +253,9 @@ local function handleOpenCrate(player, crateId)
 		return
 	end
 
-	data.ownedCrates[crateId] = data.ownedCrates[crateId] - 1
-	if data.ownedCrates[crateId] <= 0 then
-		data.ownedCrates[crateId] = nil
+	data.ownedCrates[key] = data.ownedCrates[key] - 1
+	if data.ownedCrates[key] <= 0 then
+		data.ownedCrates[key] = nil
 	end
 
 	PlayerData.Replicate(player)

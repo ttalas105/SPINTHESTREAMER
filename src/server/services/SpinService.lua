@@ -70,11 +70,11 @@ local RARITY_BASE_WEIGHTS = {
 local RARITY_ORDER = { "Common", "Rare", "Epic", "Legendary", "Mythic" }
 
 local RARITY_EXPONENTS = {
-	Common    = -3.2,
-	Rare      =  1.1,
-	Epic      =  2.15,
-	Legendary =  3.15,
-	Mythic    =  4.15,
+	Common    = -2.3,
+	Rare      =  0.85,
+	Epic      =  1.6,
+	Legendary =  2.3,
+	Mythic    =  3.1,
 }
 
 local function pickStreamerByOdds(luckMultiplier: number)
@@ -381,16 +381,6 @@ local function handleCrateSpin(player, crateId: number)
 	local hasStorageSpace = (#(data.storage or {}) < PlayerData.STORAGE_MAX)
 	if not hasInventorySpace and not hasStorageSpace then
 		SpinResult:FireClient(player, { success = false, reason = "Inventory and storage are full!" })
-		return
-	end
-
-	-- Check rebirth requirement
-	local rebirthReq = Economy.GetCrateRebirthRequirement(crateId)
-	if (data.rebirthCount or 0) < rebirthReq then
-		SpinResult:FireClient(player, {
-			success = false,
-			reason = "You must be Rebirth " .. rebirthReq .. " to use this case!",
-		})
 		return
 	end
 
