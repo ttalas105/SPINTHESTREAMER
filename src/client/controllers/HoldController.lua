@@ -3,6 +3,9 @@
 	Streamer floats next to the player's hand. Not a Tool, not welded, not parented
 	to the character. Just an anchored model in Workspace that follows the hand
 	position every frame. Player can move freely. No collision, no falling.
+
+	Also renders held streamers for OTHER players so everyone can see what
+	someone is flexing.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -23,8 +26,16 @@ local modelsFolder = ReplicatedStorage:FindFirstChild("StreamerModels")
 local heldModel = nil
 local heldStreamerId = nil
 local heldEffect = nil
-local followConn = nil  -- RenderStepped connection
-local attachGeneration = 0 -- incremented each Hold call to cancel stale attachModel runs
+local followConn = nil
+local attachGeneration = 0
+
+-- Other players
+local otherHeld = {}       -- [userId] = { model, streamerId, effect, pivotToBottom }
+local otherFollowConn = nil
+
+-- Remotes (set in Init)
+local HoldUpdate = nil
+local HoldSync = nil
 
 local BUBBLE_FONT = Enum.Font.FredokaOne
 
@@ -126,7 +137,7 @@ local function createBillboard(adornee, streamerInfo, effect)
 end
 
 -------------------------------------------------
--- CLEAR
+-- CLEAR (local player)
 -------------------------------------------------
 
 local function clearHeld()
@@ -150,8 +161,6 @@ end
 
 -------------------------------------------------
 -- CLEAN MODEL: strip scripts, GUIs, sounds
--- KEEP Humanoid + Motor6Ds + Shirt/Pants/Accessories (needed for clothes)
--- Humanoid is disabled so it does nothing; model is anchored in Workspace
 -------------------------------------------------
 
 local function cleanModel(model)
@@ -169,7 +178,6 @@ local function cleanModel(model)
 		pcall(function() obj:Destroy() end)
 	end
 
-	-- Keep Humanoid for clothes but fully disable it
 	local hum = model:FindFirstChildOfClass("Humanoid")
 	if hum then
 		hum.HealthDisplayType = Enum.HumanoidHealthDisplayType.AlwaysOff
@@ -201,7 +209,6 @@ local function cleanModel(model)
 		end)
 	end
 
-	-- Anchor every part and disable all collision/interaction
 	for _, part in ipairs(model:GetDescendants()) do
 		if part:IsA("BasePart") then
 			part.Anchored = true
@@ -214,7 +221,7 @@ local function cleanModel(model)
 end
 
 -------------------------------------------------
--- ATTACH: clone model, clean it, start following hand
+-- ATTACH: clone model, clean it, start following hand (local player)
 -------------------------------------------------
 
 local function attachModel(modelTemplate, streamerInfo, effect, generation)
@@ -245,11 +252,9 @@ local function attachModel(modelTemplate, streamerInfo, effect, generation)
 	clone.Parent = workspace
 	heldModel = clone
 
-	-- Billboard
 	local bb = createBillboard(primaryPart, streamerInfo, effect)
 	bb.Parent = clone
 
-	-- Compute Y offset so the model's feet sit at a consistent height (before VFX)
 	local pivotToBottom = 0
 	do
 		local ok, bbCF, bbSize = pcall(function() return clone:GetBoundingBox() end)
@@ -260,13 +265,11 @@ local function attachModel(modelTemplate, streamerInfo, effect, generation)
 		end
 	end
 
-	-- Attach element VFX/aura
 	if effect then
 		local effectName = type(effect) == "table" and effect.name or effect
 		VFXHelper.Attach(clone, effectName)
 	end
 
-	-- Follow hand every render frame. Model is anchored so PivotTo just sets CFrame.
 	followConn = RunService.RenderStepped:Connect(function()
 		local char = player.Character
 		if not char then return end
@@ -313,6 +316,114 @@ local function findStreamerModelTemplate(streamerId: string)
 end
 
 -------------------------------------------------
+-- REMOTE HELPER
+-------------------------------------------------
+
+local function fireHoldRemote(data)
+	if HoldUpdate then
+		HoldUpdate:FireServer(data)
+	end
+end
+
+-------------------------------------------------
+-- OTHER PLAYERS: held model management
+-------------------------------------------------
+
+local function clearOtherHeld(userId)
+	local entry = otherHeld[userId]
+	if entry then
+		if entry.model then
+			pcall(function() entry.model:Destroy() end)
+		end
+		otherHeld[userId] = nil
+	end
+
+	if not next(otherHeld) and otherFollowConn then
+		otherFollowConn:Disconnect()
+		otherFollowConn = nil
+	end
+end
+
+local function ensureOtherFollowLoop()
+	if otherFollowConn then return end
+
+	otherFollowConn = RunService.Heartbeat:Connect(function()
+		for userId, entry in pairs(otherHeld) do
+			if not entry.model or not entry.model.Parent or not entry.model.PrimaryPart then
+				continue
+			end
+
+			local otherPlayer = Players:GetPlayerByUserId(userId)
+			if not otherPlayer then continue end
+
+			local char = otherPlayer.Character
+			if not char then continue end
+
+			local root = char:FindFirstChild("HumanoidRootPart")
+			if not root then continue end
+
+			local groundY = root.CFrame.Position.Y - 3
+			local baseCF = root.CFrame * CFrame.new(2.5, 0, -2)
+			local pos = Vector3.new(baseCF.Position.X, groundY + entry.pivotToBottom, baseCF.Position.Z)
+			local _, yRot, _ = root.CFrame:ToEulerAnglesYXZ()
+			entry.model:PivotTo(CFrame.new(pos) * CFrame.Angles(0, yRot, 0))
+			VFXHelper.Reposition(entry.model)
+		end
+	end)
+end
+
+local function holdForOther(userId, streamerId, effect)
+	clearOtherHeld(userId)
+
+	if not streamerId then return end
+
+	local modelTemplate = findStreamerModelTemplate(streamerId)
+	if not modelTemplate then return end
+
+	local streamerInfo = Streamers.ById[streamerId]
+	if not streamerInfo then return end
+
+	local clone = modelTemplate:Clone()
+	clone.Name = "OtherHeldStreamer_" .. userId
+	cleanModel(clone)
+
+	local primaryPart = clone.PrimaryPart or clone:FindFirstChildWhichIsA("BasePart")
+	if not primaryPart then
+		clone:Destroy()
+		return
+	end
+	clone.PrimaryPart = primaryPart
+
+	clone.Parent = workspace
+
+	local bb = createBillboard(primaryPart, streamerInfo, effect)
+	bb.Parent = clone
+
+	local pivotToBottom = 0
+	do
+		local ok, bbCF, bbSize = pcall(function() return clone:GetBoundingBox() end)
+		if ok and bbCF and bbSize then
+			local pivotY = clone:GetPivot().Position.Y
+			local bottomY = bbCF.Position.Y - (bbSize.Y / 2)
+			pivotToBottom = pivotY - bottomY
+		end
+	end
+
+	if effect then
+		VFXHelper.Attach(clone, effect)
+	end
+
+	otherHeld[userId] = {
+		model = clone,
+		streamerId = streamerId,
+		effect = effect,
+		pivotToBottom = pivotToBottom,
+	}
+
+	ensureOtherFollowLoop()
+end
+
+-------------------------------------------------
 -- PUBLIC API
 -------------------------------------------------
 
@@ -321,6 +432,7 @@ function HoldController.Hold(item)
 
 	if item == nil then
 		clearHeld()
+		fireHoldRemote(nil)
 		return
 	end
 
@@ -328,6 +440,7 @@ function HoldController.Hold(item)
 	local effect = type(item) == "table" and item.effect or nil
 
 	clearHeld()
+	fireHoldRemote({ id = streamerId, effect = effect })
 
 	local modelTemplate = findStreamerModelTemplate(streamerId)
 	if not modelTemplate then
@@ -354,12 +467,37 @@ end
 
 function HoldController.Drop()
 	clearHeld()
+	fireHoldRemote(nil)
 end
 
 function HoldController.Init()
 	modelsFolder = ReplicatedStorage:FindFirstChild("StreamerModels")
+
+	local RemoteEvents = ReplicatedStorage:WaitForChild("RemoteEvents")
+	HoldUpdate = RemoteEvents:WaitForChild("HoldUpdate")
+	HoldSync = RemoteEvents:WaitForChild("HoldSync")
+
+	HoldSync.OnClientEvent:Connect(function(userId, data)
+		if data and data.id then
+			holdForOther(userId, data.id, data.effect)
+		else
+			clearOtherHeld(userId)
+		end
+	end)
+
+	Players.PlayerRemoving:Connect(function(removingPlayer)
+		if removingPlayer ~= player then
+			clearOtherHeld(removingPlayer.UserId)
+		end
+	end)
+
 	player.CharacterAdded:Connect(function()
 		clearHeld()
+		fireHoldRemote(nil)
+	end)
+
+	task.defer(function()
+		HoldUpdate:FireServer("init")
 	end)
 end
 

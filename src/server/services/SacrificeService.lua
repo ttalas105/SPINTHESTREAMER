@@ -96,7 +96,15 @@ end
 -- Items are moved between inventory/storage and the queue.
 -------------------------------------------------
 
-local function handleQueueAdd(player, queueId, sourceType, sourceIndex)
+local function countQueueItems(queue)
+	local count = 0
+	for _, v in ipairs(queue) do
+		if v and v ~= false then count = count + 1 end
+	end
+	return count
+end
+
+local function handleQueueAdd(player, queueId, sourceType, sourceIndex, targetSlot)
 	if type(queueId) ~= "string" or type(sourceType) ~= "string" or type(sourceIndex) ~= "number" then
 		SacrificeResult:FireClient(player, { success = false, reason = "Invalid queue request." })
 		return
@@ -109,8 +117,12 @@ local function handleQueueAdd(player, queueId, sourceType, sourceIndex)
 		SacrificeResult:FireClient(player, { success = false, reason = "Invalid source." })
 		return
 	end
+	if targetSlot ~= nil and (type(targetSlot) ~= "number" or targetSlot ~= math.floor(targetSlot) or targetSlot < 1) then
+		SacrificeResult:FireClient(player, { success = false, reason = "Invalid target slot." })
+		return
+	end
 
-	local ok = PlayerData.AddToSacrificeQueue(player, queueId, sourceType, sourceIndex)
+	local ok = PlayerData.AddToSacrificeQueue(player, queueId, sourceType, sourceIndex, targetSlot)
 	if not ok then
 		SacrificeResult:FireClient(player, { success = false, reason = "Could not add to queue." })
 		return
@@ -164,7 +176,8 @@ local function handleQueueAutoFill(player, queueId, filterType, filterArg1, filt
 
 	local queue = data.sacrificeQueues[queueId]
 	local added = 0
-	local remaining = maxCount - #queue
+	local existing = countQueueItems(queue)
+	local remaining = maxCount - existing
 	if remaining <= 0 then
 		SacrificeResult:FireClient(player, { success = true, action = "queueAutoFill", queueId = queueId, added = 0 })
 		return
@@ -183,11 +196,21 @@ local function handleQueueAutoFill(player, queueId, filterType, filterArg1, filt
 		return false
 	end
 
+	local function placeInQueue(itm)
+		for j = 1, #queue do
+			if queue[j] == false then
+				queue[j] = itm
+				return
+			end
+		end
+		table.insert(queue, itm)
+	end
+
 	for i = #data.inventory, 1, -1 do
 		if added >= remaining then break end
 		if matches(data.inventory[i]) then
 			local item = table.remove(data.inventory, i)
-			table.insert(queue, item)
+			placeInQueue(item)
 			added = added + 1
 		end
 	end
@@ -197,7 +220,7 @@ local function handleQueueAutoFill(player, queueId, filterType, filterArg1, filt
 			if added >= remaining then break end
 			if matches(data.storage[i]) then
 				local item = table.remove(data.storage, i)
-				table.insert(queue, item)
+				placeInQueue(item)
 				added = added + 1
 			end
 		end
@@ -223,14 +246,15 @@ local function handleGemTrade(player, tradeIndex)
 
 	local queueId = "GemTrade_" .. tradeIndex
 	local queue = PlayerData.GetSacrificeQueue(player, queueId)
+	local queueCount = countQueueItems(queue)
 
-	if #queue < trade.count then
-		SacrificeResult:FireClient(player, { success = false, reason = ("Need %d %s in queue (you have %d)."):format(trade.count, trade.rarity, #queue) })
+	if queueCount < trade.count then
+		SacrificeResult:FireClient(player, { success = false, reason = ("Need %d %s in queue (you have %d)."):format(trade.count, trade.rarity, queueCount) })
 		return
 	end
 
 	for _, item in ipairs(queue) do
-		if not itemMatchesRarity(item, trade.rarity) then
+		if item and item ~= false and not itemMatchesRarity(item, trade.rarity) then
 			SacrificeResult:FireClient(player, { success = false, reason = "Queue contains items of the wrong rarity." })
 			return
 		end
@@ -264,6 +288,7 @@ local function handleOneTime(player, oneTimeId)
 
 	local queueId = "OneTime_" .. oneTimeId
 	local queue = PlayerData.GetSacrificeQueue(player, queueId)
+	local queueCount = countQueueItems(queue)
 
 	local isEffectReq = cfg.req[1] and cfg.req[1].effectReq ~= nil
 	local isRarityReq = cfg.req[1] and cfg.req[1].rarity ~= nil
@@ -271,7 +296,7 @@ local function handleOneTime(player, oneTimeId)
 	local totalNeeded = 0
 	for _, r in ipairs(cfg.req) do totalNeeded = totalNeeded + (r.count or 1) end
 
-	if #queue < totalNeeded then
+	if queueCount < totalNeeded then
 		SacrificeResult:FireClient(player, { success = false, reason = "Queue is not full yet." })
 		return
 	end
@@ -280,7 +305,7 @@ local function handleOneTime(player, oneTimeId)
 		local r = cfg.req[1]
 		local count = 0
 		for _, item in ipairs(queue) do
-			if itemMatchesEffect(item, r.effectReq) then count = count + 1 end
+			if item and item ~= false and itemMatchesEffect(item, r.effectReq) then count = count + 1 end
 		end
 		if count < (r.count or 1) then
 			SacrificeResult:FireClient(player, { success = false, reason = ("Need %d %s cards in queue."):format(r.count or 1, r.effectReq) })
@@ -290,7 +315,7 @@ local function handleOneTime(player, oneTimeId)
 		for _, r in ipairs(cfg.req) do
 			local count = 0
 			for _, item in ipairs(queue) do
-				if itemMatchesRarity(item, r.rarity) then count = count + 1 end
+				if item and item ~= false and itemMatchesRarity(item, r.rarity) then count = count + 1 end
 			end
 			if count < (r.count or 1) then
 				SacrificeResult:FireClient(player, { success = false, reason = "Queue doesn't have the required streamers." })
@@ -303,7 +328,7 @@ local function handleOneTime(player, oneTimeId)
 			local need = r.count or 1
 			for qi, item in ipairs(queue) do
 				if need <= 0 then break end
-				if not used[qi] and itemMatchesExact(item, r.streamerId, r.effect) then
+				if item and item ~= false and not used[qi] and itemMatchesExact(item, r.streamerId, r.effect) then
 					used[qi] = true
 					need = need - 1
 				end
@@ -340,14 +365,15 @@ local function handleElemental(player, effect, rarity)
 
 	local queueId = "Elemental_" .. effect .. "_" .. rarity
 	local queue = PlayerData.GetSacrificeQueue(player, queueId)
+	local queueCount = countQueueItems(queue)
 
-	if #queue < need then
-		SacrificeResult:FireClient(player, { success = false, reason = ("Need %d %s %s in queue (you have %d)."):format(need, effect, rarity, #queue) })
+	if queueCount < need then
+		SacrificeResult:FireClient(player, { success = false, reason = ("Need %d %s %s in queue (you have %d)."):format(need, effect, rarity, queueCount) })
 		return
 	end
 
 	for _, item in ipairs(queue) do
-		if not itemMatchesRarityAndEffect(item, rarity, effect) then
+		if item and item ~= false and not itemMatchesRarityAndEffect(item, rarity, effect) then
 			SacrificeResult:FireClient(player, { success = false, reason = "Queue contains items that don't match." })
 			return
 		end

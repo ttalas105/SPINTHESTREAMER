@@ -88,6 +88,14 @@ local function getQueueItems(queueId)
 	return queues[queueId] or {}
 end
 
+local function countQueueItems(queue)
+	local count = 0
+	for _, v in ipairs(queue) do
+		if v and v ~= false then count = count + 1 end
+	end
+	return count
+end
+
 local function fireQueueChanged()
 	for _, cb in ipairs(onQueueChanged) do
 		task.spawn(cb)
@@ -98,8 +106,8 @@ end
 -- SERVER QUEUE ACTIONS
 -------------------------------------------------
 
-local function requestQueueAdd(queueId, sourceType, sourceIndex)
-	SacrificeQueueAction:FireServer("add", queueId, sourceType, sourceIndex)
+local function requestQueueAdd(queueId, sourceType, sourceIndex, targetSlot)
+	SacrificeQueueAction:FireServer("add", queueId, sourceType, sourceIndex, targetSlot)
 end
 
 local function requestQueueRemove(queueId, queueIndex)
@@ -222,7 +230,7 @@ local function closePicker()
 	if pickerFrame then pickerFrame:Destroy(); pickerFrame = nil end
 end
 
-local function showPicker(title, filterFn, queueId, onDone)
+local function showPicker(title, filterFn, queueId, onDone, targetSlot)
 	closePicker()
 	local inv = HUDController.Data.inventory or {}
 	local sto = HUDController.Data.storage or {}
@@ -353,7 +361,7 @@ local function showPicker(title, filterFn, queueId, onDone)
 		local capEntry = entry
 		cell.MouseButton1Click:Connect(function()
 			closePicker()
-			requestQueueAdd(queueId, capEntry.sourceType, capEntry.sourceIndex)
+			requestQueueAdd(queueId, capEntry.sourceType, capEntry.sourceIndex, targetSlot)
 			if onDone then onDone() end
 		end)
 	end
@@ -383,7 +391,7 @@ local function buildGemTradeContent(tradeIndex)
 
 	local queueId = "GemTrade_" .. tradeIndex
 	local queue = getQueueItems(queueId)
-	local selected = #queue
+	local selected = countQueueItems(queue)
 	local need = trade.count
 	local rc = DesignConfig.RarityColors[trade.rarity] or Color3.new(1, 1, 1)
 	local canSacrifice = selected >= need
@@ -414,7 +422,7 @@ local function buildGemTradeContent(tradeIndex)
 
 	for i = 1, need do
 		local item = queue[i]
-		local isFilled = item ~= nil
+		local isFilled = item ~= nil and item ~= false
 		local slot = Instance.new("TextButton")
 		slot.Size = UDim2.new(0, slotSize, 0, slotSize)
 		slot.BackgroundColor3 = isFilled and Color3.fromRGB(40, 120, 60) or Color3.fromRGB(50, 42, 80)
@@ -433,13 +441,13 @@ local function buildGemTradeContent(tradeIndex)
 				requestQueueRemove(queueId, capI)
 			end)
 		else
+			local capSlot = i
 			slot.MouseButton1Click:Connect(function()
 				showPicker("Pick a " .. trade.rarity .. " streamer", function(itm)
 					local _, _, info = getItemInfo(itm)
 					return info and info.rarity == trade.rarity
 				end, queueId, function()
-					-- Rebuild after server processes
-				end)
+				end, capSlot)
 			end)
 		end
 	end
@@ -598,7 +606,7 @@ local function buildOneTimeContent(oneTimeId)
 		for c = 1, count do
 			queueIdx = queueIdx + 1
 			local item = queue[queueIdx]
-			local isFilled = item ~= nil
+			local isFilled = item ~= nil and item ~= false
 			if not isFilled then allFilled = false end
 
 			local slot = Instance.new("TextButton")
@@ -632,6 +640,7 @@ local function buildOneTimeContent(oneTimeId)
 				pl.Font = FONT; pl.TextSize = sx(10); pl.TextWrapped = true; pl.Parent = slot
 
 				local capR = r
+				local capSlot = queueIdx
 				slot.MouseButton1Click:Connect(function()
 					local filterFn
 					if capR.streamerId then
@@ -659,7 +668,7 @@ local function buildOneTimeContent(oneTimeId)
 						pickerTitle = pickerTitle .. (capR.streamerId or capR.rarity or "?")
 					end
 					if filterFn then
-						showPicker(pickerTitle, filterFn, queueId, nil)
+						showPicker(pickerTitle, filterFn, queueId, nil, capSlot)
 					end
 				end)
 			end
@@ -708,7 +717,7 @@ local function buildOneTimeContent(oneTimeId)
 		end)
 	end
 
-	if #queue > 0 then
+	if countQueueItems(queue) > 0 then
 		local clrLink = Instance.new("TextButton")
 		clrLink.Size = UDim2.new(0, sx(80), 0, sx(24))
 		clrLink.BackgroundTransparency = 1; clrLink.Text = "Clear"
@@ -731,7 +740,7 @@ buildEffectOneTimeContent = function(oneTimeId, cfg, done)
 
 	local queueId = "OneTime_" .. oneTimeId
 	local queue = getQueueItems(queueId)
-	local queued = #queue
+	local queued = countQueueItems(queue)
 	local accentColor = done and Color3.fromRGB(80, 220, 100) or effectColor
 
 	local header = Instance.new("Frame")
@@ -792,7 +801,7 @@ buildEffectOneTimeContent = function(oneTimeId, cfg, done)
 
 	for i = 1, need do
 		local item = queue[i]
-		local isFilled = item ~= nil
+		local isFilled = item ~= nil and item ~= false
 		local slot = Instance.new("TextButton")
 		slot.Size = UDim2.new(0, slotSize, 0, slotSize)
 		slot.BackgroundColor3 = isFilled and Color3.fromRGB(40, 120, 60) or Color3.fromRGB(50, 42, 80)
@@ -811,11 +820,12 @@ buildEffectOneTimeContent = function(oneTimeId, cfg, done)
 				requestQueueRemove(queueId, capI)
 			end)
 		else
+			local capSlot = i
 			slot.MouseButton1Click:Connect(function()
 				showPicker("Pick a " .. effectName .. " streamer", function(itm)
 					local eff = type(itm) == "table" and itm.effect or nil
 					return eff == effectName
-				end, queueId, nil)
+				end, queueId, nil, capSlot)
 			end)
 		end
 	end

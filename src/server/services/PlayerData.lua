@@ -900,11 +900,17 @@ function PlayerData.GetSacrificeQueue(player, queueId: string)
 	return queues[queueId] or {}
 end
 
-function PlayerData.AddToSacrificeQueue(player, queueId: string, sourceType: string, sourceIndex: number): boolean
+function PlayerData.AddToSacrificeQueue(player, queueId: string, sourceType: string, sourceIndex: number, targetSlot: number?): boolean
 	local data = PlayerData.Get(player)
 	if not data then return false end
 	if not data.sacrificeQueues then data.sacrificeQueues = {} end
 	if not data.sacrificeQueues[queueId] then data.sacrificeQueues[queueId] = {} end
+
+	local queue = data.sacrificeQueues[queueId]
+
+	if targetSlot then
+		if queue[targetSlot] and queue[targetSlot] ~= false then return false end
+	end
 
 	local item
 	if sourceType == "hotbar" then
@@ -918,7 +924,26 @@ function PlayerData.AddToSacrificeQueue(player, queueId: string, sourceType: str
 	end
 
 	if not item then return false end
-	table.insert(data.sacrificeQueues[queueId], item)
+
+	if targetSlot then
+		for i = #queue + 1, targetSlot - 1 do
+			queue[i] = false
+		end
+		queue[targetSlot] = item
+	else
+		local placed = false
+		for i = 1, #queue do
+			if queue[i] == false then
+				queue[i] = item
+				placed = true
+				break
+			end
+		end
+		if not placed then
+			table.insert(queue, item)
+		end
+	end
+
 	PlayerData.Replicate(player)
 	return true
 end
@@ -930,17 +955,20 @@ function PlayerData.RemoveFromSacrificeQueue(player, queueId: string, queueIndex
 	local queue = data.sacrificeQueues[queueId]
 	if queueIndex < 1 or queueIndex > #queue then return false end
 
-	local item = table.remove(queue, queueIndex)
-	if not item then return false end
+	local item = queue[queueIndex]
+	if not item or item == false then return false end
 
 	if #data.inventory < PlayerData.HOTBAR_MAX then
 		table.insert(data.inventory, item)
 	elseif data.storage and #data.storage < PlayerData.STORAGE_MAX then
 		table.insert(data.storage, item)
 	else
-		table.insert(queue, queueIndex, item)
-		PlayerData.Replicate(player)
 		return false
+	end
+
+	queue[queueIndex] = false
+	while #queue > 0 and queue[#queue] == false do
+		table.remove(queue)
 	end
 
 	PlayerData.Replicate(player)
@@ -952,19 +980,24 @@ function PlayerData.ClearSacrificeQueue(player, queueId: string): (boolean, numb
 	if not data then return false, 0 end
 	if not data.sacrificeQueues or not data.sacrificeQueues[queueId] then return true, 0 end
 	local queue = data.sacrificeQueues[queueId]
-	if #queue == 0 then return true, 0 end
+
+	local itemCount = 0
+	for _, v in ipairs(queue) do
+		if v and v ~= false then itemCount = itemCount + 1 end
+	end
+	if itemCount == 0 then return true, 0 end
 
 	local invSpace = PlayerData.HOTBAR_MAX - #data.inventory
 	local stoSpace = (data.storage and (PlayerData.STORAGE_MAX - #data.storage)) or 0
 	local totalSpace = invSpace + stoSpace
 
-	if totalSpace < #queue then
-		return false, #queue - totalSpace
+	if totalSpace < itemCount then
+		return false, itemCount - totalSpace
 	end
 
 	for i = #queue, 1, -1 do
-		local item = table.remove(queue, i)
-		if item then
+		local item = queue[i]
+		if item and item ~= false then
 			if #data.inventory < PlayerData.HOTBAR_MAX then
 				table.insert(data.inventory, item)
 			elseif data.storage and #data.storage < PlayerData.STORAGE_MAX then

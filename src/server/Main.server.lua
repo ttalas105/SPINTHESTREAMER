@@ -20,6 +20,7 @@ do
 		"SetPlayerBusy",
 		"SettingsUpdate",
 		"SacrificeQueueAction",
+		"HoldUpdate", "HoldSync",
 	}
 	for _, name in ipairs(newRemotes) do
 		if not remotes:FindFirstChild(name) then
@@ -45,6 +46,7 @@ local BaseService      = require(services.BaseService)
 local IndexService     = require(services.IndexService)
 local GemShopService   = require(services.GemShopService)
 local SacrificeService = require(services.SacrificeService)
+local HoldService      = require(services.HoldService)
 local ReceiptHandler   = require(services.ReceiptHandler)
 local CaseStockService = require(services.CaseStockService)
 local PotionService    = require(services.PotionService)
@@ -488,6 +490,7 @@ SacrificeService.Init(PlayerData, PotionService, QuestService)
 ReceiptHandler.Init(PlayerData, SpinService)
 CaseStockService.Init(PlayerData, SpinService, QuestService)
 LeaderboardService.Init(PlayerData)
+HoldService.Init()
 PotionService.SetQuestService(QuestService)
 
 

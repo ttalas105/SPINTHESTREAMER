@@ -24,7 +24,7 @@ local DISPLAY_ROWS    = 10
 
 local CATEGORIES = {
 	{ key = "Leaderboard_Spins",      stat = "totalSpins",      dsName = "LB_Spins",      prefix = "",   format = "number" },
-	{ key = "Leaderboard_Cash",       stat = "totalCashEarned", dsName = "LB_Cash",        prefix = "$",  format = "cash" },
+	{ key = "Leaderboard_Cash",       stat = "cash",            dsName = "LB_Cash",        prefix = "$",  format = "cash" },
 	{ key = "Leaderboard_TimePlayed", stat = "timePlayed",      dsName = "LB_TimePlayed",  prefix = "",   format = "time" },
 	{ key = "Leaderboard_Robux",      stat = "robuxSpent",      dsName = "LB_Robux",       prefix = "R$", format = "number" },
 }

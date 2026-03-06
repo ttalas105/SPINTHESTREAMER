@@ -49,6 +49,7 @@ local ownedPotionData = { Luck = {}, Cash = {} }
 local potionRestockSecondsLeft = 0
 local potionRestockTimerLabel
 local MAX_POTION_STOCK = 8
+local SHOW_WORLD_POTION_INDICATORS = false
 
 -- Exposed active potion data so other controllers (HUD) can read it
 PotionController.ActivePotions = {} -- { Luck = {multiplier, tier, remaining}, Cash = ..., Divine = ... }
@@ -246,7 +247,7 @@ end
 local function createIndicator(potionType, liquidColor, isRainbow)
 	local frame = Instance.new("Frame")
 	frame.Name = potionType .. "Indicator"
-	frame.Size = UDim2.new(0, 75, 0, 95)
+	frame.Size = UDim2.new(0, 75, 0, 72)
 	frame.BackgroundTransparency = 1
 	frame.BorderSizePixel = 0
 	frame.Visible = false
@@ -273,24 +274,6 @@ local function createIndicator(potionType, liquidColor, isRainbow)
 	icon.ScaleType = Enum.ScaleType.Fit
 	icon.Parent = frame
 
-	-- Timer label below icon
-	local timerLabel = Instance.new("TextLabel")
-	timerLabel.Name = "Timer"
-	timerLabel.Size = UDim2.new(1, 0, 0, 18)
-	timerLabel.Position = UDim2.new(0.5, 0, 0, 72)
-	timerLabel.AnchorPoint = Vector2.new(0.5, 0)
-	timerLabel.BackgroundTransparency = 1
-	timerLabel.Text = "0:00"
-	timerLabel.TextColor3 = Color3.new(1, 1, 1)
-	timerLabel.Font = BUBBLE_FONT
-	timerLabel.TextSize = 14
-	timerLabel.Parent = frame
-	local timerStroke = Instance.new("UIStroke")
-	timerStroke.Color = Color3.fromRGB(0, 0, 0)
-	timerStroke.Thickness = 1.5
-	timerStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
-	timerStroke.Parent = timerLabel
-
 	frame.MouseEnter:Connect(function()
 		local tt = frame:GetAttribute("TooltipText")
 		if tt and tt ~= "" then showCursorTooltip(tt) end
@@ -303,14 +286,19 @@ local function createIndicator(potionType, liquidColor, isRainbow)
 end
 
 local function updateIndicator(indicator, data, isRainbow)
+	if not SHOW_WORLD_POTION_INDICATORS then
+		if indicator then
+			indicator.Visible = false
+		end
+		return
+	end
+	if not indicator then return end
+
 	if not data or not data.remaining or data.remaining <= 0 then
 		indicator.Visible = false
 		return
 	end
 	indicator.Visible = true
-
-	local timerLabel = indicator:FindFirstChild("Timer")
-	if timerLabel then timerLabel.Text = formatTime(data.remaining) end
 
 	local potionType = indicator.Name:gsub("Indicator", "")
 	local potionImage = indicator:FindFirstChild("PotionImage")
@@ -365,15 +353,8 @@ local IMG_SIZE     = 100
 local MODAL_W      = 760
 local MODAL_H      = 690
 
-local RARITY_COLORS = {
-	Common  = Color3.fromRGB(180, 180, 190),
-	Rare    = Color3.fromRGB(80, 170, 255),
-	Epic    = Color3.fromRGB(180, 80, 255),
-}
 
 local function buildPotionRow(potionType, potion, parent, ownedCount, stockCount)
-	local rarityColor = RARITY_COLORS[potion.rarity] or RARITY_COLORS.Common
-
 	local row = Instance.new("Frame")
 	row.Name = potionType .. "Row_" .. potion.tier
 	row.Size = UDim2.new(1, 0, 0, ROW_H)
@@ -521,24 +502,32 @@ local function buildPotionRow(potionType, potion, parent, ownedCount, stockCount
 	priceStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
 	priceStroke.Parent = priceLabel
 
-	-- Rarity label
-	local rarityLabel = Instance.new("TextLabel")
-	rarityLabel.Name = "RarityLabel"
-	rarityLabel.Size = UDim2.new(0, 100, 0, 20)
-	rarityLabel.Position = UDim2.new(0, textX, 0, 84)
-	rarityLabel.BackgroundTransparency = 1
-	rarityLabel.Text = potion.rarity or "Common"
-	rarityLabel.TextColor3 = rarityColor
-	rarityLabel.Font = BUBBLE_FONT
-	rarityLabel.TextSize = 14
-	rarityLabel.TextXAlignment = Enum.TextXAlignment.Left
-	rarityLabel.ZIndex = 53
-	rarityLabel.Parent = row
+	-- Rebirth requirement (if any)
+	local rebirthRequired = potion.rebirthRequired or 0
+	local currentRebirth = HUDController.Data.rebirthCount or 0
+	local isLocked = rebirthRequired > 0 and currentRebirth < rebirthRequired
+
+	local nextY = 84
+	if rebirthRequired > 0 then
+		local reqLabel = Instance.new("TextLabel")
+		reqLabel.Name = "RebirthReq"
+		reqLabel.Size = UDim2.new(1, -(textX + 14), 0, 18)
+		reqLabel.Position = UDim2.new(0, textX, 0, nextY)
+		reqLabel.BackgroundTransparency = 1
+		reqLabel.Text = "Requires Rebirth " .. rebirthRequired
+		reqLabel.TextColor3 = isLocked and Color3.fromRGB(255, 120, 80) or Color3.fromRGB(100, 200, 120)
+		reqLabel.Font = FONT_SUB
+		reqLabel.TextSize = 12
+		reqLabel.TextXAlignment = Enum.TextXAlignment.Left
+		reqLabel.ZIndex = 53
+		reqLabel.Parent = row
+		nextY = nextY + 16
+	end
 
 	local stockLabel = Instance.new("TextLabel")
 	stockLabel.Name = "StockLabel"
 	stockLabel.Size = UDim2.new(0, 180, 0, 18)
-	stockLabel.Position = UDim2.new(0, textX, 0, 102)
+	stockLabel.Position = UDim2.new(0, textX, 0, nextY)
 	stockLabel.BackgroundTransparency = 1
 	stockLabel.Text = ("Stock: %d/%d"):format(stockCount or 0, MAX_POTION_STOCK)
 	stockLabel.TextColor3 = (stockCount or 0) <= 0 and Color3.fromRGB(255, 110, 110) or Color3.fromRGB(255, 220, 100)
@@ -551,7 +540,7 @@ local function buildPotionRow(potionType, potion, parent, ownedCount, stockCount
 	local ownedLabel = Instance.new("TextLabel")
 	ownedLabel.Name = "OwnedLabel"
 	ownedLabel.Size = UDim2.new(0, 180, 0, 18)
-	ownedLabel.Position = UDim2.new(0, textX, 0, 118)
+	ownedLabel.Position = UDim2.new(0, textX, 0, nextY + 16)
 	ownedLabel.BackgroundTransparency = 1
 	ownedLabel.Text = ""
 	ownedLabel.TextColor3 = Color3.fromRGB(200, 180, 230)
@@ -560,26 +549,6 @@ local function buildPotionRow(potionType, potion, parent, ownedCount, stockCount
 	ownedLabel.TextXAlignment = Enum.TextXAlignment.Left
 	ownedLabel.ZIndex = 53
 	ownedLabel.Parent = row
-
-	-- Rebirth requirement (if any)
-	local rebirthRequired = potion.rebirthRequired or 0
-	local currentRebirth = HUDController.Data.rebirthCount or 0
-	local isLocked = rebirthRequired > 0 and currentRebirth < rebirthRequired
-
-	if rebirthRequired > 0 then
-		local reqLabel = Instance.new("TextLabel")
-		reqLabel.Name = "RebirthReq"
-		reqLabel.Size = UDim2.new(1, -(textX + 14), 0, 18)
-		reqLabel.Position = UDim2.new(0, textX, 0, 84)
-		reqLabel.BackgroundTransparency = 1
-		reqLabel.Text = "Requires Rebirth " .. rebirthRequired
-		reqLabel.TextColor3 = isLocked and Color3.fromRGB(255, 120, 80) or Color3.fromRGB(100, 200, 120)
-		reqLabel.Font = FONT_SUB
-		reqLabel.TextSize = 12
-		reqLabel.TextXAlignment = Enum.TextXAlignment.Left
-		reqLabel.ZIndex = 53
-		reqLabel.Parent = row
-	end
 
 	local function makeBtn(name, text, xOffset, bg)
 		local btn = Instance.new("TextButton")
@@ -975,24 +944,11 @@ local function buildShopModal()
 	prisDesc.ZIndex = 53
 	prisDesc.Parent = prisRow
 
-	-- "Divine" rarity label
-	local prisRarity = Instance.new("TextLabel")
-	prisRarity.Size = UDim2.new(0, 100, 0, 20)
-	prisRarity.Position = UDim2.new(0, prisTextX, 0, 60)
-	prisRarity.BackgroundTransparency = 1
-	prisRarity.Text = "Divine"
-	prisRarity.TextColor3 = Color3.fromRGB(220, 140, 255)
-	prisRarity.Font = BUBBLE_FONT
-	prisRarity.TextSize = 14
-	prisRarity.TextXAlignment = Enum.TextXAlignment.Left
-	prisRarity.ZIndex = 53
-	prisRarity.Parent = prisRow
-
 	-- Divine count + USE
 	divineCountLabel = Instance.new("TextLabel")
 	divineCountLabel.Name = "DivineCount"
 	divineCountLabel.Size = UDim2.new(0, 120, 0, 18)
-	divineCountLabel.Position = UDim2.new(0, prisTextX, 0, 82)
+	divineCountLabel.Position = UDim2.new(0, prisTextX, 0, 60)
 	divineCountLabel.BackgroundTransparency = 1
 	divineCountLabel.Text = "Owned: 0"
 	divineCountLabel.TextColor3 = Color3.fromRGB(200, 180, 230)
@@ -1005,7 +961,7 @@ local function buildShopModal()
 	local useBtn = Instance.new("TextButton")
 	useBtn.Name = "UseBtn"
 	useBtn.Size = UDim2.new(0, 70, 0, 28)
-	useBtn.Position = UDim2.new(0, prisTextX + 130, 0, 78)
+	useBtn.Position = UDim2.new(0, prisTextX + 130, 0, 56)
 	useBtn.BackgroundColor3 = Color3.fromRGB(180, 80, 220)
 	useBtn.Text = "USE"
 	useBtn.TextColor3 = Color3.new(1, 1, 1)
@@ -1249,39 +1205,41 @@ function PotionController.Init()
 	shopModal = buildShopModal()
 	lastKnownRebirth = HUDController.Data.rebirthCount or 0
 
-	-- Build indicators (bottom-right, auto-sizes to fit active potions)
-	indicatorContainer = Instance.new("Frame")
-	indicatorContainer.Name = "PotionIndicators"
-	indicatorContainer.Size = UDim2.new(0, 0, 0, 100)
-	indicatorContainer.AutomaticSize = Enum.AutomaticSize.X
-	indicatorContainer.Position = UDim2.new(1, -INDICATOR_MARGIN, 1, -INDICATOR_MARGIN)
-	indicatorContainer.AnchorPoint = Vector2.new(1, 1)
-	indicatorContainer.BackgroundTransparency = 1
-	indicatorContainer.Parent = screenGui
+	if SHOW_WORLD_POTION_INDICATORS then
+		-- Build indicators (bottom-right, auto-sizes to fit active potions)
+		indicatorContainer = Instance.new("Frame")
+		indicatorContainer.Name = "PotionIndicators"
+		indicatorContainer.Size = UDim2.new(0, 0, 0, 100)
+		indicatorContainer.AutomaticSize = Enum.AutomaticSize.X
+		indicatorContainer.Position = UDim2.new(1, -INDICATOR_MARGIN, 1, -INDICATOR_MARGIN)
+		indicatorContainer.AnchorPoint = Vector2.new(1, 1)
+		indicatorContainer.BackgroundTransparency = 1
+		indicatorContainer.Parent = screenGui
 
-	local indLayout = Instance.new("UIListLayout")
-	indLayout.FillDirection = Enum.FillDirection.Horizontal
-	indLayout.SortOrder = Enum.SortOrder.LayoutOrder
-	indLayout.HorizontalAlignment = Enum.HorizontalAlignment.Right
-	indLayout.VerticalAlignment = Enum.VerticalAlignment.Bottom
-	indLayout.Padding = UDim.new(0, 10)
-	indLayout.Parent = indicatorContainer
+		local indLayout = Instance.new("UIListLayout")
+		indLayout.FillDirection = Enum.FillDirection.Horizontal
+		indLayout.SortOrder = Enum.SortOrder.LayoutOrder
+		indLayout.HorizontalAlignment = Enum.HorizontalAlignment.Right
+		indLayout.VerticalAlignment = Enum.VerticalAlignment.Bottom
+		indLayout.Padding = UDim.new(0, 10)
+		indLayout.Parent = indicatorContainer
 
-	luckIndicator = createIndicator("Luck", Color3.fromRGB(80, 255, 100), false)
-	luckIndicator.LayoutOrder = 1
-	luckIndicator.Parent = indicatorContainer
+		luckIndicator = createIndicator("Luck", Color3.fromRGB(80, 255, 100), false)
+		luckIndicator.LayoutOrder = 1
+		luckIndicator.Parent = indicatorContainer
 
-	cashIndicator = createIndicator("Cash", Color3.fromRGB(255, 220, 60), false)
-	cashIndicator.LayoutOrder = 2
-	cashIndicator.Parent = indicatorContainer
+		cashIndicator = createIndicator("Cash", Color3.fromRGB(255, 220, 60), false)
+		cashIndicator.LayoutOrder = 2
+		cashIndicator.Parent = indicatorContainer
 
-	divineIndicator = createIndicator("Divine", Color3.fromRGB(255, 120, 255), true)
-	divineIndicator.LayoutOrder = 3
-	divineIndicator.Parent = indicatorContainer
+		divineIndicator = createIndicator("Divine", Color3.fromRGB(255, 120, 255), true)
+		divineIndicator.LayoutOrder = 3
+		divineIndicator.Parent = indicatorContainer
+	end
 
 	local indicatorsPinnedLeft = false
 	local camera = workspace.CurrentCamera
-	if camera then
+	if camera and SHOW_WORLD_POTION_INDICATORS then
 		camera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
 			applyIndicatorContainerPlacement(indicatorsPinnedLeft)
 		end)
@@ -1294,11 +1252,13 @@ function PotionController.Init()
 		updateIndicator(luckIndicator, payload.Luck, false)
 		updateIndicator(cashIndicator, payload.Cash, false)
 		updateIndicator(divineIndicator, payload.Divine, true)
-		local divineActive = payload and payload.Divine and payload.Divine.remaining and payload.Divine.remaining > 0
-		local luckActive = payload and payload.Luck and payload.Luck.remaining and payload.Luck.remaining > 0
-		local cashActive = payload and payload.Cash and payload.Cash.remaining and payload.Cash.remaining > 0
-		indicatorsPinnedLeft = divineActive or luckActive or cashActive
-		applyIndicatorContainerPlacement(indicatorsPinnedLeft)
+		if SHOW_WORLD_POTION_INDICATORS then
+			local divineActive = payload and payload.Divine and payload.Divine.remaining and payload.Divine.remaining > 0
+			local luckActive = payload and payload.Luck and payload.Luck.remaining and payload.Luck.remaining > 0
+			local cashActive = payload and payload.Cash and payload.Cash.remaining and payload.Cash.remaining > 0
+			indicatorsPinnedLeft = divineActive or luckActive or cashActive
+			applyIndicatorContainerPlacement(indicatorsPinnedLeft)
+		end
 
 		-- Update divine count in shop
 		if divineCountLabel then

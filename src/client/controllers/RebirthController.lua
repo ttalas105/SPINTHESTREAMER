@@ -1,6 +1,7 @@
 --[[
 	RebirthController.lua
-	Rebirth UI – dark-themed panel matching the Case Shop / Potion Shop style.
+	Rebirth UI – bright pastel-themed panel showing actual rebirth rewards:
+	coin bonus, base slot unlock, luck bonus, case/potion unlocks.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -8,6 +9,7 @@ local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 
 local Economy = require(ReplicatedStorage.Shared.Config.Economy)
+local SlotsConfig = require(ReplicatedStorage.Shared.Config.SlotsConfig)
 local UIHelper = require(script.Parent.UIHelper)
 
 local RebirthController = {}
@@ -24,22 +26,41 @@ local screenGui, overlay, modalFrame
 local isOpen = false
 
 local titleRef, subtitleRef
-local levelBadgeRef, levelTextRef
-local bonusValueRef, caseImageRef, caseNameRef, slotValueRef
+local levelTextRef
+local progressFillRef, progressTextRef
+local coinBonusValueRef, slotValueRef, luckValueRef
+local caseUnlockRow, caseUnlockImage, caseUnlockText
+local potionUnlockRow, potionUnlockText
+local noUnlocksRef
 local costRef, confirmBtnRef, confirmTextRef
 local warnRef, maxedRef
-local progressBarRef, progressFillRef, progressTextRef
 
 local FONT = Enum.Font.FredokaOne
 local FONT_SUB = Enum.Font.GothamBold
-local MODAL_BG = Color3.fromRGB(30, 25, 45)
-local ACCENT = Color3.fromRGB(255, 160, 50)
-local ACCENT_DARK = Color3.fromRGB(200, 100, 20)
-local GREEN = Color3.fromRGB(80, 220, 100)
-local RED_BTN = Color3.fromRGB(220, 55, 55)
-local MODAL_W, MODAL_H = 440, 500
 
+local BG_TOP = Color3.fromRGB(180, 215, 255)
+local BG_BOTTOM = Color3.fromRGB(210, 190, 255)
+local CARD_BG = Color3.fromRGB(255, 255, 255)
+local CARD_BORDER = Color3.fromRGB(180, 210, 255)
+local GREEN = Color3.fromRGB(80, 200, 80)
+local GREEN_DARK = Color3.fromRGB(40, 130, 40)
+local GOLD = Color3.fromRGB(255, 200, 50)
+local GOLD_DARK = Color3.fromRGB(180, 130, 10)
+local RED_BTN = Color3.fromRGB(240, 60, 60)
+local TEXT_DARK = Color3.fromRGB(40, 40, 60)
+local TEXT_MED = Color3.fromRGB(100, 100, 130)
+local PROGRESS_BG = Color3.fromRGB(50, 130, 170)
+local MODAL_BORDER = Color3.fromRGB(100, 180, 255)
+
+local MODAL_W, MODAL_H = 500, 650
 local bounceTween = TweenInfo.new(0.12, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+
+local POTION_UNLOCKS = {
+	[3]  = "Luck Potion 2 (2x Luck)",
+	[5]  = "Money Potion 2 (2x Cash)",
+	[8]  = "Luck Potion 3 (4x Luck)",
+	[10] = "Money Potion 3 (4x Cash)",
+}
 
 -------------------------------------------------
 -- GET CURRENT REBIRTH DATA
@@ -54,9 +75,23 @@ end
 -- FORMAT NUMBER
 -------------------------------------------------
 local function fmtNum(n)
-	if n >= 1e6 then return string.format("%.1fM", n / 1e6) end
-	if n >= 1e3 then return string.format("%.1fK", n / 1e3) end
+	if n >= 1e12 then return string.format("%.1fT", n / 1e12) end
+	if n >= 1e9  then return string.format("%.1fB", n / 1e9) end
+	if n >= 1e6  then return string.format("%.1fM", n / 1e6) end
+	if n >= 1e3  then return string.format("%.1fK", n / 1e3) end
 	return tostring(n)
+end
+
+-------------------------------------------------
+-- HELPER: text stroke
+-------------------------------------------------
+local function addStroke(parent, color, thickness)
+	local s = Instance.new("UIStroke")
+	s.Color = color or Color3.new(0, 0, 0)
+	s.Thickness = thickness or 1
+	s.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+	s.Parent = parent
+	return s
 end
 
 -------------------------------------------------
@@ -82,14 +117,16 @@ local function updateDisplay()
 	end
 
 	if current >= Economy.MaxRebirths then
-		if titleRef then titleRef.Text = "Max Rebirth" end
+		if titleRef then titleRef.Text = "MAX REBIRTH" end
 		if levelTextRef then levelTextRef.Text = "MAX" end
-		if bonusValueRef then
-			bonusValueRef.Text = "+" .. Economy.GetRebirthBonusPercent(current) .. "% coins"
+		if coinBonusValueRef then
+			coinBonusValueRef.Text = "+" .. Economy.GetRebirthBonusPercent(current) .. "%"
 		end
-		if caseImageRef then caseImageRef.Visible = false end
-		if caseNameRef then caseNameRef.Text = "Base Slot Unlock" end
 		if slotValueRef then slotValueRef.Text = "MAXED" end
+		if luckValueRef then luckValueRef.Text = "+" .. (current * 2) .. "%" end
+		if caseUnlockRow then caseUnlockRow.Visible = false end
+		if potionUnlockRow then potionUnlockRow.Visible = false end
+		if noUnlocksRef then noUnlocksRef.Visible = false end
 		if costRef then costRef.Visible = false end
 		if confirmBtnRef then confirmBtnRef.Visible = false end
 		if warnRef then warnRef.Visible = false end
@@ -97,7 +134,6 @@ local function updateDisplay()
 			maxedRef.Text = "You've reached the highest rebirth!"
 			maxedRef.Visible = true
 		end
-	-- Show next rebirth info
 		return
 	end
 
@@ -109,37 +145,62 @@ local function updateDisplay()
 	if confirmBtnRef then confirmBtnRef.Visible = true end
 	if warnRef then warnRef.Visible = true end
 
-	if titleRef then titleRef.Text = "Rebirth" end
+	if titleRef then titleRef.Text = "REBIRTH" end
 	if levelTextRef then levelTextRef.Text = tostring(nextLevel) end
 
-	if bonusValueRef then
-		bonusValueRef.Text = "+" .. info.coinBonus .. "% coins"
+	if coinBonusValueRef then
+		coinBonusValueRef.Text = "+" .. info.coinBonus .. "%"
 	end
 
-	if caseImageRef then caseImageRef.Visible = false end
-	if caseNameRef then
-		caseNameRef.Text = "Base Slot Unlock"
-	end
 	if slotValueRef then
-		slotValueRef.Text = "Next slot"
+		local currentSlots = SlotsConfig.GetSlotsForRebirth(current)
+		local nextSlots = SlotsConfig.GetSlotsForRebirth(nextLevel)
+		if nextSlots > currentSlots then
+			slotValueRef.Text = currentSlots .. " \u{2192} " .. nextSlots
+		else
+			slotValueRef.Text = tostring(currentSlots) .. " (max)"
+		end
 	end
 
-	if costRef then costRef.Text = "$" .. fmtNum(info.cost) end
+	if luckValueRef then
+		luckValueRef.Text = "+" .. (nextLevel * 2) .. "%"
+	end
+
+	local hasBonusUnlock = false
+
+	if caseUnlockRow then
+		if info.unlocksCase then
+			caseUnlockRow.Visible = true
+			hasBonusUnlock = true
+			if caseUnlockImage then
+				caseUnlockImage.Image = Economy.CrateImageIds[info.unlocksCase] or ""
+			end
+			if caseUnlockText then
+				caseUnlockText.Text = Economy.CrateNames[info.unlocksCase] or ("Case " .. info.unlocksCase)
+			end
+		else
+			caseUnlockRow.Visible = false
+		end
+	end
+
+	if potionUnlockRow then
+		local potionName = POTION_UNLOCKS[nextLevel]
+		if potionName then
+			potionUnlockRow.Visible = true
+			hasBonusUnlock = true
+			if potionUnlockText then potionUnlockText.Text = potionName end
+		else
+			potionUnlockRow.Visible = false
+		end
+	end
+
+	if noUnlocksRef then
+		noUnlocksRef.Visible = not hasBonusUnlock
+	end
+
+	if costRef then costRef.Text = "Cost: $" .. fmtNum(info.cost) end
 	if confirmTextRef then confirmTextRef.Text = "REBIRTH" end
 end
-
--------------------------------------------------
--- HELPER: small text stroke
--------------------------------------------------
-local function addStroke(parent, color, thickness)
-	local s = Instance.new("UIStroke")
-	s.Color = color or Color3.new(0, 0, 0)
-	s.Thickness = thickness or 1
-	s.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
-	s.Parent = parent
-	return s
-end
-
 
 -------------------------------------------------
 -- BUILD UI
@@ -148,176 +209,203 @@ local function buildUI()
 	screenGui = UIHelper.CreateScreenGui("RebirthGui", 22)
 	screenGui.Parent = playerGui
 
-	-- Dim overlay
 	overlay = Instance.new("Frame")
 	overlay.Name = "Overlay"
 	overlay.Size = UDim2.new(1, 0, 1, 0)
 	overlay.BackgroundColor3 = Color3.new(0, 0, 0)
-	overlay.BackgroundTransparency = 0.45
+	overlay.BackgroundTransparency = 0.4
 	overlay.BorderSizePixel = 0
 	overlay.Visible = false
 	overlay.ZIndex = 1
 	overlay.Parent = screenGui
 
-	-- Modal
 	modalFrame = Instance.new("Frame")
 	modalFrame.Name = "RebirthModal"
 	modalFrame.Size = UDim2.new(0, MODAL_W, 0, MODAL_H)
 	modalFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
 	modalFrame.AnchorPoint = Vector2.new(0.5, 0.5)
-	modalFrame.BackgroundColor3 = MODAL_BG
+	modalFrame.BackgroundColor3 = Color3.fromRGB(220, 235, 255)
 	modalFrame.BorderSizePixel = 0
 	modalFrame.Visible = false
 	modalFrame.ZIndex = 2
 	modalFrame.ClipsDescendants = true
 	modalFrame.Parent = screenGui
 
-	Instance.new("UICorner", modalFrame).CornerRadius = UDim.new(0, 20)
+	Instance.new("UICorner", modalFrame).CornerRadius = UDim.new(0, 22)
 	local mStroke = Instance.new("UIStroke")
-	mStroke.Color = Color3.fromRGB(70, 60, 100)
-	mStroke.Thickness = 1.5
-	mStroke.Transparency = 0.3
+	mStroke.Color = MODAL_BORDER
+	mStroke.Thickness = 3
 	mStroke.Parent = modalFrame
-	UIHelper.CreateShadow(modalFrame)
+
+	local bgGrad = Instance.new("UIGradient")
+	bgGrad.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, BG_TOP),
+		ColorSequenceKeypoint.new(0.5, Color3.fromRGB(225, 235, 255)),
+		ColorSequenceKeypoint.new(1, BG_BOTTOM),
+	})
+	bgGrad.Rotation = 180
+	bgGrad.Parent = modalFrame
+
 	UIHelper.MakeResponsiveModal(modalFrame, MODAL_W, MODAL_H)
 
 	-- ===== HEADER =====
 	local header = Instance.new("Frame")
 	header.Name = "Header"
-	header.Size = UDim2.new(1, 0, 0, 60)
+	header.Size = UDim2.new(1, 0, 0, 62)
 	header.BackgroundTransparency = 1
 	header.ZIndex = 3
 	header.Parent = modalFrame
 
 	titleRef = Instance.new("TextLabel")
-	titleRef.Size = UDim2.new(0.6, 0, 0, 32)
-	titleRef.Position = UDim2.new(0, 20, 0, 12)
+	titleRef.Size = UDim2.new(0.6, 0, 0, 36)
+	titleRef.Position = UDim2.new(0, 22, 0, 10)
 	titleRef.BackgroundTransparency = 1
-	titleRef.Text = "Rebirth"
-	titleRef.TextColor3 = Color3.new(1, 1, 1)
+	titleRef.Text = "REBIRTH"
+	titleRef.TextColor3 = TEXT_DARK
 	titleRef.Font = FONT
-	titleRef.TextSize = 30
+	titleRef.TextSize = 34
 	titleRef.TextXAlignment = Enum.TextXAlignment.Left
 	titleRef.ZIndex = 3
 	titleRef.Parent = header
-	addStroke(titleRef, Color3.new(0, 0, 0), 1.5)
+	addStroke(titleRef, Color3.new(1, 1, 1), 2)
 
 	subtitleRef = Instance.new("TextLabel")
-	subtitleRef.Size = UDim2.new(0.5, 0, 0, 16)
-	subtitleRef.Position = UDim2.new(0, 22, 0, 42)
+	subtitleRef.Size = UDim2.new(0.5, 0, 0, 18)
+	subtitleRef.Position = UDim2.new(0, 24, 0, 44)
 	subtitleRef.BackgroundTransparency = 1
 	subtitleRef.Text = "Rebirth 0 / " .. Economy.MaxRebirths
-	subtitleRef.TextColor3 = Color3.fromRGB(150, 145, 170)
+	subtitleRef.TextColor3 = TEXT_MED
 	subtitleRef.Font = FONT_SUB
-	subtitleRef.TextSize = 12
+	subtitleRef.TextSize = 16
 	subtitleRef.TextXAlignment = Enum.TextXAlignment.Left
 	subtitleRef.ZIndex = 3
 	subtitleRef.Parent = header
 
-	-- Close button
 	local closeBtn = Instance.new("TextButton")
 	closeBtn.Name = "CloseBtn"
-	closeBtn.Size = UDim2.new(0, 40, 0, 40)
+	closeBtn.Size = UDim2.new(0, 44, 0, 44)
 	closeBtn.Position = UDim2.new(1, -14, 0, 10)
 	closeBtn.AnchorPoint = Vector2.new(1, 0)
 	closeBtn.BackgroundColor3 = RED_BTN
 	closeBtn.Text = "X"
 	closeBtn.TextColor3 = Color3.new(1, 1, 1)
 	closeBtn.Font = FONT
-	closeBtn.TextSize = 20
+	closeBtn.TextSize = 24
 	closeBtn.BorderSizePixel = 0
 	closeBtn.AutoButtonColor = false
 	closeBtn.ZIndex = 5
 	closeBtn.Parent = modalFrame
 	Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(1, 0)
 	local cStroke = Instance.new("UIStroke")
-	cStroke.Color = Color3.fromRGB(160, 30, 30)
-	cStroke.Thickness = 1.5
+	cStroke.Color = Color3.fromRGB(180, 40, 40)
+	cStroke.Thickness = 2
 	cStroke.Parent = closeBtn
-	addStroke(closeBtn, Color3.fromRGB(80, 0, 0), 1)
 
 	closeBtn.MouseEnter:Connect(function()
-		TweenService:Create(closeBtn, bounceTween, { Size = UDim2.new(0, 46, 0, 46), BackgroundColor3 = Color3.fromRGB(255, 75, 75) }):Play()
+		TweenService:Create(closeBtn, bounceTween, {
+			Size = UDim2.new(0, 50, 0, 50),
+			BackgroundColor3 = Color3.fromRGB(255, 80, 80),
+		}):Play()
 	end)
 	closeBtn.MouseLeave:Connect(function()
-		TweenService:Create(closeBtn, bounceTween, { Size = UDim2.new(0, 40, 0, 40), BackgroundColor3 = RED_BTN }):Play()
+		TweenService:Create(closeBtn, bounceTween, {
+			Size = UDim2.new(0, 44, 0, 44),
+			BackgroundColor3 = RED_BTN,
+		}):Play()
 	end)
 	closeBtn.MouseButton1Click:Connect(function() RebirthController.Close() end)
 
-	-- Divider
-	local divider = Instance.new("Frame")
-	divider.Size = UDim2.new(1, -30, 0, 1)
-	divider.Position = UDim2.new(0.5, 0, 0, 62)
-	divider.AnchorPoint = Vector2.new(0.5, 0)
-	divider.BackgroundColor3 = Color3.fromRGB(60, 55, 80)
-	divider.BorderSizePixel = 0
-	divider.ZIndex = 3
-	divider.Parent = modalFrame
-
-	-- ===== CONTENT AREA =====
+	-- ===== CONTENT =====
 	local content = Instance.new("Frame")
 	content.Name = "Content"
-	content.Size = UDim2.new(1, -40, 1, -75)
-	content.Position = UDim2.new(0.5, 0, 0, 72)
+	content.Size = UDim2.new(1, -36, 1, -70)
+	content.Position = UDim2.new(0.5, 0, 0, 66)
 	content.AnchorPoint = Vector2.new(0.5, 0)
 	content.BackgroundTransparency = 1
 	content.ZIndex = 3
 	content.Parent = modalFrame
 
-	-- == Level badge (big centered number) ==
-	local badgeSize = 90
+	-- == Level badge ==
+	local badgeSize = 110
+	local badgeOuter = Instance.new("Frame")
+	badgeOuter.Name = "BadgeGlow"
+	badgeOuter.Size = UDim2.new(0, badgeSize + 22, 0, badgeSize + 22)
+	badgeOuter.Position = UDim2.new(0.5, 0, 0, -6)
+	badgeOuter.AnchorPoint = Vector2.new(0.5, 0)
+	badgeOuter.BackgroundColor3 = Color3.fromRGB(200, 190, 255)
+	badgeOuter.BackgroundTransparency = 0.5
+	badgeOuter.BorderSizePixel = 0
+	badgeOuter.ZIndex = 3
+	badgeOuter.Parent = content
+	Instance.new("UICorner", badgeOuter).CornerRadius = UDim.new(1, 0)
+
 	local badgeFrame = Instance.new("Frame")
 	badgeFrame.Name = "LevelBadge"
 	badgeFrame.Size = UDim2.new(0, badgeSize, 0, badgeSize)
-	badgeFrame.Position = UDim2.new(0.5, 0, 0, 0)
-	badgeFrame.AnchorPoint = Vector2.new(0.5, 0)
-	badgeFrame.BackgroundColor3 = Color3.fromRGB(50, 40, 75)
+	badgeFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
+	badgeFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+	badgeFrame.BackgroundColor3 = Color3.fromRGB(220, 210, 255)
 	badgeFrame.BorderSizePixel = 0
 	badgeFrame.ZIndex = 4
-	badgeFrame.Parent = content
+	badgeFrame.Parent = badgeOuter
 	Instance.new("UICorner", badgeFrame).CornerRadius = UDim.new(1, 0)
-	local badgeStroke = Instance.new("UIStroke")
-	badgeStroke.Color = ACCENT
-	badgeStroke.Thickness = 2
-	badgeStroke.Parent = badgeFrame
 
-	levelBadgeRef = badgeFrame
+	local badgeGrad = Instance.new("UIGradient")
+	badgeGrad.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 170, 210)),
+		ColorSequenceKeypoint.new(0.2, Color3.fromRGB(200, 160, 255)),
+		ColorSequenceKeypoint.new(0.5, Color3.fromRGB(160, 210, 255)),
+		ColorSequenceKeypoint.new(0.8, Color3.fromRGB(160, 255, 210)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 255, 170)),
+	})
+	badgeGrad.Rotation = 135
+	badgeGrad.Parent = badgeFrame
+
+	local badgeStroke = Instance.new("UIStroke")
+	badgeStroke.Color = Color3.new(1, 1, 1)
+	badgeStroke.Thickness = 3
+	badgeStroke.Parent = badgeFrame
 
 	levelTextRef = Instance.new("TextLabel")
 	levelTextRef.Size = UDim2.new(1, 0, 1, 0)
 	levelTextRef.BackgroundTransparency = 1
 	levelTextRef.Text = "1"
-	levelTextRef.TextColor3 = ACCENT
+	levelTextRef.TextColor3 = Color3.new(1, 1, 1)
 	levelTextRef.Font = FONT
-	levelTextRef.TextSize = 40
+	levelTextRef.TextSize = 56
 	levelTextRef.ZIndex = 5
 	levelTextRef.Parent = badgeFrame
-	addStroke(levelTextRef, ACCENT_DARK, 1.5)
+	addStroke(levelTextRef, Color3.fromRGB(100, 70, 160), 2.5)
 
 	-- == Progress bar ==
-	local barY = badgeSize + 12
+	local barY = badgeSize + 22
 	local barBg = Instance.new("Frame")
 	barBg.Name = "ProgressBg"
-	barBg.Size = UDim2.new(1, 0, 0, 18)
-	barBg.Position = UDim2.new(0, 0, 0, barY)
-	barBg.BackgroundColor3 = Color3.fromRGB(40, 35, 60)
+	barBg.Size = UDim2.new(0.85, 0, 0, 28)
+	barBg.Position = UDim2.new(0.5, 0, 0, barY)
+	barBg.AnchorPoint = Vector2.new(0.5, 0)
+	barBg.BackgroundColor3 = PROGRESS_BG
 	barBg.BorderSizePixel = 0
 	barBg.ZIndex = 4
 	barBg.Parent = content
-	Instance.new("UICorner", barBg).CornerRadius = UDim.new(0, 9)
+	Instance.new("UICorner", barBg).CornerRadius = UDim.new(0, 14)
+	local barStroke = Instance.new("UIStroke")
+	barStroke.Color = Color3.fromRGB(30, 90, 130)
+	barStroke.Thickness = 2
+	barStroke.Parent = barBg
 
 	progressFillRef = Instance.new("Frame")
 	progressFillRef.Name = "Fill"
 	progressFillRef.Size = UDim2.new(0, 0, 1, 0)
-	progressFillRef.BackgroundColor3 = ACCENT
+	progressFillRef.BackgroundColor3 = Color3.fromRGB(100, 220, 80)
 	progressFillRef.BorderSizePixel = 0
 	progressFillRef.ZIndex = 5
 	progressFillRef.Parent = barBg
-	Instance.new("UICorner", progressFillRef).CornerRadius = UDim.new(0, 9)
+	Instance.new("UICorner", progressFillRef).CornerRadius = UDim.new(0, 14)
 	local fillGrad = Instance.new("UIGradient")
 	fillGrad.Color = ColorSequence.new({
-		ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 200, 60)),
-		ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 120, 30)),
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(120, 230, 80)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(60, 190, 50)),
 	})
 	fillGrad.Parent = progressFillRef
 
@@ -327,134 +415,230 @@ local function buildUI()
 	progressTextRef.Text = "0 / " .. Economy.MaxRebirths
 	progressTextRef.TextColor3 = Color3.new(1, 1, 1)
 	progressTextRef.Font = FONT_SUB
-	progressTextRef.TextSize = 11
+	progressTextRef.TextSize = 16
 	progressTextRef.ZIndex = 6
 	progressTextRef.Parent = barBg
-	addStroke(progressTextRef, Color3.new(0, 0, 0), 1)
+	addStroke(progressTextRef, Color3.new(0, 0, 0), 1.5)
 
-	progressBarRef = barBg
-
-	-- == Rewards card ==
-	local cardY = barY + 30
-	local rewardCard = Instance.new("Frame")
-	rewardCard.Name = "RewardCard"
-	rewardCard.Size = UDim2.new(1, 0, 0, 120)
-	rewardCard.Position = UDim2.new(0, 0, 0, cardY)
-	rewardCard.BackgroundColor3 = Color3.fromRGB(40, 35, 60)
-	rewardCard.BorderSizePixel = 0
-	rewardCard.ZIndex = 4
-	rewardCard.Parent = content
-	Instance.new("UICorner", rewardCard).CornerRadius = UDim.new(0, 14)
-
-	-- "Rewards" header inside card
+	-- ===== REWARDS HEADER =====
+	local rwdY = barY + 40
 	local rwdTitle = Instance.new("TextLabel")
-	rwdTitle.Size = UDim2.new(1, -16, 0, 22)
-	rwdTitle.Position = UDim2.new(0, 12, 0, 8)
+	rwdTitle.Size = UDim2.new(1, 0, 0, 24)
+	rwdTitle.Position = UDim2.new(0, 0, 0, rwdY)
 	rwdTitle.BackgroundTransparency = 1
 	rwdTitle.Text = "REWARDS"
-	rwdTitle.TextColor3 = Color3.fromRGB(180, 175, 200)
-	rwdTitle.Font = FONT_SUB
-	rwdTitle.TextSize = 12
-	rwdTitle.TextXAlignment = Enum.TextXAlignment.Left
-	rwdTitle.ZIndex = 5
-	rwdTitle.Parent = rewardCard
+	rwdTitle.TextColor3 = TEXT_DARK
+	rwdTitle.Font = FONT
+	rwdTitle.TextSize = 22
+	rwdTitle.ZIndex = 4
+	rwdTitle.Parent = content
+	addStroke(rwdTitle, Color3.new(1, 1, 1), 1.5)
 
-	-- Coin bonus row
-	local coinIcon = Instance.new("TextLabel")
-	coinIcon.Size = UDim2.new(0, 30, 0, 30)
-	coinIcon.Position = UDim2.new(0, 12, 0, 34)
-	coinIcon.BackgroundTransparency = 1
-	coinIcon.Text = "\u{1F4B0}"
-	coinIcon.TextSize = 22
-	coinIcon.Font = FONT
-	coinIcon.ZIndex = 5
-	coinIcon.Parent = rewardCard
+	-- ===== THREE REWARD CARDS =====
+	local cardsY = rwdY + 30
+	local gap = 10
+	local cardW = math.floor((MODAL_W - 36 - gap * 2) / 3)
+	local cardH = 100
 
-	local coinLabel = Instance.new("TextLabel")
-	coinLabel.Size = UDim2.new(0, 100, 0, 22)
-	coinLabel.Position = UDim2.new(0, 46, 0, 38)
-	coinLabel.BackgroundTransparency = 1
-	coinLabel.Text = "Coin Bonus"
-	coinLabel.TextColor3 = Color3.fromRGB(160, 160, 180)
-	coinLabel.Font = FONT_SUB
-	coinLabel.TextSize = 13
-	coinLabel.TextXAlignment = Enum.TextXAlignment.Left
-	coinLabel.ZIndex = 5
-	coinLabel.Parent = rewardCard
+	local function makeCard(name, xOffset, iconText, titleText, valueColor, valueDarkColor)
+		local card = Instance.new("Frame")
+		card.Name = name
+		card.Size = UDim2.new(0, cardW, 0, cardH)
+		card.Position = UDim2.new(0, xOffset, 0, cardsY)
+		card.BackgroundColor3 = CARD_BG
+		card.BorderSizePixel = 0
+		card.ZIndex = 4
+		card.Parent = content
+		Instance.new("UICorner", card).CornerRadius = UDim.new(0, 14)
+		local cs = Instance.new("UIStroke")
+		cs.Color = CARD_BORDER
+		cs.Thickness = 1.5
+		cs.Parent = card
 
-	bonusValueRef = Instance.new("TextLabel")
-	bonusValueRef.Size = UDim2.new(0, 120, 0, 22)
-	bonusValueRef.Position = UDim2.new(1, -12, 0, 38)
-	bonusValueRef.AnchorPoint = Vector2.new(1, 0)
-	bonusValueRef.BackgroundTransparency = 1
-	bonusValueRef.Text = "+5% coins"
-	bonusValueRef.TextColor3 = GREEN
-	bonusValueRef.Font = FONT
-	bonusValueRef.TextSize = 18
-	bonusValueRef.TextXAlignment = Enum.TextXAlignment.Right
-	bonusValueRef.ZIndex = 5
-	bonusValueRef.Parent = rewardCard
-	addStroke(bonusValueRef, Color3.new(0, 0, 0), 1)
+		local cTitle = Instance.new("TextLabel")
+		cTitle.Size = UDim2.new(1, 0, 0, 18)
+		cTitle.Position = UDim2.new(0.5, 0, 0, 8)
+		cTitle.AnchorPoint = Vector2.new(0.5, 0)
+		cTitle.BackgroundTransparency = 1
+		cTitle.Text = titleText
+		cTitle.TextColor3 = TEXT_MED
+		cTitle.Font = FONT_SUB
+		cTitle.TextSize = 14
+		cTitle.ZIndex = 5
+		cTitle.Parent = card
 
-	-- Case unlock row
-	caseImageRef = Instance.new("ImageLabel")
-	caseImageRef.Size = UDim2.new(0, 40, 0, 40)
-	caseImageRef.Position = UDim2.new(0, 7, 0, 68)
-	caseImageRef.BackgroundTransparency = 1
-	caseImageRef.Image = ""
-	caseImageRef.ScaleType = Enum.ScaleType.Fit
-	caseImageRef.ZIndex = 5
-	caseImageRef.Parent = rewardCard
+		local cIcon = Instance.new("TextLabel")
+		cIcon.Size = UDim2.new(1, 0, 0, 28)
+		cIcon.Position = UDim2.new(0.5, 0, 0, 28)
+		cIcon.AnchorPoint = Vector2.new(0.5, 0)
+		cIcon.BackgroundTransparency = 1
+		cIcon.Text = iconText
+		cIcon.TextSize = 26
+		cIcon.Font = FONT
+		cIcon.ZIndex = 5
+		cIcon.Parent = card
 
-	caseNameRef = Instance.new("TextLabel")
-	caseNameRef.Size = UDim2.new(0, 160, 0, 22)
-	caseNameRef.Position = UDim2.new(0, 46, 0, 78)
-	caseNameRef.BackgroundTransparency = 1
-	caseNameRef.Text = "Base Slot Unlock"
-	caseNameRef.TextColor3 = Color3.fromRGB(160, 160, 180)
-	caseNameRef.Font = FONT_SUB
-	caseNameRef.TextSize = 13
-	caseNameRef.TextXAlignment = Enum.TextXAlignment.Left
-	caseNameRef.ZIndex = 5
-	caseNameRef.Parent = rewardCard
-	addStroke(caseNameRef, Color3.new(0, 0, 0), 1)
+		local cValue = Instance.new("TextLabel")
+		cValue.Name = "Value"
+		cValue.Size = UDim2.new(1, -6, 0, 28)
+		cValue.Position = UDim2.new(0.5, 0, 1, -8)
+		cValue.AnchorPoint = Vector2.new(0.5, 1)
+		cValue.BackgroundTransparency = 1
+		cValue.Text = ""
+		cValue.TextColor3 = valueColor
+		cValue.Font = FONT
+		cValue.TextSize = 26
+		cValue.ZIndex = 5
+		cValue.Parent = card
+		addStroke(cValue, valueDarkColor, 1.5)
 
-	slotValueRef = Instance.new("TextLabel")
-	slotValueRef.Size = UDim2.new(0, 120, 0, 22)
-	slotValueRef.Position = UDim2.new(1, -12, 0, 78)
-	slotValueRef.AnchorPoint = Vector2.new(1, 0)
-	slotValueRef.BackgroundTransparency = 1
-	slotValueRef.Text = "Next slot"
-	slotValueRef.TextColor3 = GREEN
-	slotValueRef.Font = FONT
-	slotValueRef.TextSize = 18
-	slotValueRef.TextXAlignment = Enum.TextXAlignment.Right
-	slotValueRef.ZIndex = 5
-	slotValueRef.Parent = rewardCard
-	addStroke(slotValueRef, Color3.new(0, 0, 0), 1)
+		return card, cValue
+	end
 
-	-- == Cost display ==
-	local costY = cardY + 132
+	local _, coinVal = makeCard(
+		"CoinCard", 0,
+		"\u{1F4B0}", "Coin Bonus",
+		GREEN, GREEN_DARK
+	)
+	coinBonusValueRef = coinVal
+
+	local _, slotVal = makeCard(
+		"SlotCard", cardW + gap,
+		"\u{1F511}", "Base Slot",
+		Color3.fromRGB(80, 160, 255), Color3.fromRGB(30, 80, 160)
+	)
+	slotValueRef = slotVal
+
+	local _, luckVal = makeCard(
+		"LuckCard", (cardW + gap) * 2,
+		"\u{2728}", "Luck Bonus",
+		Color3.fromRGB(255, 180, 50), Color3.fromRGB(160, 100, 10)
+	)
+	luckValueRef = luckVal
+
+	-- ===== ALSO UNLOCKS SECTION =====
+	local bonusY = cardsY + cardH + 12
+	local bonusFrame = Instance.new("Frame")
+	bonusFrame.Name = "BonusUnlocks"
+	bonusFrame.Size = UDim2.new(1, 0, 0, 90)
+	bonusFrame.Position = UDim2.new(0, 0, 0, bonusY)
+	bonusFrame.BackgroundColor3 = Color3.fromRGB(240, 245, 255)
+	bonusFrame.BorderSizePixel = 0
+	bonusFrame.ZIndex = 4
+	bonusFrame.Parent = content
+	Instance.new("UICorner", bonusFrame).CornerRadius = UDim.new(0, 14)
+	local buStroke = Instance.new("UIStroke")
+	buStroke.Color = Color3.fromRGB(200, 215, 240)
+	buStroke.Thickness = 1.5
+	buStroke.Parent = bonusFrame
+
+	local alsoTitle = Instance.new("TextLabel")
+	alsoTitle.Size = UDim2.new(1, 0, 0, 20)
+	alsoTitle.Position = UDim2.new(0.5, 0, 0, 6)
+	alsoTitle.AnchorPoint = Vector2.new(0.5, 0)
+	alsoTitle.BackgroundTransparency = 1
+	alsoTitle.Text = "ALSO UNLOCKS"
+	alsoTitle.TextColor3 = TEXT_MED
+	alsoTitle.Font = FONT_SUB
+	alsoTitle.TextSize = 14
+	alsoTitle.ZIndex = 5
+	alsoTitle.Parent = bonusFrame
+
+	local rowH = 30
+	local rowStart = 28
+
+	local function makeUnlockRow(name, yPos, icon, textColor)
+		local row = Instance.new("Frame")
+		row.Name = name
+		row.Size = UDim2.new(1, -24, 0, rowH)
+		row.Position = UDim2.new(0.5, 0, 0, yPos)
+		row.AnchorPoint = Vector2.new(0.5, 0)
+		row.BackgroundTransparency = 1
+		row.ZIndex = 5
+		row.Visible = false
+		row.Parent = bonusFrame
+
+		local ico = Instance.new("TextLabel")
+		ico.Size = UDim2.new(0, 26, 0, 26)
+		ico.Position = UDim2.new(0, 0, 0.5, 0)
+		ico.AnchorPoint = Vector2.new(0, 0.5)
+		ico.BackgroundTransparency = 1
+		ico.Text = icon
+		ico.TextSize = 22
+		ico.Font = FONT
+		ico.ZIndex = 5
+		ico.Parent = row
+
+		local txt = Instance.new("TextLabel")
+		txt.Size = UDim2.new(1, -36, 0, rowH)
+		txt.Position = UDim2.new(0, 32, 0, 0)
+		txt.BackgroundTransparency = 1
+		txt.Text = ""
+		txt.TextColor3 = textColor
+		txt.Font = FONT
+		txt.TextSize = 18
+		txt.TextXAlignment = Enum.TextXAlignment.Left
+		txt.ZIndex = 5
+		txt.Parent = row
+		addStroke(txt, Color3.new(1, 1, 1), 1)
+
+		return row, txt
+	end
+
+	caseUnlockRow, caseUnlockText = makeUnlockRow(
+		"CaseUnlock", rowStart,
+		"\u{1F4E6}", Color3.fromRGB(60, 140, 255)
+	)
+
+	caseUnlockImage = Instance.new("ImageLabel")
+	caseUnlockImage.Size = UDim2.new(0, 26, 0, 26)
+	caseUnlockImage.Position = UDim2.new(1, 0, 0.5, 0)
+	caseUnlockImage.AnchorPoint = Vector2.new(1, 0.5)
+	caseUnlockImage.BackgroundTransparency = 1
+	caseUnlockImage.ScaleType = Enum.ScaleType.Fit
+	caseUnlockImage.ZIndex = 5
+	caseUnlockImage.Parent = caseUnlockRow
+
+	potionUnlockRow, potionUnlockText = makeUnlockRow(
+		"PotionUnlock", rowStart + rowH + 2,
+		"\u{1F9EA}", Color3.fromRGB(170, 80, 220)
+	)
+
+	noUnlocksRef = Instance.new("TextLabel")
+	noUnlocksRef.Size = UDim2.new(1, -24, 0, 50)
+	noUnlocksRef.Position = UDim2.new(0.5, 0, 0, rowStart)
+	noUnlocksRef.AnchorPoint = Vector2.new(0.5, 0)
+	noUnlocksRef.BackgroundTransparency = 1
+	noUnlocksRef.Text = "No additional unlocks at this level"
+	noUnlocksRef.TextColor3 = Color3.fromRGB(160, 165, 185)
+	noUnlocksRef.Font = FONT_SUB
+	noUnlocksRef.TextSize = 15
+	noUnlocksRef.ZIndex = 5
+	noUnlocksRef.Visible = false
+	noUnlocksRef.Parent = bonusFrame
+
+	-- ===== COST =====
+	local bottomY = bonusY + 102
 	costRef = Instance.new("TextLabel")
 	costRef.Name = "Cost"
 	costRef.Size = UDim2.new(1, 0, 0, 28)
-	costRef.Position = UDim2.new(0, 0, 0, costY)
+	costRef.Position = UDim2.new(0, 0, 0, bottomY)
 	costRef.BackgroundTransparency = 1
-	costRef.Text = "$100"
-	costRef.TextColor3 = Color3.fromRGB(255, 220, 100)
+	costRef.Text = "Cost: $100"
+	costRef.TextColor3 = GOLD
 	costRef.Font = FONT
-	costRef.TextSize = 22
+	costRef.TextSize = 24
 	costRef.ZIndex = 4
 	costRef.Parent = content
-	addStroke(costRef, Color3.new(0, 0, 0), 1)
+	addStroke(costRef, GOLD_DARK, 1.5)
 
-	-- == Confirm button ==
-	local btnY = costY + 34
+	-- ===== CONFIRM BUTTON =====
+	local btnY = bottomY + 34
 	confirmBtnRef = Instance.new("TextButton")
 	confirmBtnRef.Name = "ConfirmBtn"
-	confirmBtnRef.Size = UDim2.new(1, 0, 0, 50)
+	confirmBtnRef.Size = UDim2.new(1, 0, 0, 56)
 	confirmBtnRef.Position = UDim2.new(0, 0, 0, btnY)
-	confirmBtnRef.BackgroundColor3 = ACCENT
+	confirmBtnRef.BackgroundColor3 = GOLD
 	confirmBtnRef.BorderSizePixel = 0
 	confirmBtnRef.AutoButtonColor = false
 	confirmBtnRef.Text = ""
@@ -462,13 +646,13 @@ local function buildUI()
 	confirmBtnRef.Parent = content
 	Instance.new("UICorner", confirmBtnRef).CornerRadius = UDim.new(0, 14)
 	local btnStroke = Instance.new("UIStroke")
-	btnStroke.Color = ACCENT_DARK
-	btnStroke.Thickness = 1.5
+	btnStroke.Color = GOLD_DARK
+	btnStroke.Thickness = 2
 	btnStroke.Parent = confirmBtnRef
 	local btnGrad = Instance.new("UIGradient")
 	btnGrad.Color = ColorSequence.new({
-		ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 190, 70)),
-		ColorSequenceKeypoint.new(1, Color3.fromRGB(240, 110, 30)),
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 225, 80)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 170, 30)),
 	})
 	btnGrad.Rotation = 90
 	btnGrad.Parent = confirmBtnRef
@@ -479,13 +663,13 @@ local function buildUI()
 	confirmTextRef.Text = "REBIRTH"
 	confirmTextRef.TextColor3 = Color3.new(1, 1, 1)
 	confirmTextRef.Font = FONT
-	confirmTextRef.TextSize = 24
+	confirmTextRef.TextSize = 30
 	confirmTextRef.ZIndex = 5
 	confirmTextRef.Parent = confirmBtnRef
-	addStroke(confirmTextRef, Color3.new(0, 0, 0), 1.5)
+	addStroke(confirmTextRef, Color3.fromRGB(120, 80, 0), 2)
 
-	local idleSize = UDim2.new(1, 0, 0, 50)
-	local hoverSize = UDim2.new(1, 6, 0, 54)
+	local idleSize = UDim2.new(1, 0, 0, 56)
+	local hoverSize = UDim2.new(1, 6, 0, 60)
 	confirmBtnRef.MouseEnter:Connect(function()
 		TweenService:Create(confirmBtnRef, bounceTween, { Size = hoverSize }):Play()
 	end)
@@ -496,39 +680,39 @@ local function buildUI()
 		local current = getRebirthCount()
 		if current >= Economy.MaxRebirths then return end
 		confirmTextRef.Text = "REBIRTHING..."
-		confirmBtnRef.BackgroundColor3 = Color3.fromRGB(120, 120, 120)
+		confirmBtnRef.BackgroundColor3 = Color3.fromRGB(180, 180, 180)
 		RebirthRequest:FireServer()
 	end)
 
-	-- == Warning text (subtle, at bottom) ==
-	local warnY = btnY + 58
+	-- ===== WARNING =====
+	local warnY = btnY + 62
 	warnRef = Instance.new("TextLabel")
 	warnRef.Name = "Warning"
-	warnRef.Size = UDim2.new(1, 0, 0, 30)
+	warnRef.Size = UDim2.new(1, 0, 0, 24)
 	warnRef.Position = UDim2.new(0, 0, 0, warnY)
 	warnRef.BackgroundTransparency = 1
 	warnRef.Text = "Resets your money and active potions"
-	warnRef.TextColor3 = Color3.fromRGB(200, 100, 100)
+	warnRef.TextColor3 = Color3.fromRGB(220, 80, 80)
 	warnRef.Font = FONT_SUB
-	warnRef.TextSize = 12
+	warnRef.TextSize = 14
 	warnRef.ZIndex = 4
 	warnRef.Parent = content
 
-	-- == Maxed label (hidden by default) ==
+	-- ===== MAXED LABEL (hidden) =====
 	maxedRef = Instance.new("TextLabel")
 	maxedRef.Name = "Maxed"
-	maxedRef.Size = UDim2.new(1, 0, 0, 50)
+	maxedRef.Size = UDim2.new(1, 0, 0, 56)
 	maxedRef.Position = UDim2.new(0, 0, 0, btnY)
 	maxedRef.BackgroundTransparency = 1
 	maxedRef.Text = ""
-	maxedRef.TextColor3 = Color3.fromRGB(255, 220, 100)
+	maxedRef.TextColor3 = GOLD
 	maxedRef.Font = FONT
-	maxedRef.TextSize = 18
+	maxedRef.TextSize = 22
 	maxedRef.TextWrapped = true
 	maxedRef.Visible = false
 	maxedRef.ZIndex = 4
 	maxedRef.Parent = content
-	addStroke(maxedRef, Color3.new(0, 0, 0), 1)
+	addStroke(maxedRef, GOLD_DARK, 1)
 end
 
 -------------------------------------------------
@@ -559,11 +743,9 @@ function RebirthController.Close()
 end
 
 -------------------------------------------------
-	-- Server tells us to open (proximity prompt)
 -- INIT
 -------------------------------------------------
 
-	-- Rebirth result from server
 function RebirthController.Init()
 	buildUI()
 
@@ -573,16 +755,11 @@ function RebirthController.Init()
 
 	RebirthResult.OnClientEvent:Connect(function(data)
 		if data.success then
-					-- Update current label
-					local currentLabel = modalFrame:FindFirstChild("CurrentLabel")
-					if currentLabel then
-						currentLabel.Text = "Current Rebirth: " .. getRebirthCount() .. " / " .. Economy.MaxRebirths
-					end
 			if confirmTextRef then
 				confirmTextRef.Text = "REBIRTHED!"
 				confirmBtnRef.BackgroundColor3 = GREEN
 				task.delay(1.2, function()
-					confirmBtnRef.BackgroundColor3 = ACCENT
+					confirmBtnRef.BackgroundColor3 = GOLD
 					updateDisplay()
 				end)
 			end
@@ -591,7 +768,7 @@ function RebirthController.Init()
 				confirmTextRef.Text = data.reason or "Failed!"
 				confirmBtnRef.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
 				task.delay(1.5, function()
-					confirmBtnRef.BackgroundColor3 = ACCENT
+					confirmBtnRef.BackgroundColor3 = GOLD
 					updateDisplay()
 				end)
 			end
