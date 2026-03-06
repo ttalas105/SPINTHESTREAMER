@@ -356,14 +356,14 @@ end
 -- SHOP MODAL
 -------------------------------------------------
 
-local MODAL_BG     = Color3.fromRGB(28, 26, 34)
-local CARD_BG      = Color3.fromRGB(42, 38, 50)
-local CARD_HOVER   = Color3.fromRGB(55, 50, 65)
+local MODAL_BG     = Color3.fromRGB(127, 194, 255)
+local CARD_BG      = Color3.fromRGB(55, 75, 142)
+local CARD_HOVER   = Color3.fromRGB(66, 89, 164)
 local FONT_SUB     = Enum.Font.GothamBold
 local ROW_H        = 130
 local IMG_SIZE     = 100
-local MODAL_W      = 500
-local MODAL_H      = 540
+local MODAL_W      = 760
+local MODAL_H      = 690
 
 local RARITY_COLORS = {
 	Common  = Color3.fromRGB(180, 180, 190),
@@ -383,13 +383,20 @@ local function buildPotionRow(potionType, potion, parent, ownedCount, stockCount
 	row.Parent = parent
 
 	local rowCorner = Instance.new("UICorner")
-	rowCorner.CornerRadius = UDim.new(0, 14)
+	rowCorner.CornerRadius = UDim.new(0, 16)
 	rowCorner.Parent = row
 	local rowStroke = Instance.new("UIStroke")
-	rowStroke.Color = Color3.fromRGB(60, 55, 75)
-	rowStroke.Thickness = 1.5
+	rowStroke.Color = Color3.fromRGB(255, 255, 255)
+	rowStroke.Thickness = 2
 	rowStroke.Transparency = 0.3
 	rowStroke.Parent = row
+	local rowGrad = Instance.new("UIGradient")
+	rowGrad.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(82, 116, 208)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(49, 70, 140)),
+	})
+	rowGrad.Rotation = 18
+	rowGrad.Parent = row
 
 	-- Potion image (left side, bordered)
 	local imgFrame = Instance.new("Frame")
@@ -600,9 +607,9 @@ local function buildPotionRow(potionType, potion, parent, ownedCount, stockCount
 
 	local canBuy = (not isLocked) and (stockCount or 0) > 0
 	local canUse = (ownedCount or 0) > 0 and not isLocked
-	local buy1Btn = makeBtn("Buy1Btn", isLocked and "LOCKED" or "BUY 1", -154, canBuy and Color3.fromRGB(60, 200, 90) or Color3.fromRGB(70, 65, 80))
-	local buyMaxBtn = makeBtn("BuyMaxBtn", "BUY MAX", -84, canBuy and Color3.fromRGB(50, 170, 85) or Color3.fromRGB(70, 65, 80))
-	local useBtn = makeBtn("UseBtn", "USE (" .. tostring(ownedCount or 0) .. ")", -14, canUse and Color3.fromRGB(180, 80, 220) or Color3.fromRGB(70, 65, 80))
+	local buy1Btn = makeBtn("Buy1Btn", isLocked and "LOCKED" or "BUY 1", -154, canBuy and Color3.fromRGB(66, 166, 255) or Color3.fromRGB(67, 77, 97))
+	local buyMaxBtn = makeBtn("BuyMaxBtn", "BUY MAX", -84, canBuy and Color3.fromRGB(140, 98, 255) or Color3.fromRGB(67, 77, 97))
+	local useBtn = makeBtn("UseBtn", "USE (" .. tostring(ownedCount or 0) .. ")", -14, canUse and Color3.fromRGB(81, 208, 94) or Color3.fromRGB(67, 77, 97))
 
 	if canBuy then
 		buy1Btn.MouseButton1Click:Connect(function()
@@ -677,13 +684,20 @@ local function buildShopModal()
 	modal.Parent = screenGui
 
 	local mCorner = Instance.new("UICorner")
-	mCorner.CornerRadius = UDim.new(0, 20)
+	mCorner.CornerRadius = UDim.new(0, 24)
 	mCorner.Parent = modal
 	local mStroke = Instance.new("UIStroke")
-	mStroke.Color = Color3.fromRGB(70, 60, 100)
-	mStroke.Thickness = 2.5
-	mStroke.Transparency = 0.2
+	mStroke.Color = Color3.fromRGB(255, 255, 255)
+	mStroke.Thickness = 3
+	mStroke.Transparency = 0.35
 	mStroke.Parent = modal
+	local modalGradient = Instance.new("UIGradient")
+	modalGradient.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(157, 215, 255)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(115, 175, 255)),
+	})
+	modalGradient.Rotation = 90
+	modalGradient.Parent = modal
 	UIHelper.CreateShadow(modal)
 	UIHelper.MakeResponsiveModal(modal, MODAL_W, MODAL_H)
 
@@ -701,10 +715,10 @@ local function buildShopModal()
 	title.Size = UDim2.new(0.6, 0, 0, 36)
 	title.Position = UDim2.new(0, 20, 0, 10)
 	title.BackgroundTransparency = 1
-	title.Text = "Potion Shop"
+	title.Text = "POTION SHOP!"
 	title.TextColor3 = Color3.new(1, 1, 1)
 	title.Font = BUBBLE_FONT
-	title.TextSize = 30
+	title.TextSize = 36
 	title.TextXAlignment = Enum.TextXAlignment.Left
 	title.ZIndex = 52
 	title.Parent = header
@@ -718,13 +732,13 @@ local function buildShopModal()
 	local closeBtn = Instance.new("TextButton")
 	closeBtn.Name = "CloseBtn"
 	closeBtn.Size = UDim2.new(0, 42, 0, 42)
-	closeBtn.Position = UDim2.new(1, -14, 0, 10)
+	closeBtn.Position = UDim2.new(1, -14, 0, 8)
 	closeBtn.AnchorPoint = Vector2.new(1, 0)
-	closeBtn.BackgroundColor3 = Color3.fromRGB(220, 55, 55)
+	closeBtn.BackgroundColor3 = Color3.fromRGB(248, 87, 87)
 	closeBtn.Text = "X"
 	closeBtn.TextColor3 = Color3.new(1, 1, 1)
 	closeBtn.Font = BUBBLE_FONT
-	closeBtn.TextSize = 22
+	closeBtn.TextSize = 24
 	closeBtn.BorderSizePixel = 0
 	closeBtn.AutoButtonColor = false
 	closeBtn.ZIndex = 55
@@ -733,21 +747,21 @@ local function buildShopModal()
 	closeCorner.CornerRadius = UDim.new(1, 0)
 	closeCorner.Parent = closeBtn
 	local closeStroke = Instance.new("UIStroke")
-	closeStroke.Color = Color3.fromRGB(160, 30, 30)
+	closeStroke.Color = Color3.fromRGB(255, 255, 255)
 	closeStroke.Thickness = 2
 	closeStroke.Parent = closeBtn
 	local closeTextStroke = Instance.new("UIStroke")
-	closeTextStroke.Color = Color3.fromRGB(80, 0, 0)
+	closeTextStroke.Color = Color3.fromRGB(130, 35, 35)
 	closeTextStroke.Thickness = 1.5
 	closeTextStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
 	closeTextStroke.Parent = closeBtn
 
 	local closeBounce = TweenInfo.new(0.12, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 	closeBtn.MouseEnter:Connect(function()
-		TweenService:Create(closeBtn, closeBounce, { Size = UDim2.new(0, 48, 0, 48), BackgroundColor3 = Color3.fromRGB(255, 75, 75) }):Play()
+		TweenService:Create(closeBtn, closeBounce, { Size = UDim2.new(0, 48, 0, 48), BackgroundColor3 = Color3.fromRGB(255, 107, 107) }):Play()
 	end)
 	closeBtn.MouseLeave:Connect(function()
-		TweenService:Create(closeBtn, closeBounce, { Size = UDim2.new(0, 42, 0, 42), BackgroundColor3 = Color3.fromRGB(220, 55, 55) }):Play()
+		TweenService:Create(closeBtn, closeBounce, { Size = UDim2.new(0, 42, 0, 42), BackgroundColor3 = Color3.fromRGB(248, 87, 87) }):Play()
 	end)
 	closeBtn.MouseButton1Click:Connect(function()
 		PotionController.CloseShop()
@@ -758,23 +772,29 @@ local function buildShopModal()
 	divider.Size = UDim2.new(1, -30, 0, 1)
 	divider.Position = UDim2.new(0.5, 0, 0, 62)
 	divider.AnchorPoint = Vector2.new(0.5, 0)
-	divider.BackgroundColor3 = Color3.fromRGB(65, 60, 80)
+	divider.BackgroundColor3 = Color3.fromRGB(68, 104, 183)
 	divider.BorderSizePixel = 0
 	divider.ZIndex = 52
 	divider.Parent = modal
 
 	potionRestockTimerLabel = Instance.new("TextLabel")
 	potionRestockTimerLabel.Name = "RestockTimer"
-	potionRestockTimerLabel.Size = UDim2.new(0, 200, 0, 18)
-	potionRestockTimerLabel.Position = UDim2.new(0.5, 0, 0, 44)
+	potionRestockTimerLabel.Size = UDim2.new(0, 220, 0, 28)
+	potionRestockTimerLabel.Position = UDim2.new(0.5, 0, 0, 38)
 	potionRestockTimerLabel.AnchorPoint = Vector2.new(0.5, 0)
-	potionRestockTimerLabel.BackgroundTransparency = 1
+	potionRestockTimerLabel.BackgroundColor3 = Color3.fromRGB(54, 68, 125)
+	potionRestockTimerLabel.BackgroundTransparency = 0
 	potionRestockTimerLabel.Text = "Restock: --:--"
-	potionRestockTimerLabel.TextColor3 = Color3.fromRGB(255, 220, 100)
+	potionRestockTimerLabel.TextColor3 = Color3.fromRGB(245, 233, 160)
 	potionRestockTimerLabel.Font = FONT_SUB
-	potionRestockTimerLabel.TextSize = 12
+	potionRestockTimerLabel.TextSize = 18
 	potionRestockTimerLabel.ZIndex = 53
 	potionRestockTimerLabel.Parent = modal
+	Instance.new("UICorner", potionRestockTimerLabel).CornerRadius = UDim.new(1, 0)
+	local restockStroke = Instance.new("UIStroke")
+	restockStroke.Color = Color3.fromRGB(26, 35, 75)
+	restockStroke.Thickness = 1.8
+	restockStroke.Parent = potionRestockTimerLabel
 
 	-- Tab row (Luck / Money pages)
 	local currentTab = "Luck"
@@ -800,18 +820,19 @@ local function buildShopModal()
 	local function createTabButton(text)
 		local btn = Instance.new("TextButton")
 		btn.Size = UDim2.new(0, 120, 0, 30)
-		btn.BackgroundColor3 = Color3.fromRGB(55, 50, 75)
+		btn.BackgroundColor3 = Color3.fromRGB(86, 102, 156)
 		btn.Text = text
-		btn.TextColor3 = Color3.fromRGB(180, 175, 200)
+		btn.TextColor3 = Color3.fromRGB(30, 46, 96)
 		btn.Font = BUBBLE_FONT
 		btn.TextSize = 16
+		btn.TextStrokeTransparency = 1
 		btn.BorderSizePixel = 0
 		btn.AutoButtonColor = false
 		btn.ZIndex = 53
 		btn.Parent = tabRow
 		Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
 		local bStroke = Instance.new("UIStroke")
-		bStroke.Color = Color3.fromRGB(80, 75, 110)
+		bStroke.Color = Color3.fromRGB(255, 255, 255)
 		bStroke.Thickness = 1.2
 		bStroke.Parent = btn
 		return btn
@@ -822,11 +843,11 @@ local function buildShopModal()
 
 	local function updateTabStyles()
 		local function style(btn, active, activeColor)
-			btn.BackgroundColor3 = active and activeColor or Color3.fromRGB(55, 50, 75)
-			btn.TextColor3 = active and Color3.new(1, 1, 1) or Color3.fromRGB(180, 175, 200)
+			btn.BackgroundColor3 = active and activeColor or Color3.fromRGB(86, 102, 156)
+			btn.TextColor3 = active and Color3.fromRGB(18, 34, 82) or Color3.fromRGB(36, 54, 105)
 		end
-		style(luckTabBtn, currentTab == "Luck", Color3.fromRGB(60, 190, 95))
-		style(moneyTabBtn, currentTab == "Cash", Color3.fromRGB(190, 150, 55))
+		style(luckTabBtn, currentTab == "Luck", Color3.fromRGB(66, 166, 255))
+		style(moneyTabBtn, currentTab == "Cash", Color3.fromRGB(140, 98, 255))
 	end
 
 	-- Scrollable potion list
@@ -838,7 +859,7 @@ local function buildShopModal()
 	scroll.BackgroundTransparency = 1
 	scroll.BorderSizePixel = 0
 	scroll.ScrollBarThickness = 6
-	scroll.ScrollBarImageColor3 = Color3.fromRGB(100, 90, 140)
+	scroll.ScrollBarImageColor3 = Color3.fromRGB(87, 120, 213)
 	scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
 	scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
 	scroll.ZIndex = 51
@@ -1180,11 +1201,11 @@ local function buildShopModal()
 	local function bindTabHover(btn, activeTab)
 		btn.MouseEnter:Connect(function()
 			if currentTab == activeTab then return end
-			TweenService:Create(btn, TweenInfo.new(0.1), { BackgroundColor3 = Color3.fromRGB(70, 64, 92) }):Play()
+			TweenService:Create(btn, TweenInfo.new(0.1), { BackgroundColor3 = Color3.fromRGB(99, 116, 176) }):Play()
 		end)
 		btn.MouseLeave:Connect(function()
 			if currentTab == activeTab then return end
-			TweenService:Create(btn, TweenInfo.new(0.1), { BackgroundColor3 = Color3.fromRGB(55, 50, 75) }):Play()
+			TweenService:Create(btn, TweenInfo.new(0.1), { BackgroundColor3 = Color3.fromRGB(86, 102, 156) }):Play()
 		end)
 	end
 	bindTabHover(luckTabBtn, "Luck")

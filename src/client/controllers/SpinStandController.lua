@@ -1,8 +1,7 @@
 --[[
 	SpinStandController.lua
-	Case Shop UI — dark themed, vertical list.
-	18 cases in a vertical list.
-	Each case shows: image, name, rarity, luck, cost, stock, Buy 1, Buy Max, Open (with owned count).
+	Case Shop UI inspired by bright mobile "card shop" layouts.
+	Each case row includes: case art, name, rarity, huge luck bonus, stock, price, open, buy 1, buy max.
 	Global stock resets every 5 minutes with a countdown timer in the header.
 ]]
 
@@ -38,15 +37,15 @@ local isOpen = false
 -------------------------------------------------
 local FONT        = Enum.Font.FredokaOne
 local FONT_SUB    = Enum.Font.GothamBold
-local MODAL_BG    = Color3.fromRGB(28, 26, 34)
-local CARD_BG     = Color3.fromRGB(42, 38, 50)
-local CARD_HOVER  = Color3.fromRGB(55, 50, 65)
+local MODAL_BG    = Color3.fromRGB(127, 194, 255)
+local CARD_BG     = Color3.fromRGB(55, 55, 78)
+local CARD_HOVER  = Color3.fromRGB(65, 65, 94)
 local CARD_LOCKED = Color3.fromRGB(30, 28, 36)
 
-local ROW_H       = 130
-local IMAGE_SIZE  = 105
-local MODAL_W     = 620
-local MODAL_H     = 660
+local ROW_H       = 152
+local IMAGE_SIZE  = 124
+local MODAL_W     = 860
+local MODAL_H     = 760
 
 local RARITY_COLORS = {
 	Common    = Color3.fromRGB(180, 180, 190),
@@ -119,10 +118,84 @@ local function addStroke(parent, color, thickness)
 	return s
 end
 
+local function getThemeForCase(crateId, rarity)
+	if crateId == 1 then
+		return {
+			base = Color3.fromRGB(137, 76, 213),
+			top = Color3.fromRGB(174, 109, 247),
+			bottom = Color3.fromRGB(98, 54, 163),
+			luckText = Color3.fromRGB(255, 237, 115),
+			price = Color3.fromRGB(116, 76, 209),
+		}
+	elseif crateId == 2 then
+		return {
+			base = Color3.fromRGB(150, 102, 54),
+			top = Color3.fromRGB(212, 162, 94),
+			bottom = Color3.fromRGB(114, 74, 43),
+			luckText = Color3.fromRGB(255, 236, 116),
+			price = Color3.fromRGB(218, 172, 67),
+		}
+	elseif crateId == 3 then
+		return {
+			base = Color3.fromRGB(48, 99, 170),
+			top = Color3.fromRGB(92, 153, 230),
+			bottom = Color3.fromRGB(42, 79, 146),
+			luckText = Color3.fromRGB(255, 236, 113),
+			price = Color3.fromRGB(56, 105, 196),
+		}
+	elseif crateId == 4 then
+		return {
+			base = Color3.fromRGB(52, 42, 112),
+			top = Color3.fromRGB(89, 73, 170),
+			bottom = Color3.fromRGB(35, 26, 88),
+			luckText = Color3.fromRGB(199, 198, 255),
+			price = Color3.fromRGB(63, 52, 146),
+		}
+	end
+
+	if rarity == "Legendary" then
+		return {
+			base = Color3.fromRGB(92, 78, 44),
+			top = Color3.fromRGB(188, 145, 64),
+			bottom = Color3.fromRGB(69, 53, 32),
+			luckText = Color3.fromRGB(255, 236, 113),
+			price = Color3.fromRGB(202, 156, 62),
+		}
+	elseif rarity == "Epic" then
+		return {
+			base = Color3.fromRGB(90, 56, 143),
+			top = Color3.fromRGB(156, 89, 225),
+			bottom = Color3.fromRGB(65, 39, 102),
+			luckText = Color3.fromRGB(255, 236, 113),
+			price = Color3.fromRGB(130, 78, 194),
+		}
+	elseif rarity == "Mythic" or rarity == "Godly" then
+		return {
+			base = Color3.fromRGB(104, 44, 78),
+			top = Color3.fromRGB(184, 72, 126),
+			bottom = Color3.fromRGB(73, 31, 56),
+			luckText = Color3.fromRGB(255, 225, 120),
+			price = Color3.fromRGB(171, 66, 112),
+		}
+	end
+
+	return {
+		base = CARD_BG,
+		top = Color3.fromRGB(98, 96, 131),
+		bottom = Color3.fromRGB(52, 51, 73),
+		luckText = Color3.fromRGB(255, 236, 113),
+		price = Color3.fromRGB(76, 82, 138),
+	}
+end
+
 local function getCardBaseColor(crateId)
 	local tutorialLock = isTutorialActive() and crateId ~= 1
 	if tutorialLock then
 		return CARD_LOCKED
+	end
+	local refs = cardRefs[crateId]
+	if refs and refs.baseColor then
+		return refs.baseColor
 	end
 	return CARD_BG
 end
@@ -182,9 +255,15 @@ local function updateAllCards()
 		if locked then
 			refs.lockOverlay.Visible = true
 			refs.card.BackgroundColor3 = CARD_LOCKED
+			if refs.bgGradient then
+				refs.bgGradient.Enabled = false
+			end
 		else
 			refs.lockOverlay.Visible = false
-			refs.card.BackgroundColor3 = CARD_BG
+			refs.card.BackgroundColor3 = refs.baseColor or CARD_BG
+			if refs.bgGradient then
+				refs.bgGradient.Enabled = true
+			end
 		end
 
 		-- Stock label
@@ -206,19 +285,24 @@ local function updateAllCards()
 		if refs.openBtn then
 			refs.openBtnText.Text = "OPEN (" .. owned .. ")"
 			if owned > 0 and not locked then
-				refs.openBtn.BackgroundColor3 = Color3.fromRGB(60, 200, 90)
+				refs.openBtnText.TextColor3 = Color3.fromRGB(255, 255, 255)
 			else
-				refs.openBtn.BackgroundColor3 = Color3.fromRGB(50, 45, 65)
+				refs.openBtnText.TextColor3 = Color3.fromRGB(180, 190, 200)
+			end
+			if not locked then
+				refs.openBtn.BackgroundColor3 = Color3.fromRGB(81, 208, 94)
+			else
+				refs.openBtn.BackgroundColor3 = Color3.fromRGB(67, 77, 97)
 			end
 		end
 
 		-- Buy buttons enabled state
 		if not locked and currentStock > 0 then
-			refs.buy1Btn.BackgroundColor3 = Color3.fromRGB(80, 150, 255)
-			refs.buyMaxBtn.BackgroundColor3 = Color3.fromRGB(140, 100, 255)
+			refs.buy1Btn.BackgroundColor3 = Color3.fromRGB(66, 166, 255)
+			refs.buyMaxBtn.BackgroundColor3 = Color3.fromRGB(140, 98, 255)
 		elseif not locked then
-			refs.buy1Btn.BackgroundColor3 = Color3.fromRGB(50, 45, 65)
-			refs.buyMaxBtn.BackgroundColor3 = Color3.fromRGB(50, 45, 65)
+			refs.buy1Btn.BackgroundColor3 = Color3.fromRGB(67, 77, 97)
+			refs.buyMaxBtn.BackgroundColor3 = Color3.fromRGB(67, 77, 97)
 		end
 	end
 end
@@ -233,22 +317,31 @@ local function buildCaseRow(crateId, parent)
 	local name = Economy.CrateNames[crateId]
 	local rarity = Economy.CrateRarities[crateId]
 	local rarityColor = RARITY_COLORS[rarity] or RARITY_COLORS.Common
+	local theme = getThemeForCase(crateId, rarity)
 
 	local row = Instance.new("Frame")
 	row.Name = "CaseRow_" .. crateId
-	row.Size = UDim2.new(1, 0, 0, ROW_H)
-	row.BackgroundColor3 = CARD_BG
+	row.Size = UDim2.new(1, -20, 0, ROW_H)
+	row.BackgroundColor3 = theme.base
 	row.BorderSizePixel = 0
 	row.LayoutOrder = crateId
 	row.Parent = parent
 
-	Instance.new("UICorner", row).CornerRadius = UDim.new(0, 14)
+	Instance.new("UICorner", row).CornerRadius = UDim.new(0, 18)
 
 	local rowStroke = Instance.new("UIStroke")
-	rowStroke.Color = Color3.fromRGB(60, 55, 75)
-	rowStroke.Thickness = 1.5
-	rowStroke.Transparency = 0.3
+	rowStroke.Color = Color3.fromRGB(255, 255, 255)
+	rowStroke.Thickness = 3
+	rowStroke.Transparency = 0.7
 	rowStroke.Parent = row
+
+	local rowGradient = Instance.new("UIGradient")
+	rowGradient.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, theme.top),
+		ColorSequenceKeypoint.new(1, theme.bottom),
+	})
+	rowGradient.Rotation = 15
+	rowGradient.Parent = row
 
 	-- Case image (left)
 	local imgScale = crateId >= 13 and 1.3 or 1.0
@@ -264,82 +357,139 @@ local function buildCaseRow(crateId, parent)
 	caseImage.ClipsDescendants = false
 	caseImage.Parent = row
 
-	local textX = IMAGE_SIZE + 20
+	local textX = IMAGE_SIZE + 28
 
 	-- Name
 	local nameLabel = Instance.new("TextLabel")
-	nameLabel.Size = UDim2.new(0, 180, 0, 28)
-	nameLabel.Position = UDim2.new(0, textX, 0, 8)
+	nameLabel.Size = UDim2.new(0.56, 0, 0, 30)
+	nameLabel.Position = UDim2.new(0, textX, 0, 10)
 	nameLabel.BackgroundTransparency = 1
 	nameLabel.Text = name
 	nameLabel.TextColor3 = Color3.new(1, 1, 1)
 	nameLabel.Font = FONT
-	nameLabel.TextSize = 20
+	nameLabel.TextSize = 42
+	nameLabel.TextScaled = true
+	nameLabel.TextWrapped = true
 	nameLabel.TextXAlignment = Enum.TextXAlignment.Left
-	nameLabel.TextTruncate = Enum.TextTruncate.AtEnd
+	nameLabel.TextYAlignment = Enum.TextYAlignment.Top
 	nameLabel.Parent = row
-	addStroke(nameLabel, Color3.new(0, 0, 0), 1.5)
+	addStroke(nameLabel, Color3.new(0, 0, 0), 2)
 
-	-- Rarity + Luck
-	local infoLabel = Instance.new("TextLabel")
-	infoLabel.Size = UDim2.new(0, 180, 0, 18)
-	infoLabel.Position = UDim2.new(0, textX, 0, 36)
-	infoLabel.BackgroundTransparency = 1
-	infoLabel.Text = rarity .. " \u{2022} " .. luckString(luck)
-	infoLabel.TextColor3 = rarityColor
-	infoLabel.Font = FONT_SUB
-	infoLabel.TextSize = 13
-	infoLabel.TextXAlignment = Enum.TextXAlignment.Left
-	infoLabel.Parent = row
-	addStroke(infoLabel, Color3.new(0, 0, 0), 1)
+	-- Rarity label
+	local rarityLabel = Instance.new("TextLabel")
+	rarityLabel.Size = UDim2.new(0.56, 0, 0, 22)
+	rarityLabel.Position = UDim2.new(0, textX, 0, 42)
+	rarityLabel.BackgroundTransparency = 1
+	rarityLabel.Text = string.upper(tostring(rarity)) .. "!"
+	rarityLabel.TextColor3 = rarityColor
+	rarityLabel.Font = FONT
+	rarityLabel.TextSize = 24
+	rarityLabel.TextScaled = true
+	rarityLabel.TextXAlignment = Enum.TextXAlignment.Left
+	rarityLabel.Parent = row
+	addStroke(rarityLabel, Color3.new(0, 0, 0), 1.8)
 
-	-- Cost
-	local costLabel = Instance.new("TextLabel")
-	costLabel.Size = UDim2.new(0, 180, 0, 20)
-	costLabel.Position = UDim2.new(0, textX, 0, 56)
-	costLabel.BackgroundTransparency = 1
-	costLabel.Text = formatCash(cost)
-	costLabel.TextColor3 = Color3.fromRGB(100, 255, 130)
-	costLabel.Font = FONT
-	costLabel.TextSize = 16
-	costLabel.TextXAlignment = Enum.TextXAlignment.Left
-	costLabel.Parent = row
-	addStroke(costLabel, Color3.new(0, 0, 0), 1.2)
+	-- Huge luck line
+	local luckLabel = Instance.new("TextLabel")
+	luckLabel.Size = UDim2.new(0.56, 0, 0, 42)
+	luckLabel.Position = UDim2.new(0, textX, 0, 62)
+	luckLabel.BackgroundTransparency = 1
+	luckLabel.Text = "+" .. math.floor(luck * 100) .. "% LUCK!"
+	luckLabel.TextColor3 = theme.luckText
+	luckLabel.Font = FONT
+	luckLabel.TextSize = 42
+	luckLabel.TextScaled = true
+	luckLabel.TextXAlignment = Enum.TextXAlignment.Left
+	luckLabel.Parent = row
+	addStroke(luckLabel, Color3.new(0, 0, 0), 2.2)
 
 	-- Stock label
 	local stockLbl = Instance.new("TextLabel")
 	stockLbl.Name = "StockLabel"
-	stockLbl.Size = UDim2.new(0, 180, 0, 16)
-	stockLbl.Position = UDim2.new(0, textX, 0, 78)
+	stockLbl.Size = UDim2.new(0.38, 0, 0, 20)
+	stockLbl.Position = UDim2.new(0, textX, 1, -30)
 	stockLbl.BackgroundTransparency = 1
 	stockLbl.Text = "Stock: --/--"
 	stockLbl.TextColor3 = Color3.fromRGB(140, 255, 160)
-	stockLbl.Font = FONT_SUB
-	stockLbl.TextSize = 12
+	stockLbl.Font = FONT
+	stockLbl.TextSize = 16
+	stockLbl.TextScaled = true
 	stockLbl.TextXAlignment = Enum.TextXAlignment.Left
 	stockLbl.Parent = row
-	addStroke(stockLbl, Color3.new(0, 0, 0), 1)
+	addStroke(stockLbl, Color3.new(0, 0, 0), 1.6)
 
-	-- Right side: button column
-	local btnX = -12
+	-- Price capsule
+	local pricePill = Instance.new("Frame")
+	pricePill.Name = "PricePill"
+	pricePill.Size = UDim2.new(0, 132, 0, 42)
+	pricePill.Position = UDim2.new(1, -174, 1, -22)
+	pricePill.AnchorPoint = Vector2.new(1, 1)
+	pricePill.BackgroundColor3 = theme.price
+	pricePill.BorderSizePixel = 0
+	pricePill.Parent = row
+	Instance.new("UICorner", pricePill).CornerRadius = UDim.new(1, 0)
+	local priceStroke = Instance.new("UIStroke")
+	priceStroke.Color = Color3.fromRGB(255, 255, 255)
+	priceStroke.Thickness = 2
+	priceStroke.Transparency = 0.35
+	priceStroke.Parent = pricePill
+
+	local costLabel = Instance.new("TextLabel")
+	costLabel.Size = UDim2.new(1, -10, 1, -2)
+	costLabel.Position = UDim2.new(0.5, 0, 0.5, 0)
+	costLabel.AnchorPoint = Vector2.new(0.5, 0.5)
+	costLabel.BackgroundTransparency = 1
+	costLabel.Text = formatCash(cost)
+	costLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+	costLabel.Font = FONT
+	costLabel.TextSize = 30
+	costLabel.TextScaled = true
+	costLabel.TextXAlignment = Enum.TextXAlignment.Center
+	costLabel.Parent = pricePill
+	addStroke(costLabel, Color3.new(0, 0, 0), 1.8)
+
+	-- Right side: button cluster (matches reference)
+	local btnX = -14
 	local bounceTI = TweenInfo.new(0.12, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 
-	-- OPEN button (top right)
+	local actionPanel = Instance.new("Frame")
+	actionPanel.Name = "ActionPanel"
+	actionPanel.Size = UDim2.new(0, 158, 0, 126)
+	actionPanel.Position = UDim2.new(1, btnX, 0, 8)
+	actionPanel.AnchorPoint = Vector2.new(1, 0)
+	actionPanel.BackgroundColor3 = Color3.fromRGB(48, 37, 88)
+	actionPanel.BorderSizePixel = 0
+	actionPanel.Parent = row
+	Instance.new("UICorner", actionPanel).CornerRadius = UDim.new(0, 16)
+	local actionStroke = Instance.new("UIStroke")
+	actionStroke.Color = Color3.fromRGB(255, 255, 255)
+	actionStroke.Thickness = 1.5
+	actionStroke.Transparency = 0.45
+	actionStroke.Parent = actionPanel
+
+	-- OPEN button (top)
 	local openBtn = Instance.new("TextButton")
 	openBtn.Name = "OpenBtn"
-	openBtn.Size = UDim2.new(0, 120, 0, 34)
-	openBtn.Position = UDim2.new(1, btnX, 0, 10)
-	openBtn.AnchorPoint = Vector2.new(1, 0)
-	openBtn.BackgroundColor3 = Color3.fromRGB(50, 45, 65)
+	openBtn.Size = UDim2.new(1, -12, 0, 46)
+	openBtn.Position = UDim2.new(0.5, 0, 0, 8)
+	openBtn.AnchorPoint = Vector2.new(0.5, 0)
+	openBtn.BackgroundColor3 = Color3.fromRGB(81, 208, 94)
 	openBtn.Text = ""
 	openBtn.BorderSizePixel = 0
 	openBtn.AutoButtonColor = false
-	openBtn.Parent = row
-	Instance.new("UICorner", openBtn).CornerRadius = UDim.new(0, 10)
+	openBtn.Parent = actionPanel
+	Instance.new("UICorner", openBtn).CornerRadius = UDim.new(1, 0)
 	local openStroke = Instance.new("UIStroke")
-	openStroke.Color = Color3.fromRGB(30, 140, 50)
-	openStroke.Thickness = 1.5
+	openStroke.Color = Color3.fromRGB(49, 144, 66)
+	openStroke.Thickness = 2
 	openStroke.Parent = openBtn
+	local openGradient = Instance.new("UIGradient")
+	openGradient.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(104, 234, 118)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(76, 198, 101)),
+	})
+	openGradient.Rotation = 90
+	openGradient.Parent = openBtn
 
 	local openBtnText = Instance.new("TextLabel")
 	openBtnText.Size = UDim2.new(1, 0, 1, 0)
@@ -347,15 +497,18 @@ local function buildCaseRow(crateId, parent)
 	openBtnText.Text = "OPEN (0)"
 	openBtnText.TextColor3 = Color3.new(1, 1, 1)
 	openBtnText.Font = FONT
-	openBtnText.TextSize = 16
+	openBtnText.TextSize = 15
+	openBtnText.TextScaled = false
+	openBtnText.TextXAlignment = Enum.TextXAlignment.Center
+	openBtnText.TextYAlignment = Enum.TextYAlignment.Center
 	openBtnText.Parent = openBtn
 	addStroke(openBtnText, Color3.fromRGB(10, 50, 20), 1.5)
 
 	openBtn.MouseEnter:Connect(function()
-		TweenService:Create(openBtn, bounceTI, { Size = UDim2.new(0, 126, 0, 37) }):Play()
+		TweenService:Create(openBtn, bounceTI, { Size = UDim2.new(1, -8, 0, 49) }):Play()
 	end)
 	openBtn.MouseLeave:Connect(function()
-		TweenService:Create(openBtn, bounceTI, { Size = UDim2.new(0, 120, 0, 34) }):Play()
+		TweenService:Create(openBtn, bounceTI, { Size = UDim2.new(1, -12, 0, 46) }):Play()
 	end)
 
 	openBtn.MouseButton1Click:Connect(function()
@@ -377,38 +530,49 @@ local function buildCaseRow(crateId, parent)
 		SpinController.WaitForResult()
 	end)
 
-	-- BUY 1 button (bottom-left of button area)
+	-- BUY 1 button (bottom-left)
 	local buy1Btn = Instance.new("TextButton")
 	buy1Btn.Name = "Buy1Btn"
-	buy1Btn.Size = UDim2.new(0, 56, 0, 30)
-	buy1Btn.Position = UDim2.new(1, btnX - 64, 0, 52)
-	buy1Btn.AnchorPoint = Vector2.new(1, 0)
-	buy1Btn.BackgroundColor3 = Color3.fromRGB(80, 150, 255)
+	buy1Btn.Size = UDim2.new(0, 68, 0, 64)
+	buy1Btn.Position = UDim2.new(0, 8, 0, 58)
+	buy1Btn.AnchorPoint = Vector2.new(0, 0)
+	buy1Btn.BackgroundColor3 = Color3.fromRGB(66, 166, 255)
 	buy1Btn.Text = ""
 	buy1Btn.BorderSizePixel = 0
 	buy1Btn.AutoButtonColor = false
-	buy1Btn.Parent = row
-	Instance.new("UICorner", buy1Btn).CornerRadius = UDim.new(0, 8)
+	buy1Btn.Parent = actionPanel
+	Instance.new("UICorner", buy1Btn).CornerRadius = UDim.new(0, 16)
 	local buy1Stroke = Instance.new("UIStroke")
-	buy1Stroke.Color = Color3.fromRGB(40, 90, 180)
-	buy1Stroke.Thickness = 1.5
+	buy1Stroke.Color = Color3.fromRGB(38, 118, 204)
+	buy1Stroke.Thickness = 2
 	buy1Stroke.Parent = buy1Btn
 
 	local buy1Text = Instance.new("TextLabel")
-	buy1Text.Size = UDim2.new(1, 0, 1, 0)
+	buy1Text.Size = UDim2.new(1, 0, 0, 24)
+	buy1Text.Position = UDim2.new(0, 0, 0, 4)
 	buy1Text.BackgroundTransparency = 1
 	buy1Text.Text = "BUY 1"
 	buy1Text.TextColor3 = Color3.new(1, 1, 1)
 	buy1Text.Font = FONT
-	buy1Text.TextSize = 12
+	buy1Text.TextSize = 14
 	buy1Text.Parent = buy1Btn
 	addStroke(buy1Text, Color3.new(0, 0, 0), 1)
 
+	local buy1Icon = Instance.new("ImageLabel")
+	buy1Icon.Size = UDim2.new(1, 0, 0, 30)
+	buy1Icon.Position = UDim2.new(0.5, 0, 1, -32)
+	buy1Icon.AnchorPoint = Vector2.new(0.5, 0)
+	buy1Icon.BackgroundTransparency = 1
+	buy1Icon.Image = "rbxthumb://type=Asset&id=18209599079&w=420&h=420"
+	buy1Icon.ScaleType = Enum.ScaleType.Fit
+	buy1Icon.ZIndex = 3
+	buy1Icon.Parent = buy1Btn
+
 	buy1Btn.MouseEnter:Connect(function()
-		TweenService:Create(buy1Btn, bounceTI, { Size = UDim2.new(0, 60, 0, 33) }):Play()
+		TweenService:Create(buy1Btn, bounceTI, { Size = UDim2.new(0, 72, 0, 68) }):Play()
 	end)
 	buy1Btn.MouseLeave:Connect(function()
-		TweenService:Create(buy1Btn, bounceTI, { Size = UDim2.new(0, 56, 0, 30) }):Play()
+		TweenService:Create(buy1Btn, bounceTI, { Size = UDim2.new(0, 68, 0, 64) }):Play()
 	end)
 
 	buy1Btn.MouseButton1Click:Connect(function()
@@ -420,38 +584,49 @@ local function buildCaseRow(crateId, parent)
 		BuyCrateStock:FireServer(crateId, 1)
 	end)
 
-	-- BUY MAX button (bottom-right of button area)
+	-- BUY MAX button (bottom-right)
 	local buyMaxBtn = Instance.new("TextButton")
 	buyMaxBtn.Name = "BuyMaxBtn"
-	buyMaxBtn.Size = UDim2.new(0, 56, 0, 30)
-	buyMaxBtn.Position = UDim2.new(1, btnX, 0, 52)
+	buyMaxBtn.Size = UDim2.new(0, 68, 0, 64)
+	buyMaxBtn.Position = UDim2.new(1, -8, 0, 58)
 	buyMaxBtn.AnchorPoint = Vector2.new(1, 0)
-	buyMaxBtn.BackgroundColor3 = Color3.fromRGB(140, 100, 255)
+	buyMaxBtn.BackgroundColor3 = Color3.fromRGB(140, 98, 255)
 	buyMaxBtn.Text = ""
 	buyMaxBtn.BorderSizePixel = 0
 	buyMaxBtn.AutoButtonColor = false
-	buyMaxBtn.Parent = row
-	Instance.new("UICorner", buyMaxBtn).CornerRadius = UDim.new(0, 8)
+	buyMaxBtn.Parent = actionPanel
+	Instance.new("UICorner", buyMaxBtn).CornerRadius = UDim.new(0, 16)
 	local buyMaxStroke = Instance.new("UIStroke")
-	buyMaxStroke.Color = Color3.fromRGB(90, 60, 180)
-	buyMaxStroke.Thickness = 1.5
+	buyMaxStroke.Color = Color3.fromRGB(98, 62, 188)
+	buyMaxStroke.Thickness = 2
 	buyMaxStroke.Parent = buyMaxBtn
 
 	local buyMaxText = Instance.new("TextLabel")
-	buyMaxText.Size = UDim2.new(1, 0, 1, 0)
+	buyMaxText.Size = UDim2.new(1, 0, 0, 24)
+	buyMaxText.Position = UDim2.new(0, 0, 0, 4)
 	buyMaxText.BackgroundTransparency = 1
 	buyMaxText.Text = "MAX"
 	buyMaxText.TextColor3 = Color3.new(1, 1, 1)
 	buyMaxText.Font = FONT
-	buyMaxText.TextSize = 12
+	buyMaxText.TextSize = 14
 	buyMaxText.Parent = buyMaxBtn
 	addStroke(buyMaxText, Color3.new(0, 0, 0), 1)
 
+	local buyMaxIcon = Instance.new("ImageLabel")
+	buyMaxIcon.Size = UDim2.new(1, 0, 0, 30)
+	buyMaxIcon.Position = UDim2.new(0.5, 0, 1, -32)
+	buyMaxIcon.AnchorPoint = Vector2.new(0.5, 0)
+	buyMaxIcon.BackgroundTransparency = 1
+	buyMaxIcon.Image = "rbxthumb://type=Asset&id=89118380394851&w=420&h=420"
+	buyMaxIcon.ScaleType = Enum.ScaleType.Fit
+	buyMaxIcon.ZIndex = 3
+	buyMaxIcon.Parent = buyMaxBtn
+
 	buyMaxBtn.MouseEnter:Connect(function()
-		TweenService:Create(buyMaxBtn, bounceTI, { Size = UDim2.new(0, 60, 0, 33) }):Play()
+		TweenService:Create(buyMaxBtn, bounceTI, { Size = UDim2.new(0, 72, 0, 68) }):Play()
 	end)
 	buyMaxBtn.MouseLeave:Connect(function()
-		TweenService:Create(buyMaxBtn, bounceTI, { Size = UDim2.new(0, 56, 0, 30) }):Play()
+		TweenService:Create(buyMaxBtn, bounceTI, { Size = UDim2.new(0, 68, 0, 64) }):Play()
 	end)
 
 	buyMaxBtn.MouseButton1Click:Connect(function()
@@ -472,8 +647,8 @@ local function buildCaseRow(crateId, parent)
 	-- Owned count label (below buttons)
 	local ownedLabel = Instance.new("TextLabel")
 	ownedLabel.Name = "OwnedLabel"
-	ownedLabel.Size = UDim2.new(0, 120, 0, 16)
-	ownedLabel.Position = UDim2.new(1, btnX, 0, 86)
+	ownedLabel.Size = UDim2.new(0, 148, 0, 16)
+	ownedLabel.Position = UDim2.new(1, btnX, 1, -18)
 	ownedLabel.AnchorPoint = Vector2.new(1, 0)
 	ownedLabel.BackgroundTransparency = 1
 	ownedLabel.Text = ""
@@ -520,6 +695,8 @@ local function buildCaseRow(crateId, parent)
 
 	cardRefs[crateId] = {
 		card = row,
+		baseColor = theme.base,
+		bgGradient = rowGradient,
 		buy1Btn = buy1Btn,
 		buyMaxBtn = buyMaxBtn,
 		openBtn = openBtn,
@@ -588,7 +765,7 @@ function SpinStandController.Init()
 	overlay.Name = "Overlay"
 	overlay.Size = UDim2.new(1, 0, 1, 0)
 	overlay.BackgroundColor3 = Color3.new(0, 0, 0)
-	overlay.BackgroundTransparency = 0.4
+	overlay.BackgroundTransparency = 0.3
 	overlay.BorderSizePixel = 0
 	overlay.Visible = false
 	overlay.ZIndex = 1
@@ -605,13 +782,21 @@ function SpinStandController.Init()
 	modalFrame.Visible = false
 	modalFrame.Parent = screenGui
 
-	Instance.new("UICorner", modalFrame).CornerRadius = UDim.new(0, 20)
+	Instance.new("UICorner", modalFrame).CornerRadius = UDim.new(0, 24)
 
 	local modalStroke = Instance.new("UIStroke")
-	modalStroke.Color = Color3.fromRGB(70, 60, 100)
-	modalStroke.Thickness = 1.5
-	modalStroke.Transparency = 0.3
+	modalStroke.Color = Color3.fromRGB(255, 255, 255)
+	modalStroke.Thickness = 3
+	modalStroke.Transparency = 0.35
 	modalStroke.Parent = modalFrame
+
+	local modalGradient = Instance.new("UIGradient")
+	modalGradient.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(157, 215, 255)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(115, 175, 255)),
+	})
+	modalGradient.Rotation = 90
+	modalGradient.Parent = modalFrame
 
 	UIHelper.CreateShadow(modalFrame)
 	UIHelper.MakeResponsiveModal(modalFrame, MODAL_W, MODAL_H)
@@ -624,13 +809,13 @@ function SpinStandController.Init()
 	header.Parent = modalFrame
 
 	local title = Instance.new("TextLabel")
-	title.Size = UDim2.new(0, 200, 0, 36)
-	title.Position = UDim2.new(0, 20, 0, 14)
+	title.Size = UDim2.new(0, 300, 0, 44)
+	title.Position = UDim2.new(0, 26, 0, 10)
 	title.BackgroundTransparency = 1
-	title.Text = "Case Shop"
+	title.Text = "CASE SHOP!"
 	title.TextColor3 = Color3.new(1, 1, 1)
 	title.Font = FONT
-	title.TextSize = 32
+	title.TextSize = 40
 	title.TextXAlignment = Enum.TextXAlignment.Left
 	title.ZIndex = 3
 	title.Parent = header
@@ -638,45 +823,47 @@ function SpinStandController.Init()
 
 	-- Restock timer (center of header)
 	restockTimerLabel = Instance.new("TextLabel")
-	restockTimerLabel.Size = UDim2.new(0, 200, 0, 24)
-	restockTimerLabel.Position = UDim2.new(0.5, 0, 0, 20)
+	restockTimerLabel.Size = UDim2.new(0, 230, 0, 34)
+	restockTimerLabel.Position = UDim2.new(0.5, 0, 0, 14)
 	restockTimerLabel.AnchorPoint = Vector2.new(0.5, 0)
-	restockTimerLabel.BackgroundTransparency = 1
+	restockTimerLabel.BackgroundColor3 = Color3.fromRGB(54, 68, 125)
+	restockTimerLabel.BackgroundTransparency = 0
 	restockTimerLabel.Text = "\u{23F0} Restock: --:--"
-	restockTimerLabel.TextColor3 = Color3.fromRGB(255, 220, 80)
+	restockTimerLabel.TextColor3 = Color3.fromRGB(245, 233, 160)
 	restockTimerLabel.Font = FONT
-	restockTimerLabel.TextSize = 16
+	restockTimerLabel.TextSize = 23
 	restockTimerLabel.ZIndex = 3
 	restockTimerLabel.Parent = header
-	addStroke(restockTimerLabel, Color3.new(0, 0, 0), 1.2)
+	Instance.new("UICorner", restockTimerLabel).CornerRadius = UDim.new(1, 0)
+	addStroke(restockTimerLabel, Color3.fromRGB(26, 35, 75), 1.8)
 
 	-- Close button
 	local closeBtn = Instance.new("TextButton")
 	closeBtn.Size = UDim2.new(0, 42, 0, 42)
-	closeBtn.Position = UDim2.new(1, -14, 0, 10)
+	closeBtn.Position = UDim2.new(1, -14, 0, 8)
 	closeBtn.AnchorPoint = Vector2.new(1, 0)
-	closeBtn.BackgroundColor3 = Color3.fromRGB(220, 55, 55)
+	closeBtn.BackgroundColor3 = Color3.fromRGB(248, 87, 87)
 	closeBtn.Text = "X"
 	closeBtn.TextColor3 = Color3.new(1, 1, 1)
 	closeBtn.Font = FONT
-	closeBtn.TextSize = 22
+	closeBtn.TextSize = 24
 	closeBtn.BorderSizePixel = 0
 	closeBtn.AutoButtonColor = false
 	closeBtn.ZIndex = 5
 	closeBtn.Parent = modalFrame
 	Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(1, 0)
 	local closeStroke = Instance.new("UIStroke")
-	closeStroke.Color = Color3.fromRGB(160, 30, 30)
+	closeStroke.Color = Color3.fromRGB(255, 255, 255)
 	closeStroke.Thickness = 2
 	closeStroke.Parent = closeBtn
-	addStroke(closeBtn, Color3.fromRGB(80, 0, 0), 1.5)
+	addStroke(closeBtn, Color3.fromRGB(130, 35, 35), 1.8)
 
 	local closeBounce = TweenInfo.new(0.12, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 	closeBtn.MouseEnter:Connect(function()
-		TweenService:Create(closeBtn, closeBounce, { Size = UDim2.new(0, 48, 0, 48), BackgroundColor3 = Color3.fromRGB(255, 75, 75) }):Play()
+		TweenService:Create(closeBtn, closeBounce, { Size = UDim2.new(0, 48, 0, 48), BackgroundColor3 = Color3.fromRGB(255, 107, 107) }):Play()
 	end)
 	closeBtn.MouseLeave:Connect(function()
-		TweenService:Create(closeBtn, closeBounce, { Size = UDim2.new(0, 42, 0, 42), BackgroundColor3 = Color3.fromRGB(220, 55, 55) }):Play()
+		TweenService:Create(closeBtn, closeBounce, { Size = UDim2.new(0, 42, 0, 42), BackgroundColor3 = Color3.fromRGB(248, 87, 87) }):Play()
 	end)
 	closeBtn.MouseButton1Click:Connect(function()
 		SpinStandController.Close()
@@ -688,6 +875,7 @@ function SpinStandController.Init()
 	divider.Position = UDim2.new(0.5, 0, 0, 64)
 	divider.AnchorPoint = Vector2.new(0.5, 0)
 	divider.BackgroundColor3 = Color3.fromRGB(65, 60, 80)
+	divider.BackgroundTransparency = 0.2
 	divider.BorderSizePixel = 0
 	divider.ZIndex = 3
 	divider.Parent = modalFrame
@@ -695,13 +883,14 @@ function SpinStandController.Init()
 	-- Scrollable case list
 	local scroll = Instance.new("ScrollingFrame")
 	scroll.Name = "CaseScroll"
-	scroll.Size = UDim2.new(1, -24, 1, -80)
-	scroll.Position = UDim2.new(0.5, 0, 0, 72)
+	scroll.Size = UDim2.new(1, -24, 1, -90)
+	scroll.Position = UDim2.new(0.5, 0, 0, 78)
 	scroll.AnchorPoint = Vector2.new(0.5, 0)
 	scroll.BackgroundTransparency = 1
 	scroll.BorderSizePixel = 0
-	scroll.ScrollBarThickness = 6
-	scroll.ScrollBarImageColor3 = Color3.fromRGB(100, 90, 140)
+	scroll.ScrollBarThickness = 10
+	scroll.VerticalScrollBarInset = Enum.ScrollBarInset.ScrollBar
+	scroll.ScrollBarImageColor3 = Color3.fromRGB(87, 120, 213)
 	scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
 	scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
 	scroll.ZIndex = 2
@@ -711,7 +900,7 @@ function SpinStandController.Init()
 	listLayout.FillDirection = Enum.FillDirection.Vertical
 	listLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 	listLayout.SortOrder = Enum.SortOrder.LayoutOrder
-	listLayout.Padding = UDim.new(0, 10)
+	listLayout.Padding = UDim.new(0, 12)
 	listLayout.Parent = scroll
 
 	local topPad = Instance.new("UIPadding")

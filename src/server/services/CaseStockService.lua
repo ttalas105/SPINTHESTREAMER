@@ -1,14 +1,12 @@
 --[[
 	CaseStockService.lua
-	Manages global case stock (shared across all players) with a 5-minute restock timer.
+	Manages per-player case stock with a 5-minute restock timer.
 	Handles buying cases into player inventory and opening owned cases (triggering spin).
-	Stock and restock timer persist across server restarts (leave/rejoin).
+	Stock and restock timer persist per player across server restarts (leave/rejoin).
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
-local DataStoreService = game:GetService("DataStoreService")
-local RunService = game:GetService("RunService")
 
 local Economy = require(ReplicatedStorage.Shared.Config.Economy)
 
@@ -20,40 +18,8 @@ local QuestService
 
 local RemoteEvents = ReplicatedStorage:WaitForChild("RemoteEvents")
 
-local stock = {}
-local lastRestockTime = 0
-
-local CASE_STOCK_KEY = "World_CaseStock"
-local worldDataStore
-local studioMemoryStore = {}
-do
-	local ok, ds = pcall(function()
-		return DataStoreService:GetDataStore("SpinTheStreamer_v2")
-	end)
-	if ok and ds then
-		worldDataStore = ds
-	else
-		worldDataStore = {
-			GetAsync = function(key) return studioMemoryStore[key] end,
-			SetAsync = function(key, value) studioMemoryStore[key] = value end,
-		}
-		if RunService:IsStudio() then
-			print("[CaseStock] Using in-memory mock — enable 'Studio Access to API Services' in Game Settings to persist stock")
-		end
-	end
-end
-
 local function getServerTime()
 	return os.time()
-end
-
-local function saveStock()
-	pcall(function()
-		worldDataStore:SetAsync(CASE_STOCK_KEY, {
-			stock = stock,
-			lastRestockTime = lastRestockTime,
-		})
-	end)
 end
 
 local function rollStock18()
@@ -73,62 +39,75 @@ local function rollStock12()
 	else return 12 end
 end
 
-local function restockAll()
+local function buildFreshStock()
+	local fresh = {}
 	for i = 1, Economy.TotalCases do
 		local maxStock = Economy.CrateMaxStock[i] or 50
 		if i <= 6 then
-			stock[i] = maxStock
+			fresh[i] = maxStock
 		elseif maxStock == 18 then
-			stock[i] = rollStock18()
+			fresh[i] = rollStock18()
 		elseif maxStock == 12 then
-			stock[i] = rollStock12()
+			fresh[i] = rollStock12()
 		else
-			stock[i] = maxStock
+			fresh[i] = maxStock
 		end
 	end
-	lastRestockTime = getServerTime()
-	saveStock()
+	return fresh
 end
 
-local function loadPersistedStock()
-	local ok, saved = pcall(function()
-		return worldDataStore:GetAsync(CASE_STOCK_KEY)
-	end)
-	if not ok or not saved or type(saved) ~= "table" then return false end
-	local savedStock = saved.stock
-	local savedTime = tonumber(saved.lastRestockTime)
-	if not savedStock or type(savedStock) ~= "table" then return false end
-	stock = {}
+local function sanitizeStock(rawStock)
+	local cleaned = {}
 	for i = 1, Economy.TotalCases do
-		local v = savedStock[i] or savedStock[tostring(i)]
-		stock[i] = (type(v) == "number" and v >= 0) and math.floor(v) or (Economy.CrateMaxStock[i] or 50)
+		local v = rawStock and (rawStock[i] or rawStock[tostring(i)])
+		cleaned[i] = (type(v) == "number" and v >= 0) and math.floor(v) or (Economy.CrateMaxStock[i] or 50)
 	end
-	lastRestockTime = (type(savedTime) == "number" and savedTime > 0) and savedTime or getServerTime()
-	return true
+	return cleaned
 end
 
-local function getSecondsUntilRestock()
-	local elapsed = getServerTime() - lastRestockTime
+local function ensurePlayerStockData(data)
+	if not data.caseShopStock or type(data.caseShopStock) ~= "table" then
+		data.caseShopStock = buildFreshStock()
+	end
+	data.caseShopStock = sanitizeStock(data.caseShopStock)
+
+	local n = tonumber(data.caseStockLastRestock)
+	if type(n) ~= "number" or n <= 0 then
+		data.caseStockLastRestock = getServerTime()
+	end
+end
+
+local function restockPlayer(data)
+	data.caseShopStock = buildFreshStock()
+	data.caseStockLastRestock = getServerTime()
+end
+
+local function getSecondsUntilRestock(data)
+	local elapsed = getServerTime() - (data.caseStockLastRestock or getServerTime())
 	return math.max(0, Economy.RESTOCK_INTERVAL - elapsed)
 end
 
-local function checkAutoRestock()
-	if getSecondsUntilRestock() <= 0 then
-		restockAll()
+local function checkAutoRestock(data)
+	ensurePlayerStockData(data)
+	if getSecondsUntilRestock(data) <= 0 then
+		restockPlayer(data)
+		return true
 	end
+	return false
 end
 
-local function broadcastStock(justRestocked)
+local function sendStockToPlayer(player, justRestocked)
+	local data = PlayerData.Get(player)
+	if not data then return end
+	ensurePlayerStockData(data)
 	local payload = {
-		stock = stock,
-		restockIn = getSecondsUntilRestock(),
+		stock = data.caseShopStock,
+		restockIn = getSecondsUntilRestock(data),
 		restocked = justRestocked == true,
 	}
-	for _, p in ipairs(Players:GetPlayers()) do
-		local CaseStockUpdate = RemoteEvents:FindFirstChild("CaseStockUpdate")
-		if CaseStockUpdate then
-			CaseStockUpdate:FireClient(p, payload)
-		end
+	local CaseStockUpdate = RemoteEvents:FindFirstChild("CaseStockUpdate")
+	if CaseStockUpdate then
+		CaseStockUpdate:FireClient(player, payload)
 	end
 end
 
@@ -157,9 +136,9 @@ local function handleBuyCrate(player, crateId, amount)
 	local data = PlayerData.Get(player)
 	if not data then return end
 
-	checkAutoRestock()
+	checkAutoRestock(data)
 
-	local available = stock[crateId] or 0
+	local available = data.caseShopStock[crateId] or 0
 	local toBuy = math.min(amount, available)
 	if toBuy <= 0 then
 		local BuyCrateResult = RemoteEvents:FindFirstChild("BuyCrateResult")
@@ -192,15 +171,14 @@ local function handleBuyCrate(player, crateId, amount)
 
 	local totalCost = costPer * toBuy
 	data.cash = data.cash - totalCost
-	stock[crateId] = (stock[crateId] or 0) - toBuy
-	saveStock()
+	data.caseShopStock[crateId] = (data.caseShopStock[crateId] or 0) - toBuy
 
 	if not data.ownedCrates then data.ownedCrates = {} end
 	local key = tostring(crateId)
 	data.ownedCrates[key] = (data.ownedCrates[key] or 0) + toBuy
 
 	PlayerData.Replicate(player)
-	broadcastStock(false)
+	sendStockToPlayer(player, false)
 
 	local BuyCrateResult = RemoteEvents:FindFirstChild("BuyCrateResult")
 	if BuyCrateResult then
@@ -208,7 +186,7 @@ local function handleBuyCrate(player, crateId, amount)
 			success = true,
 			crateId = crateId,
 			bought = toBuy,
-			remaining = stock[crateId],
+			remaining = data.caseShopStock[crateId],
 		})
 	end
 end
@@ -268,12 +246,14 @@ end
 -------------------------------------------------
 
 local function handleGetStock(player)
-	checkAutoRestock()
+	local data = PlayerData.Get(player)
+	if not data then return end
+	checkAutoRestock(data)
 	local GetCaseStock = RemoteEvents:FindFirstChild("GetCaseStock")
 	if GetCaseStock then
 		GetCaseStock:FireClient(player, {
-			stock = stock,
-			restockIn = getSecondsUntilRestock(),
+			stock = data.caseShopStock,
+			restockIn = getSecondsUntilRestock(data),
 		})
 	end
 end
@@ -286,12 +266,6 @@ function CaseStockService.Init(playerDataModule, spinServiceModule, questService
 	PlayerData = playerDataModule
 	SpinService = spinServiceModule
 	QuestService = questServiceModule
-
-	if not loadPersistedStock() then
-		restockAll()
-	else
-		checkAutoRestock()
-	end
 
 	local BuyCrateStock = RemoteEvents:WaitForChild("BuyCrateStock")
 	BuyCrateStock.OnServerEvent:Connect(function(player, crateId, amount)
@@ -309,28 +283,32 @@ function CaseStockService.Init(playerDataModule, spinServiceModule, questService
 
 	local GetCaseStock = RemoteEvents:WaitForChild("GetCaseStock")
 	GetCaseStock.OnServerEvent:Connect(function(player)
-		handleGetStock(player)
+		PlayerData.WithLock(player, function()
+			handleGetStock(player)
+		end)
 	end)
 
 	task.spawn(function()
 		while true do
 			task.wait(1)
-			local beforeRestock = getSecondsUntilRestock()
-			if beforeRestock <= 0 then
-				restockAll()
-				broadcastStock(true)
+			for _, player in ipairs(Players:GetPlayers()) do
+				PlayerData.WithLock(player, function()
+					local data = PlayerData.Get(player)
+					if data and checkAutoRestock(data) then
+						sendStockToPlayer(player, true)
+					end
+				end)
 			end
 		end
 	end)
 end
 
 function CaseStockService.GetStock()
-	checkAutoRestock()
-	return stock
+	return {}
 end
 
 function CaseStockService.GetRestockIn()
-	return getSecondsUntilRestock()
+	return 0
 end
 
 return CaseStockService

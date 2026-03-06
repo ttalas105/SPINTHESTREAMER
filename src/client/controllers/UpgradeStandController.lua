@@ -38,12 +38,12 @@ local refs = {
 
 local FONT = Enum.Font.FredokaOne
 local FONT_SUB = Enum.Font.GothamBold
-local MODAL_BG = Color3.fromRGB(30, 25, 45)
-local RED = Color3.fromRGB(220, 55, 55)
-local RED_DARK = Color3.fromRGB(160, 30, 30)
-local CARD_BG = Color3.fromRGB(40, 35, 60)
-local CARD_BG_DIM = Color3.fromRGB(34, 30, 50)
-local MODAL_W, MODAL_H = 520, 500
+local MODAL_BG = Color3.fromRGB(127, 194, 255)
+local RED = Color3.fromRGB(248, 87, 87)
+local RED_DARK = Color3.fromRGB(130, 35, 35)
+local CARD_BG = Color3.fromRGB(57, 79, 150)
+local CARD_BG_DIM = Color3.fromRGB(48, 67, 127)
+local MODAL_W, MODAL_H = 760, 600
 local CASH_TOUCH_SOUND_ID = "rbxassetid://7112275565"
 local CASH_SOUND_START_OFFSET = 0.28
 local cachedUpgradeCashSound = nil
@@ -174,7 +174,7 @@ local function buildProgressDots(parent)
 	for i = 1, 10 do
 		local d = Instance.new("Frame")
 		d.Size = UDim2.new(0, 10, 0, 10)
-		d.BackgroundColor3 = Color3.fromRGB(65, 60, 85)
+		d.BackgroundColor3 = Color3.fromRGB(82, 94, 155)
 		d.BorderSizePixel = 0
 		d.Parent = holder
 		Instance.new("UICorner", d).CornerRadius = UDim.new(1, 0)
@@ -194,8 +194,15 @@ local function buildUpgradeCard(parent, cfg)
 	card.BackgroundColor3 = CARD_BG
 	card.BorderSizePixel = 0
 	card.Parent = parent
-	Instance.new("UICorner", card).CornerRadius = UDim.new(0, 14)
-	addStroke(card, Color3.fromRGB(65, 60, 85), 1.5)
+	Instance.new("UICorner", card).CornerRadius = UDim.new(0, 18)
+	addStroke(card, Color3.fromRGB(255, 255, 255), 2)
+	local cardGrad = Instance.new("UIGradient")
+	cardGrad.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(82, 116, 208)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(49, 70, 140)),
+	})
+	cardGrad.Rotation = 18
+	cardGrad.Parent = card
 
 	local title = Instance.new("TextLabel")
 	title.Size = UDim2.new(0.7, 0, 0, 24)
@@ -356,7 +363,7 @@ end
 local function refreshProgress(dots, level, color)
 	local lit = math.min(10, level)
 	for i, d in ipairs(dots) do
-		d.BackgroundColor3 = i <= lit and color or Color3.fromRGB(65, 60, 85)
+		d.BackgroundColor3 = i <= lit and color or Color3.fromRGB(82, 94, 155)
 	end
 end
 
@@ -454,7 +461,7 @@ function UpgradeStandController.Init()
 	overlay.Name = "Overlay"
 	overlay.Size = UDim2.new(1, 0, 1, 0)
 	overlay.BackgroundColor3 = Color3.new(0, 0, 0)
-	overlay.BackgroundTransparency = 0.45
+	overlay.BackgroundTransparency = 0.3
 	overlay.BorderSizePixel = 0
 	overlay.Visible = false
 	overlay.ZIndex = 1
@@ -473,12 +480,19 @@ function UpgradeStandController.Init()
 	modalFrame.ClipsDescendants = true
 	modalFrame.Parent = screenGui
 
-	Instance.new("UICorner", modalFrame).CornerRadius = UDim.new(0, 20)
+	Instance.new("UICorner", modalFrame).CornerRadius = UDim.new(0, 24)
 	local mStroke = Instance.new("UIStroke")
-	mStroke.Color = Color3.fromRGB(70, 60, 100)
-	mStroke.Thickness = 1.5
-	mStroke.Transparency = 0.3
+	mStroke.Color = Color3.fromRGB(255, 255, 255)
+	mStroke.Thickness = 3
+	mStroke.Transparency = 0.35
 	mStroke.Parent = modalFrame
+	local modalGradient = Instance.new("UIGradient")
+	modalGradient.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(157, 215, 255)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(115, 175, 255)),
+	})
+	modalGradient.Rotation = 90
+	modalGradient.Parent = modalFrame
 	UIHelper.CreateShadow(modalFrame)
 	UIHelper.MakeResponsiveModal(modalFrame, MODAL_W, MODAL_H)
 
@@ -494,10 +508,10 @@ function UpgradeStandController.Init()
 	title.Size = UDim2.new(0.6, 0, 0, 32)
 	title.Position = UDim2.new(0, 20, 0, 12)
 	title.BackgroundTransparency = 1
-	title.Text = "Upgrades"
+	title.Text = "UPGRADES!"
 	title.TextColor3 = Color3.new(1, 1, 1)
 	title.Font = FONT
-	title.TextSize = 28
+	title.TextSize = 36
 	title.TextXAlignment = Enum.TextXAlignment.Left
 	title.ZIndex = 3
 	title.Parent = header
@@ -505,30 +519,30 @@ function UpgradeStandController.Init()
 
 	-- Close button
 	local closeBtn = Instance.new("TextButton")
-	closeBtn.Size = UDim2.new(0, 40, 0, 40)
-	closeBtn.Position = UDim2.new(1, -14, 0, 10)
+	closeBtn.Size = UDim2.new(0, 42, 0, 42)
+	closeBtn.Position = UDim2.new(1, -14, 0, 8)
 	closeBtn.AnchorPoint = Vector2.new(1, 0)
 	closeBtn.BackgroundColor3 = RED
 	closeBtn.Text = "X"
 	closeBtn.TextColor3 = Color3.new(1, 1, 1)
 	closeBtn.Font = FONT
-	closeBtn.TextSize = 20
+	closeBtn.TextSize = 24
 	closeBtn.BorderSizePixel = 0
 	closeBtn.AutoButtonColor = false
 	closeBtn.ZIndex = 5
 	closeBtn.Parent = modalFrame
 	Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(1, 0)
 	local cStroke = Instance.new("UIStroke")
-	cStroke.Color = RED_DARK
-	cStroke.Thickness = 1.5
+	cStroke.Color = Color3.fromRGB(255, 255, 255)
+	cStroke.Thickness = 2
 	cStroke.Parent = closeBtn
-	addStroke(closeBtn, Color3.fromRGB(80, 0, 0), 1)
+	addStroke(closeBtn, RED_DARK, 1.8)
 
 	closeBtn.MouseEnter:Connect(function()
-		TweenService:Create(closeBtn, bounceTween, { Size = UDim2.new(0, 46, 0, 46), BackgroundColor3 = Color3.fromRGB(255, 75, 75) }):Play()
+		TweenService:Create(closeBtn, bounceTween, { Size = UDim2.new(0, 48, 0, 48), BackgroundColor3 = Color3.fromRGB(255, 107, 107) }):Play()
 	end)
 	closeBtn.MouseLeave:Connect(function()
-		TweenService:Create(closeBtn, bounceTween, { Size = UDim2.new(0, 40, 0, 40), BackgroundColor3 = RED }):Play()
+		TweenService:Create(closeBtn, bounceTween, { Size = UDim2.new(0, 42, 0, 42), BackgroundColor3 = RED }):Play()
 	end)
 	closeBtn.MouseButton1Click:Connect(function() UpgradeStandController.Close() end)
 
@@ -537,7 +551,7 @@ function UpgradeStandController.Init()
 	divider.Size = UDim2.new(1, -30, 0, 1)
 	divider.Position = UDim2.new(0.5, 0, 0, 62)
 	divider.AnchorPoint = Vector2.new(0.5, 0)
-	divider.BackgroundColor3 = Color3.fromRGB(60, 55, 80)
+	divider.BackgroundColor3 = Color3.fromRGB(68, 104, 183)
 	divider.BorderSizePixel = 0
 	divider.ZIndex = 3
 	divider.Parent = modalFrame

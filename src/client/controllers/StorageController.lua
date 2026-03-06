@@ -44,8 +44,8 @@ local suppressNextClickStorageIdx = nil
 
 local FONT   = Enum.Font.FredokaOne
 local FONT2  = Enum.Font.GothamBold
-local BG     = Color3.fromRGB(14, 12, 28)
-local ACCENT = Color3.fromRGB(255, 165, 50)
+local BG     = Color3.fromRGB(127, 194, 255)
+local ACCENT = Color3.fromRGB(68, 104, 183)
 local STORAGE_MAX = 200
 
 local RARITY_ORDER = { Common = 1, Rare = 2, Epic = 3, Legendary = 4, Mythic = 5 }
@@ -156,16 +156,16 @@ local function buildGrid()
 		card.Name = "Storage_" .. si
 		card.Size = UDim2.new(0, 90, 0, 100)
 		if si == selectedStorageIdx then
-			card.BackgroundColor3 = Color3.fromRGB(60, 60, 100)
+			card.BackgroundColor3 = Color3.fromRGB(86, 102, 156)
 		else
-			card.BackgroundColor3 = Color3.fromRGB(24, 22, 42)
+			card.BackgroundColor3 = Color3.fromRGB(55, 75, 142)
 		end
 		card.BorderSizePixel = 0; card.Text = ""; card.AutoButtonColor = false
 		card.Parent = gridFrame
 		Instance.new("UICorner", card).CornerRadius = UDim.new(0, 10)
 		local stroke = Instance.new("UIStroke", card)
 		if si == selectedStorageIdx then
-			stroke.Color = Color3.fromRGB(255, 220, 80); stroke.Thickness = 3
+			stroke.Color = Color3.fromRGB(255, 255, 255); stroke.Thickness = 3
 		else
 			stroke.Color = rarityColor; stroke.Thickness = 1
 		end
@@ -480,14 +480,21 @@ function StorageController.Init()
 	modalFrame.Parent = screenGui
 	Instance.new("UICorner", modalFrame).CornerRadius = UDim.new(0, 24)
 	local mStroke = Instance.new("UIStroke", modalFrame)
-	mStroke.Color = ACCENT; mStroke.Thickness = 1.5; mStroke.Transparency = 0.3
+	mStroke.Color = Color3.fromRGB(255, 255, 255); mStroke.Thickness = 3; mStroke.Transparency = 0.35
+	local modalGradient = Instance.new("UIGradient")
+	modalGradient.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(157, 215, 255)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(115, 175, 255)),
+	})
+	modalGradient.Rotation = 90
+	modalGradient.Parent = modalFrame
 	UIHelper.CreateShadow(modalFrame)
 	UIHelper.MakeResponsiveModal(modalFrame, 860, 620)
 
 	-- Title bar
 	local titleBar = Instance.new("Frame")
 	titleBar.Size = UDim2.new(1, 0, 0, 50)
-	titleBar.BackgroundColor3 = Color3.fromRGB(20, 18, 36); titleBar.BorderSizePixel = 0
+	titleBar.BackgroundColor3 = Color3.fromRGB(90, 132, 214); titleBar.BorderSizePixel = 0
 	titleBar.Parent = modalFrame
 	Instance.new("UICorner", titleBar).CornerRadius = UDim.new(0, 20)
 
@@ -496,18 +503,18 @@ function StorageController.Init()
 	headerLabel.Position = UDim2.new(0, 16, 0, 0)
 	headerLabel.BackgroundTransparency = 1
 	headerLabel.Text = "Storage (0/" .. STORAGE_MAX .. ")"
-	headerLabel.TextColor3 = ACCENT; headerLabel.Font = FONT; headerLabel.TextSize = 24
+	headerLabel.TextColor3 = Color3.new(1, 1, 1); headerLabel.Font = FONT; headerLabel.TextSize = 28
 	headerLabel.TextXAlignment = Enum.TextXAlignment.Left
 	headerLabel.Parent = titleBar
 
 	-- Close button
 	local closeBtn = Instance.new("TextButton")
-	closeBtn.Size = UDim2.new(0, 36, 0, 36)
+	closeBtn.Size = UDim2.new(0, 40, 0, 40)
 	closeBtn.Position = UDim2.new(1, -44, 0.5, 0)
 	closeBtn.AnchorPoint = Vector2.new(0, 0.5)
-	closeBtn.BackgroundColor3 = Color3.fromRGB(200, 60, 60)
+	closeBtn.BackgroundColor3 = Color3.fromRGB(248, 87, 87)
 	closeBtn.Text = "X"; closeBtn.TextColor3 = Color3.new(1, 1, 1)
-	closeBtn.Font = FONT; closeBtn.TextSize = 18; closeBtn.BorderSizePixel = 0
+	closeBtn.Font = FONT; closeBtn.TextSize = 22; closeBtn.BorderSizePixel = 0
 	closeBtn.Parent = titleBar
 	Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(1, 0)
 	closeBtn.MouseButton1Click:Connect(function() StorageController.Close() end)
@@ -524,8 +531,8 @@ function StorageController.Init()
 	local function makeSortBtn(text, mode)
 		local btn = Instance.new("TextButton")
 		btn.Size = UDim2.new(0, 120, 0, 30)
-		btn.BackgroundColor3 = sortMode == mode and Color3.fromRGB(60, 60, 100) or Color3.fromRGB(30, 28, 50)
-		btn.Text = text; btn.TextColor3 = sortMode == mode and ACCENT or Color3.fromRGB(140, 140, 170)
+		btn.BackgroundColor3 = sortMode == mode and Color3.fromRGB(66, 166, 255) or Color3.fromRGB(86, 102, 156)
+		btn.Text = text; btn.TextColor3 = sortMode == mode and Color3.new(1, 1, 1) or Color3.fromRGB(220, 225, 245)
 		btn.Font = FONT2; btn.TextSize = 13; btn.BorderSizePixel = 0
 		btn.Parent = sortRow
 		Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
@@ -554,10 +561,10 @@ function StorageController.Init()
 	hotbarSection.Name = "HotbarPreview"
 	hotbarSection.Size = UDim2.new(1, -20, 0, 90)
 	hotbarSection.Position = UDim2.new(0, 10, 1, -100)
-	hotbarSection.BackgroundColor3 = Color3.fromRGB(18, 16, 34)
+	hotbarSection.BackgroundColor3 = Color3.fromRGB(74, 106, 186)
 	hotbarSection.BorderSizePixel = 0; hotbarSection.Parent = modalFrame
 	Instance.new("UICorner", hotbarSection).CornerRadius = UDim.new(0, 12)
-	Instance.new("UIStroke", hotbarSection).Color = Color3.fromRGB(50, 50, 70)
+	Instance.new("UIStroke", hotbarSection).Color = Color3.fromRGB(255, 255, 255)
 
 	local hbLabel = Instance.new("TextLabel")
 	hbLabel.Size = UDim2.new(0, 80, 0, 14)
@@ -586,7 +593,7 @@ function StorageController.Init()
 	gridFrame.Size = UDim2.new(1, -20, 1, -200)
 	gridFrame.Position = UDim2.new(0, 10, 0, 92)
 	gridFrame.BackgroundTransparency = 1; gridFrame.BorderSizePixel = 0
-	gridFrame.ScrollBarThickness = 6; gridFrame.ScrollBarImageColor3 = ACCENT
+	gridFrame.ScrollBarThickness = 8; gridFrame.ScrollBarImageColor3 = Color3.fromRGB(87, 120, 213)
 	gridFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
 	gridFrame.AutomaticCanvasSize = Enum.AutomaticSize.None
 	gridFrame.ScrollingDirection = Enum.ScrollingDirection.Y

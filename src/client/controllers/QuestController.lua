@@ -29,8 +29,8 @@ local hasReceivedInitialQuestSync = false
 
 local FONT = Enum.Font.FredokaOne
 local FONT_SUB = Enum.Font.GothamBold
-local MODAL_BG = Color3.fromRGB(30, 25, 45)
-local MODAL_W, MODAL_H = 520, 520
+local MODAL_BG = Color3.fromRGB(127, 194, 255)
+local MODAL_W, MODAL_H = 720, 650
 local TAB_COLORS = {
 	Daily = Color3.fromRGB(80, 200, 120),
 	Weekly = Color3.fromRGB(100, 150, 255),
@@ -113,12 +113,19 @@ local function buildQuestRow(quest, parent, order)
 	local row = Instance.new("Frame")
 	row.Name = "Quest_" .. quest.id
 	row.Size = UDim2.new(1, -10, 0, 80)
-	row.BackgroundColor3 = Color3.fromRGB(40, 35, 60)
+	row.BackgroundColor3 = Color3.fromRGB(55, 75, 142)
 	row.BorderSizePixel = 0
 	row.LayoutOrder = order
 	row.ZIndex = 3
 	row.Parent = parent
-	Instance.new("UICorner", row).CornerRadius = UDim.new(0, 12)
+	Instance.new("UICorner", row).CornerRadius = UDim.new(0, 16)
+	local rowGrad = Instance.new("UIGradient")
+	rowGrad.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(84, 116, 208)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(48, 68, 133)),
+	})
+	rowGrad.Rotation = 18
+	rowGrad.Parent = row
 
 	local pad = Instance.new("UIPadding")
 	pad.PaddingLeft = UDim.new(0, 12)
@@ -266,8 +273,8 @@ local function setTab(tab)
 			btn.BackgroundColor3 = TAB_COLORS[t] or Color3.fromRGB(100, 150, 255)
 			btn.TextColor3 = Color3.new(1, 1, 1)
 		else
-			btn.BackgroundColor3 = Color3.fromRGB(50, 45, 70)
-			btn.TextColor3 = Color3.fromRGB(150, 145, 170)
+			btn.BackgroundColor3 = Color3.fromRGB(86, 102, 156)
+			btn.TextColor3 = Color3.fromRGB(230, 235, 255)
 		end
 	end
 	refreshQuests()
@@ -302,7 +309,7 @@ function QuestController.Init()
 	overlay = Instance.new("Frame")
 	overlay.Size = UDim2.new(1, 0, 1, 0)
 	overlay.BackgroundColor3 = Color3.new(0, 0, 0)
-	overlay.BackgroundTransparency = 0.5
+	overlay.BackgroundTransparency = 0.3
 	overlay.BorderSizePixel = 0
 	overlay.ZIndex = 1
 	overlay.Visible = false
@@ -324,38 +331,45 @@ function QuestController.Init()
 	modalFrame.ZIndex = 2
 	modalFrame.Visible = false
 	modalFrame.Parent = screenGui
-	Instance.new("UICorner", modalFrame).CornerRadius = UDim.new(0, 18)
+	Instance.new("UICorner", modalFrame).CornerRadius = UDim.new(0, 24)
 	UIHelper.SinkInput(modalFrame)
 
 	UIHelper.MakeResponsiveModal(modalFrame, MODAL_W, MODAL_H)
 
 	local stroke = Instance.new("UIStroke")
-	stroke.Color = Color3.fromRGB(80, 200, 120)
-	stroke.Thickness = 2.5
+	stroke.Color = Color3.fromRGB(255, 255, 255)
+	stroke.Thickness = 3
 	stroke.Parent = modalFrame
+	local modalGradient = Instance.new("UIGradient")
+	modalGradient.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(157, 215, 255)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(115, 175, 255)),
+	})
+	modalGradient.Rotation = 90
+	modalGradient.Parent = modalFrame
 
 	-- Title
 	local title = Instance.new("TextLabel")
 	title.Size = UDim2.new(1, 0, 0, 40)
 	title.Position = UDim2.new(0, 0, 0, 8)
 	title.BackgroundTransparency = 1
-	title.Text = "QUESTS"
+	title.Text = "QUEST SHOP!"
 	title.TextColor3 = Color3.new(1, 1, 1)
 	title.Font = FONT
-	title.TextSize = 26
+	title.TextSize = 34
 	title.ZIndex = 3
 	title.Parent = modalFrame
 
 	-- Close button
 	local closeBtn = Instance.new("TextButton")
-	closeBtn.Size = UDim2.new(0, 32, 0, 32)
-	closeBtn.Position = UDim2.new(1, -8, 0, 8)
+	closeBtn.Size = UDim2.new(0, 42, 0, 42)
+	closeBtn.Position = UDim2.new(1, -14, 0, 8)
 	closeBtn.AnchorPoint = Vector2.new(1, 0)
 	closeBtn.BackgroundColor3 = Color3.fromRGB(220, 55, 55)
 	closeBtn.Text = "X"
 	closeBtn.TextColor3 = Color3.new(1, 1, 1)
 	closeBtn.Font = FONT
-	closeBtn.TextSize = 16
+	closeBtn.TextSize = 24
 	closeBtn.BorderSizePixel = 0
 	closeBtn.AutoButtonColor = false
 	closeBtn.ZIndex = 4
@@ -369,9 +383,9 @@ function QuestController.Init()
 		local tab = Instance.new("TextButton")
 		tab.Size = UDim2.new(0, 140, 0, 32)
 		tab.Position = UDim2.new(0, 16 + (i - 1) * 158, 0, tabY)
-		tab.BackgroundColor3 = i == 1 and (TAB_COLORS[tabName] or Color3.fromRGB(100, 150, 255)) or Color3.fromRGB(50, 45, 70)
+		tab.BackgroundColor3 = i == 1 and (TAB_COLORS[tabName] or Color3.fromRGB(100, 150, 255)) or Color3.fromRGB(86, 102, 156)
 		tab.Text = tabName
-		tab.TextColor3 = i == 1 and Color3.new(1, 1, 1) or Color3.fromRGB(150, 145, 170)
+		tab.TextColor3 = i == 1 and Color3.new(1, 1, 1) or Color3.fromRGB(230, 235, 255)
 		tab.Font = FONT
 		tab.TextSize = 15
 		tab.BorderSizePixel = 0
@@ -393,7 +407,7 @@ function QuestController.Init()
 	scrollFrame.BackgroundTransparency = 1
 	scrollFrame.BorderSizePixel = 0
 	scrollFrame.ScrollBarThickness = 6
-	scrollFrame.ScrollBarImageColor3 = Color3.fromRGB(80, 75, 100)
+	scrollFrame.ScrollBarImageColor3 = Color3.fromRGB(87, 120, 213)
 	scrollFrame.ZIndex = 2
 	scrollFrame.Parent = modalFrame
 

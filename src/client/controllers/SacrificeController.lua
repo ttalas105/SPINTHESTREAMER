@@ -54,8 +54,8 @@ local rarityBtns = {}
 
 local FONT   = Enum.Font.FredokaOne
 local FONT2  = Enum.Font.GothamBold
-local BG     = Color3.fromRGB(45, 35, 75)
-local ACCENT = Color3.fromRGB(255, 100, 120)
+local BG     = Color3.fromRGB(127, 194, 255)
+local ACCENT = Color3.fromRGB(68, 104, 183)
 
 local S = 1
 local function sx(n) return math.floor(n * S + 0.5) end
@@ -927,7 +927,7 @@ local function highlightRarityBtn(idx)
 		local isActive = rb.idx == idx
 		local trade = Sacrifice.GemTrades[rb.idx]
 		local rColor = trade and DesignConfig.RarityColors[trade.rarity] or Color3.new(1, 1, 1)
-		rb.btn.BackgroundColor3 = isActive and rColor or Color3.fromRGB(40, 35, 65)
+		rb.btn.BackgroundColor3 = isActive and rColor or Color3.fromRGB(86, 102, 156)
 		local lbl = rb.btn:FindFirstChild("RarLbl")
 		if lbl then lbl.TextColor3 = isActive and Color3.new(1, 1, 1) or rColor end
 		local glbl = rb.btn:FindFirstChild("GemLbl")
@@ -940,7 +940,7 @@ local function highlightSidebar(tabId)
 	for _, list in pairs(sidebarBtnLists) do
 		for _, info in ipairs(list) do
 			local isActive = info.id == tabId
-			info.btn.BackgroundColor3 = isActive and Color3.fromRGB(70, 55, 110) or Color3.fromRGB(40, 35, 65)
+			info.btn.BackgroundColor3 = isActive and Color3.fromRGB(140, 98, 255) or Color3.fromRGB(86, 102, 156)
 			local lbl = info.btn:FindFirstChild("TabLabel")
 			if lbl then lbl.TextSize = isActive and sx(18) or sx(16) end
 		end
@@ -958,8 +958,8 @@ local function switchTopTab(tab)
 
 	for key, btn in pairs(topTabBtns) do
 		local isActive = key == tab
-		btn.BackgroundColor3 = isActive and (TAB_COLORS[key] or Color3.new(1,1,1)) or Color3.fromRGB(50, 42, 80)
-		btn.TextColor3 = isActive and Color3.new(1, 1, 1) or Color3.fromRGB(180, 160, 210)
+		btn.BackgroundColor3 = isActive and (TAB_COLORS[key] or Color3.new(1,1,1)) or Color3.fromRGB(86, 102, 156)
+		btn.TextColor3 = isActive and Color3.new(1, 1, 1) or Color3.fromRGB(230, 235, 255)
 	end
 
 	for key, frame in pairs(sidebars) do
@@ -1048,35 +1048,35 @@ function SacrificeController.Init()
 	modalFrame.Visible = false; modalFrame.ClipsDescendants = true; modalFrame.Parent = screenGui
 	Instance.new("UICorner", modalFrame).CornerRadius = UDim.new(0, sx(28))
 	local mStroke = Instance.new("UIStroke", modalFrame)
-	mStroke.Color = ACCENT; mStroke.Thickness = 2.5; mStroke.Transparency = 0.1
+	mStroke.Color = Color3.fromRGB(255, 255, 255); mStroke.Thickness = 3; mStroke.Transparency = 0.35
 	UIHelper.CreateShadow(modalFrame)
 	UIHelper.MakeResponsiveModal(modalFrame, 960, 680)
 
 	local bgGrad = Instance.new("UIGradient", modalFrame)
 	bgGrad.Color = ColorSequence.new({
-		ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255)),
-		ColorSequenceKeypoint.new(1, Color3.fromRGB(210, 200, 230)),
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(157, 215, 255)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(115, 175, 255)),
 	})
 	bgGrad.Rotation = 90
 
 	local titleLbl = Instance.new("TextLabel")
 	titleLbl.Size = UDim2.new(0.5, 0, 0, sx(38)); titleLbl.Position = UDim2.new(0, sx(18), 0, sx(10))
 	titleLbl.BackgroundTransparency = 1
-	titleLbl.Text = "SACRIFICE"; titleLbl.TextColor3 = Color3.fromRGB(240, 220, 255)
+	titleLbl.Text = "SACRIFICE SHOP!"; titleLbl.TextColor3 = Color3.fromRGB(255, 255, 255)
 	titleLbl.Font = FONT; titleLbl.TextSize = sx(30); titleLbl.TextXAlignment = Enum.TextXAlignment.Left
 	titleLbl.Parent = modalFrame
 	local tts = Instance.new("UIStroke", titleLbl)
-	tts.Color = Color3.fromRGB(30, 20, 50); tts.Thickness = 2; tts.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+	tts.Color = Color3.fromRGB(0, 0, 0); tts.Thickness = 2; tts.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
 
 	local closeBtn = Instance.new("TextButton")
 	closeBtn.Size = UDim2.new(0, sx(46), 0, sx(46)); closeBtn.Position = UDim2.new(1, -sx(14), 0, sx(10))
-	closeBtn.AnchorPoint = Vector2.new(1, 0); closeBtn.BackgroundColor3 = Color3.fromRGB(255, 90, 90)
+	closeBtn.AnchorPoint = Vector2.new(1, 0); closeBtn.BackgroundColor3 = Color3.fromRGB(248, 87, 87)
 	closeBtn.Text = "X"; closeBtn.TextColor3 = Color3.new(1, 1, 1)
 	closeBtn.Font = FONT; closeBtn.TextSize = sx(24); closeBtn.BorderSizePixel = 0; closeBtn.ZIndex = 10
 	closeBtn.Parent = modalFrame
 	Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(1, 0)
 	local ccStroke = Instance.new("UIStroke", closeBtn)
-	ccStroke.Color = Color3.fromRGB(180, 50, 50); ccStroke.Thickness = 2
+	ccStroke.Color = Color3.fromRGB(255, 255, 255); ccStroke.Thickness = 2
 	closeBtn.MouseButton1Click:Connect(function() SacrificeController.Close() end)
 
 	local topTabBar = Instance.new("Frame")
@@ -1095,8 +1095,8 @@ function SacrificeController.Init()
 	for _, def in ipairs(tabDefs) do
 		local tab = Instance.new("TextButton")
 		tab.Size = UDim2.new(0, sx(148), 0, sx(36))
-		tab.BackgroundColor3 = Color3.fromRGB(50, 42, 80)
-		tab.Text = def.label; tab.TextColor3 = Color3.fromRGB(180, 160, 210)
+		tab.BackgroundColor3 = Color3.fromRGB(86, 102, 156)
+		tab.Text = def.label; tab.TextColor3 = Color3.fromRGB(230, 235, 255)
 		tab.Font = FONT; tab.TextSize = sx(14); tab.BorderSizePixel = 0
 		tab.LayoutOrder = def.order; tab.Parent = topTabBar
 		Instance.new("UICorner", tab).CornerRadius = UDim.new(0, sx(10))
@@ -1117,7 +1117,7 @@ function SacrificeController.Init()
 	for i, trade in ipairs(Sacrifice.GemTrades) do
 		local rColor = DesignConfig.RarityColors[trade.rarity] or Color3.new(1, 1, 1)
 		local rbtn = Instance.new("TextButton")
-		rbtn.Size = UDim2.new(0, sx(170), 0, sx(40)); rbtn.BackgroundColor3 = Color3.fromRGB(40, 35, 65)
+		rbtn.Size = UDim2.new(0, sx(170), 0, sx(40)); rbtn.BackgroundColor3 = Color3.fromRGB(86, 102, 156)
 		rbtn.BorderSizePixel = 0; rbtn.Text = ""; rbtn.Parent = rarityBarFrame
 		Instance.new("UICorner", rbtn).CornerRadius = UDim.new(0, sx(12))
 		local rbStroke = Instance.new("UIStroke", rbtn); rbStroke.Color = rColor; rbStroke.Thickness = 1.5; rbStroke.Transparency = 0.4
@@ -1148,7 +1148,7 @@ function SacrificeController.Init()
 		local sf = Instance.new("ScrollingFrame")
 		sf.Name = name; sf.Size = UDim2.new(0, sidebarWidth, 1, -sx(96))
 		sf.Position = UDim2.new(0, sx(6), 0, sx(92))
-		sf.BackgroundColor3 = Color3.fromRGB(35, 28, 60); sf.BackgroundTransparency = 0.35
+		sf.BackgroundColor3 = Color3.fromRGB(74, 106, 186); sf.BackgroundTransparency = 0.2
 		sf.BorderSizePixel = 0; sf.ScrollBarThickness = sx(5); sf.ScrollBarImageColor3 = ACCENT
 		sf.CanvasSize = UDim2.new(0, 0, 0, 0); sf.AutomaticCanvasSize = Enum.AutomaticSize.Y
 		sf.Visible = false; sf.Parent = modalFrame
@@ -1219,7 +1219,7 @@ function SacrificeController.Init()
 	contentFrame.Size = UDim2.new(1, -sx(22), 1, -sx(148))
 	contentFrame.Position = UDim2.new(0, sx(10), 0, sx(142))
 	contentFrame.BackgroundTransparency = 1; contentFrame.BorderSizePixel = 0
-	contentFrame.ScrollBarThickness = sx(6); contentFrame.ScrollBarImageColor3 = ACCENT
+	contentFrame.ScrollBarThickness = sx(8); contentFrame.ScrollBarImageColor3 = Color3.fromRGB(87, 120, 213)
 	contentFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
 	contentFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y; contentFrame.Parent = modalFrame
 

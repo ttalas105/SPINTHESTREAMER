@@ -38,10 +38,10 @@ local pendingGemSpin = false
 
 local FONT = Enum.Font.FredokaOne
 local FONT_SUB = Enum.Font.GothamBold
-local MODAL_BG = Color3.fromRGB(30, 25, 45)
-local MODAL_W, MODAL_H = 920, 680
-local RED = Color3.fromRGB(220, 55, 55)
-local RED_DARK = Color3.fromRGB(160, 30, 30)
+local MODAL_BG = Color3.fromRGB(127, 194, 255)
+local MODAL_W, MODAL_H = 940, 700
+local RED = Color3.fromRGB(248, 87, 87)
+local RED_DARK = Color3.fromRGB(130, 35, 35)
 
 local bounceTween = TweenInfo.new(0.12, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 
@@ -845,18 +845,25 @@ local function buildCaseCard(caseData, parent, order)
 	local card = Instance.new("Frame")
 	card.Name = "Case_" .. caseData.id
 	card.Size = UDim2.new(0, 280, 0, 370)
-	card.BackgroundColor3 = Color3.fromRGB(40, 35, 60)
+	card.BackgroundColor3 = Color3.fromRGB(55, 75, 142)
 	card.BorderSizePixel = 0
 	card.LayoutOrder = order
 	card.ZIndex = 3; card.ClipsDescendants = true
 	card.Parent = parent
 	Instance.new("UICorner", card).CornerRadius = UDim.new(0, 18)
+	local cardGrad = Instance.new("UIGradient")
+	cardGrad.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(84, 116, 208)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(48, 68, 133)),
+	})
+	cardGrad.Rotation = 18
+	cardGrad.Parent = card
 
 	-- Subtle colored border
 	local cardStroke = Instance.new("UIStroke")
 	cardStroke.Color = caseData.color
-	cardStroke.Thickness = 2.5
-	cardStroke.Transparency = 0.2
+	cardStroke.Thickness = 2
+	cardStroke.Transparency = 0.05
 	cardStroke.Parent = card
 
 	-- Logo image (case name) -- BIG
@@ -960,7 +967,7 @@ local function buildCaseCard(caseData, parent, order)
 	drBtn.Size = UDim2.new(1, -24, 0, 28)
 	drBtn.Position = UDim2.new(0.5, 0, 0, 324)
 	drBtn.AnchorPoint = Vector2.new(0.5, 0)
-	drBtn.BackgroundColor3 = Color3.fromRGB(55, 50, 75)
+	drBtn.BackgroundColor3 = Color3.fromRGB(86, 102, 156)
 	drBtn.Text = ""; drBtn.BorderSizePixel = 0
 	drBtn.AutoButtonColor = false; drBtn.ZIndex = 5
 	drBtn.Parent = card
@@ -1030,7 +1037,7 @@ function GemShopController.Init()
 	overlay.Name = "Overlay"
 	overlay.Size = UDim2.new(1, 0, 1, 0)
 	overlay.BackgroundColor3 = Color3.new(0, 0, 0)
-	overlay.BackgroundTransparency = 0.45
+	overlay.BackgroundTransparency = 0.3
 	overlay.BorderSizePixel = 0; overlay.Visible = false
 	overlay.ZIndex = 1; overlay.Parent = screenGui
 
@@ -1044,11 +1051,18 @@ function GemShopController.Init()
 	modalFrame.BorderSizePixel = 0; modalFrame.Visible = false
 	modalFrame.ZIndex = 2; modalFrame.ClipsDescendants = true
 	modalFrame.Parent = screenGui
-	Instance.new("UICorner", modalFrame).CornerRadius = UDim.new(0, 20)
+	Instance.new("UICorner", modalFrame).CornerRadius = UDim.new(0, 24)
 	local mStroke = Instance.new("UIStroke")
-	mStroke.Color = Color3.fromRGB(70, 60, 100)
-	mStroke.Thickness = 1.5; mStroke.Transparency = 0.3
+	mStroke.Color = Color3.fromRGB(255, 255, 255)
+	mStroke.Thickness = 3; mStroke.Transparency = 0.35
 	mStroke.Parent = modalFrame
+	local modalGradient = Instance.new("UIGradient")
+	modalGradient.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(157, 215, 255)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(115, 175, 255)),
+	})
+	modalGradient.Rotation = 90
+	modalGradient.Parent = modalFrame
 	UIHelper.CreateShadow(modalFrame)
 	UIHelper.MakeResponsiveModal(modalFrame, MODAL_W, MODAL_H)
 
@@ -1064,9 +1078,9 @@ function GemShopController.Init()
 	title.AnchorPoint = Vector2.new(0.5, 0)
 	title.TextXAlignment = Enum.TextXAlignment.Center
 	title.BackgroundTransparency = 1
-	title.Text = "Gem Shop"
+	title.Text = "GEM SHOP!"
 	title.TextColor3 = Color3.new(1, 1, 1)
-	title.Font = FONT; title.TextSize = 28
+	title.Font = FONT; title.TextSize = 36
 	title.ZIndex = 3; title.Parent = header
 	addStroke(title, Color3.new(0, 0, 0), 1.5)
 
@@ -1076,30 +1090,30 @@ function GemShopController.Init()
 	balanceLabel.TextXAlignment = Enum.TextXAlignment.Left
 	balanceLabel.BackgroundTransparency = 1
 	balanceLabel.Text = "\u{1F48E} " .. fmtNum(HUDController.Data.gems or 0) .. " Gems"
-	balanceLabel.TextColor3 = Color3.fromRGB(120, 210, 255)
+	balanceLabel.TextColor3 = Color3.fromRGB(56, 105, 196)
 	balanceLabel.Font = FONT; balanceLabel.TextSize = 22
 	balanceLabel.ZIndex = 3; balanceLabel.Parent = header
 	addStroke(balanceLabel, Color3.new(0, 0, 0), 1.5)
 
 	-- Close button
 	local closeBtn = Instance.new("TextButton")
-	closeBtn.Size = UDim2.new(0, 40, 0, 40)
-	closeBtn.Position = UDim2.new(1, -14, 0, 10)
+	closeBtn.Size = UDim2.new(0, 42, 0, 42)
+	closeBtn.Position = UDim2.new(1, -14, 0, 8)
 	closeBtn.AnchorPoint = Vector2.new(1, 0)
 	closeBtn.BackgroundColor3 = RED; closeBtn.Text = "X"
 	closeBtn.TextColor3 = Color3.new(1, 1, 1)
-	closeBtn.Font = FONT; closeBtn.TextSize = 20
+	closeBtn.Font = FONT; closeBtn.TextSize = 24
 	closeBtn.BorderSizePixel = 0; closeBtn.AutoButtonColor = false
 	closeBtn.ZIndex = 5; closeBtn.Parent = modalFrame
 	Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(1, 0)
 	local cStroke = Instance.new("UIStroke")
-	cStroke.Color = RED_DARK; cStroke.Thickness = 1.5; cStroke.Parent = closeBtn
+	cStroke.Color = Color3.fromRGB(255, 255, 255); cStroke.Thickness = 2; cStroke.Parent = closeBtn
 
 	closeBtn.MouseEnter:Connect(function()
-		TweenService:Create(closeBtn, bounceTween, { Size = UDim2.new(0, 46, 0, 46), BackgroundColor3 = Color3.fromRGB(255, 75, 75) }):Play()
+		TweenService:Create(closeBtn, bounceTween, { Size = UDim2.new(0, 48, 0, 48), BackgroundColor3 = Color3.fromRGB(255, 107, 107) }):Play()
 	end)
 	closeBtn.MouseLeave:Connect(function()
-		TweenService:Create(closeBtn, bounceTween, { Size = UDim2.new(0, 40, 0, 40), BackgroundColor3 = RED }):Play()
+		TweenService:Create(closeBtn, bounceTween, { Size = UDim2.new(0, 42, 0, 42), BackgroundColor3 = RED }):Play()
 	end)
 	closeBtn.MouseButton1Click:Connect(function() GemShopController.Close() end)
 
@@ -1108,7 +1122,7 @@ function GemShopController.Init()
 	divider.Size = UDim2.new(1, -30, 0, 1)
 	divider.Position = UDim2.new(0.5, 0, 0, 62)
 	divider.AnchorPoint = Vector2.new(0.5, 0)
-	divider.BackgroundColor3 = Color3.fromRGB(60, 55, 80)
+	divider.BackgroundColor3 = Color3.fromRGB(68, 104, 183)
 	divider.BorderSizePixel = 0; divider.ZIndex = 3
 	divider.Parent = modalFrame
 
@@ -1121,7 +1135,7 @@ function GemShopController.Init()
 	scrollFrame.BackgroundTransparency = 1
 	scrollFrame.BorderSizePixel = 0
 	scrollFrame.ScrollBarThickness = 5
-	scrollFrame.ScrollBarImageColor3 = Color3.fromRGB(100, 80, 150)
+	scrollFrame.ScrollBarImageColor3 = Color3.fromRGB(87, 120, 213)
 	scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
 	scrollFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
 	scrollFrame.ZIndex = 3; scrollFrame.Parent = modalFrame

@@ -25,9 +25,9 @@ local isOpen = false
 
 local FONT = Enum.Font.FredokaOne
 local FONT2 = Enum.Font.GothamBold
-local BG = Color3.fromRGB(22, 18, 42)
-local PANEL_W = 420
-local PANEL_H = 430
+local BG = Color3.fromRGB(127, 194, 255)
+local PANEL_W = 600
+local PANEL_H = 520
 
 local SETTINGS_GEAR_ASSET_ID = "rbxassetid://136970465147454"
 
@@ -38,7 +38,7 @@ local SETTINGS_GEAR_ASSET_ID = "rbxassetid://136970465147454"
 local function createToggle(parent, label, defaultOn, onChanged)
 	local row = Instance.new("Frame")
 	row.Size = UDim2.new(1, -40, 0, 56)
-	row.BackgroundColor3 = Color3.fromRGB(34, 28, 60)
+	row.BackgroundColor3 = Color3.fromRGB(74, 106, 186)
 	row.BorderSizePixel = 0
 	row.Parent = parent
 	Instance.new("UICorner", row).CornerRadius = UDim.new(0, 16)
@@ -53,7 +53,7 @@ local function createToggle(parent, label, defaultOn, onChanged)
 	lbl.Position = UDim2.new(0, 0, 0, 0)
 	lbl.BackgroundTransparency = 1
 	lbl.Text = label
-	lbl.TextColor3 = Color3.fromRGB(230, 225, 255)
+	lbl.TextColor3 = Color3.fromRGB(255, 255, 255)
 	lbl.Font = FONT; lbl.TextSize = 18
 	lbl.TextXAlignment = Enum.TextXAlignment.Left
 	lbl.Parent = row
@@ -62,7 +62,7 @@ local function createToggle(parent, label, defaultOn, onChanged)
 	local trackW, trackH = 56, 30
 	local knobSize = 24
 	local onColor = Color3.fromRGB(100, 220, 130)
-	local offColor = Color3.fromRGB(80, 60, 100)
+	local offColor = Color3.fromRGB(86, 102, 156)
 	local knobOnX = trackW - knobSize - 3
 	local knobOffX = 3
 
@@ -125,7 +125,7 @@ function SettingsController.Init()
 	backdrop.Name = "Backdrop"
 	backdrop.Size = UDim2.new(1, 0, 1, 0)
 	backdrop.BackgroundColor3 = Color3.new(0, 0, 0)
-	backdrop.BackgroundTransparency = 0.45
+	backdrop.BackgroundTransparency = 0.3
 	backdrop.BorderSizePixel = 0
 	backdrop.Text = ""
 	backdrop.AutoButtonColor = false
@@ -146,17 +146,24 @@ function SettingsController.Init()
 	UIHelper.SinkInput(modalFrame)
 
 	local outerStroke = Instance.new("UIStroke")
-	outerStroke.Color = Color3.fromRGB(120, 80, 200)
-	outerStroke.Thickness = 1.5
-	outerStroke.Transparency = 0.3
+	outerStroke.Color = Color3.fromRGB(255, 255, 255)
+	outerStroke.Thickness = 3
+	outerStroke.Transparency = 0.35
 	outerStroke.Parent = modalFrame
+	local modalGradient = Instance.new("UIGradient")
+	modalGradient.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(157, 215, 255)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(115, 175, 255)),
+	})
+	modalGradient.Rotation = 90
+	modalGradient.Parent = modalFrame
 	UIHelper.CreateShadow(modalFrame)
 	UIHelper.MakeResponsiveModal(modalFrame, PANEL_W, PANEL_H)
 
 	-- Header bar
 	local header = Instance.new("Frame")
 	header.Size = UDim2.new(1, 0, 0, 60)
-	header.BackgroundColor3 = Color3.fromRGB(50, 35, 90)
+	header.BackgroundColor3 = Color3.fromRGB(90, 132, 214)
 	header.BorderSizePixel = 0
 	header.Parent = modalFrame
 	Instance.new("UICorner", header).CornerRadius = UDim.new(0, 28)
@@ -173,9 +180,9 @@ function SettingsController.Init()
 	titleLabel.Size = UDim2.new(1, -70, 1, 0)
 	titleLabel.Position = UDim2.new(0, 22, 0, 0)
 	titleLabel.BackgroundTransparency = 1
-	titleLabel.Text = "\u{2699}\u{FE0F}  Settings"
-	titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-	titleLabel.Font = FONT; titleLabel.TextSize = 26
+	titleLabel.Text = "SETTINGS!"
+	titleLabel.TextColor3 = Color3.fromRGB(20, 40, 96)
+	titleLabel.Font = FONT; titleLabel.TextSize = 34
 	titleLabel.TextXAlignment = Enum.TextXAlignment.Left
 	titleLabel.Parent = header
 
@@ -184,10 +191,10 @@ function SettingsController.Init()
 	closeBtn.Size = UDim2.new(0, 40, 0, 40)
 	closeBtn.Position = UDim2.new(1, -14, 0.5, 0)
 	closeBtn.AnchorPoint = Vector2.new(1, 0.5)
-	closeBtn.BackgroundColor3 = Color3.fromRGB(200, 60, 80)
+	closeBtn.BackgroundColor3 = Color3.fromRGB(248, 87, 87)
 	closeBtn.Text = "X"
 	closeBtn.TextColor3 = Color3.new(1, 1, 1)
-	closeBtn.Font = FONT; closeBtn.TextSize = 20
+	closeBtn.Font = FONT; closeBtn.TextSize = 24
 	closeBtn.BorderSizePixel = 0
 	closeBtn.AutoButtonColor = false
 	closeBtn.Parent = header
@@ -234,7 +241,7 @@ local function buildSettingsContent(content)
 	musicSection.Size = UDim2.new(1, -40, 0, 28)
 	musicSection.BackgroundTransparency = 1
 	musicSection.Text = "\u{1F3B5}  Music"
-	musicSection.TextColor3 = Color3.fromRGB(180, 160, 255)
+	musicSection.TextColor3 = Color3.fromRGB(20, 40, 96)
 	musicSection.Font = FONT; musicSection.TextSize = 20
 	musicSection.TextXAlignment = Enum.TextXAlignment.Left
 	musicSection.LayoutOrder = 1
@@ -263,7 +270,7 @@ local function buildSettingsContent(content)
 	soundSection.Size = UDim2.new(1, -40, 0, 28)
 	soundSection.BackgroundTransparency = 1
 	soundSection.Text = "\u{1F50A}  Sound"
-	soundSection.TextColor3 = Color3.fromRGB(180, 160, 255)
+	soundSection.TextColor3 = Color3.fromRGB(20, 40, 96)
 	soundSection.Font = FONT; soundSection.TextSize = 20
 	soundSection.TextXAlignment = Enum.TextXAlignment.Left
 	soundSection.LayoutOrder = 4

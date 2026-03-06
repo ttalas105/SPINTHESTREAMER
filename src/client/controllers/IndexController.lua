@@ -139,7 +139,8 @@ local function updateClaimAllButton()
 
 	claimAllBtn.AutoButtonColor = enabled
 	claimAllBtn.Active = enabled
-	claimAllBtn.BackgroundColor3 = enabled and Color3.fromRGB(90, 170, 255) or Color3.fromRGB(75, 75, 90)
+	claimAllBtn.BackgroundColor3 = enabled and Color3.fromRGB(80, 210, 120) or Color3.fromRGB(98, 126, 104)
+	claimAllBtn.TextColor3 = enabled and Color3.fromRGB(20, 70, 36) or Color3.fromRGB(44, 62, 48)
 	claimAllBtn.TextTransparency = enabled and 0 or 0.2
 
 	if isClaimAllRunning then
@@ -243,7 +244,7 @@ local function buildStreamerCard(info, effect, parent, cardIndex)
 	local card = Instance.new("Frame")
 	card.Name = "IndexCard_" .. cardIndex
 	card.Size = UDim2.new(0, 180, 0, 240)
-	card.BackgroundColor3 = isUnlocked and Color3.fromRGB(50, 40, 80) or Color3.fromRGB(35, 28, 58)
+	card.BackgroundColor3 = isUnlocked and Color3.fromRGB(55, 75, 142) or Color3.fromRGB(46, 61, 113)
 	card.BorderSizePixel = 0
 	card.LayoutOrder = cardIndex
 	card:SetAttribute("IndexKey", key)
@@ -261,8 +262,8 @@ local function buildStreamerCard(info, effect, parent, cardIndex)
 
 	local cardGrad = Instance.new("UIGradient")
 	cardGrad.Color = ColorSequence.new({
-		ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255)),
-		ColorSequenceKeypoint.new(1, Color3.fromRGB(200, 200, 220)),
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(84, 116, 208)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(48, 68, 133)),
 	})
 	cardGrad.Rotation = 90
 	cardGrad.Parent = card
@@ -509,7 +510,7 @@ end
 local function highlightTab(tabName)
 	for _, btn in ipairs(sidebarBtns) do
 		local isActive = btn.Name == "Tab_" .. tabName
-		btn.BackgroundColor3 = isActive and Color3.fromRGB(80, 65, 130) or Color3.fromRGB(45, 36, 75)
+		btn.BackgroundColor3 = isActive and Color3.fromRGB(140, 98, 255) or Color3.fromRGB(86, 102, 156)
 		btn.BackgroundTransparency = isActive and 0 or 0.15
 		local lbl = btn:FindFirstChild("TabLabel")
 		if lbl then lbl.TextSize = isActive and 18 or 15 end
@@ -648,7 +649,7 @@ function IndexController.Init()
 	modalFrame.Size = UDim2.new(0, 940, 0, 670)
 	modalFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
 	modalFrame.AnchorPoint = Vector2.new(0.5, 0.5)
-	modalFrame.BackgroundColor3 = Color3.fromRGB(45, 35, 75)
+	modalFrame.BackgroundColor3 = Color3.fromRGB(127, 194, 255)
 	modalFrame.BorderSizePixel = 0
 	modalFrame.Visible = false
 	modalFrame.ClipsDescendants = true
@@ -657,17 +658,17 @@ function IndexController.Init()
 	mCorner.CornerRadius = UDim.new(0, 28)
 	mCorner.Parent = modalFrame
 	local mStroke = Instance.new("UIStroke")
-	mStroke.Color = Color3.fromRGB(180, 130, 255)
-	mStroke.Thickness = 2.5
-	mStroke.Transparency = 0.1
+	mStroke.Color = Color3.fromRGB(255, 255, 255)
+	mStroke.Thickness = 3
+	mStroke.Transparency = 0.35
 	UIHelper.MakeResponsiveModal(modalFrame, 940, 670)
 	mStroke.Parent = modalFrame
 	UIHelper.CreateShadow(modalFrame)
 
 	local bgGrad = Instance.new("UIGradient")
 	bgGrad.Color = ColorSequence.new({
-		ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255)),
-		ColorSequenceKeypoint.new(1, Color3.fromRGB(200, 190, 220)),
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(157, 215, 255)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(115, 175, 255)),
 	})
 	bgGrad.Rotation = 90
 	bgGrad.Parent = modalFrame
@@ -704,14 +705,14 @@ function IndexController.Init()
 	title.Position = UDim2.new(0.5, 0, 0, 6)
 	title.AnchorPoint = Vector2.new(0.5, 0)
 	title.BackgroundTransparency = 1
-	title.Text = "\u{2B50} STREAMER INDEX \u{2B50}"
-	title.TextColor3 = Color3.fromRGB(255, 220, 80)
+	title.Text = "STREAMER INDEX!"
+	title.TextColor3 = Color3.new(1, 1, 1)
 	title.Font = FONT
 	title.TextSize = 38
 	title.ZIndex = 2
 	title.Parent = headerFrame
 	local tStroke = Instance.new("UIStroke")
-	tStroke.Color = Color3.fromRGB(120, 60, 0)
+	tStroke.Color = Color3.fromRGB(0, 0, 0)
 	tStroke.Thickness = 2
 	tStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
 	tStroke.Parent = title
@@ -721,7 +722,7 @@ function IndexController.Init()
 	closeBtn.Size = UDim2.new(0, 50, 0, 50)
 	closeBtn.Position = UDim2.new(1, -14, 0, 16)
 	closeBtn.AnchorPoint = Vector2.new(1, 0)
-	closeBtn.BackgroundColor3 = Color3.fromRGB(255, 90, 90)
+	closeBtn.BackgroundColor3 = Color3.fromRGB(248, 87, 87)
 	closeBtn.Text = "X"
 	closeBtn.TextColor3 = Color3.new(1, 1, 1)
 	closeBtn.Font = FONT
@@ -733,7 +734,7 @@ function IndexController.Init()
 	ccCorner.CornerRadius = UDim.new(1, 0)
 	ccCorner.Parent = closeBtn
 	local ccStroke = Instance.new("UIStroke")
-	ccStroke.Color = Color3.fromRGB(180, 50, 50)
+	ccStroke.Color = Color3.fromRGB(255, 255, 255)
 	ccStroke.Thickness = 2
 	ccStroke.Parent = closeBtn
 	closeBtn.MouseButton1Click:Connect(function() IndexController.Close() end)
@@ -745,7 +746,7 @@ function IndexController.Init()
 	counterLabel.AnchorPoint = Vector2.new(0.5, 0)
 	counterLabel.BackgroundTransparency = 1
 	counterLabel.Text = "Default: 0/0 discovered"
-	counterLabel.TextColor3 = Color3.fromRGB(200, 180, 255)
+	counterLabel.TextColor3 = Color3.fromRGB(56, 105, 196)
 	counterLabel.Font = FONT
 	counterLabel.TextSize = 20
 	counterLabel.Parent = modalFrame
@@ -760,9 +761,9 @@ function IndexController.Init()
 	claimAllBtn.Size = UDim2.new(0, 170, 0, 30)
 	claimAllBtn.Position = UDim2.new(0, 88, 0, 58)
 	claimAllBtn.AnchorPoint = Vector2.new(0.5, 0)
-	claimAllBtn.BackgroundColor3 = Color3.fromRGB(90, 170, 255)
+	claimAllBtn.BackgroundColor3 = Color3.fromRGB(80, 210, 120)
 	claimAllBtn.BorderSizePixel = 0
-	claimAllBtn.TextColor3 = Color3.new(1, 1, 1)
+	claimAllBtn.TextColor3 = Color3.fromRGB(20, 70, 36)
 	claimAllBtn.Font = FONT
 	claimAllBtn.TextSize = 13
 	claimAllBtn.Text = "Claim All"
@@ -772,7 +773,7 @@ function IndexController.Init()
 	caCorner.CornerRadius = UDim.new(0, 10)
 	caCorner.Parent = claimAllBtn
 	local caStroke = Instance.new("UIStroke")
-	caStroke.Color = Color3.fromRGB(65, 120, 200)
+	caStroke.Color = Color3.fromRGB(255, 255, 255)
 	caStroke.Thickness = 1.5
 	caStroke.Parent = claimAllBtn
 
@@ -814,11 +815,11 @@ function IndexController.Init()
 	sidebar.Name = "Sidebar"
 	sidebar.Size = UDim2.new(0, sidebarWidth, 1, -95)
 	sidebar.Position = UDim2.new(0, 6, 0, 92)
-	sidebar.BackgroundColor3 = Color3.fromRGB(35, 28, 60)
-	sidebar.BackgroundTransparency = 0.4
+	sidebar.BackgroundColor3 = Color3.fromRGB(74, 106, 186)
+	sidebar.BackgroundTransparency = 0.2
 	sidebar.BorderSizePixel = 0
 	sidebar.ScrollBarThickness = 4
-	sidebar.ScrollBarImageColor3 = Color3.fromRGB(180, 130, 255)
+	sidebar.ScrollBarImageColor3 = Color3.fromRGB(87, 120, 213)
 	sidebar.CanvasSize = UDim2.new(0, 0, 0, 0)
 	sidebar.AutomaticCanvasSize = Enum.AutomaticSize.Y
 	sidebar.Parent = modalFrame
@@ -842,7 +843,7 @@ function IndexController.Init()
 		local btn = Instance.new("TextButton")
 		btn.Name = "Tab_" .. tab.name
 		btn.Size = UDim2.new(1, 0, 0, 46)
-		btn.BackgroundColor3 = Color3.fromRGB(45, 36, 75)
+		btn.BackgroundColor3 = Color3.fromRGB(86, 102, 156)
 		btn.BackgroundTransparency = 0.15
 		btn.BorderSizePixel = 0
 		btn.LayoutOrder = i
@@ -900,7 +901,7 @@ function IndexController.Init()
 	contentGrid.BackgroundTransparency = 1
 	contentGrid.BorderSizePixel = 0
 	contentGrid.ScrollBarThickness = 6
-	contentGrid.ScrollBarImageColor3 = Color3.fromRGB(180, 130, 255)
+	contentGrid.ScrollBarImageColor3 = Color3.fromRGB(87, 120, 213)
 	contentGrid.CanvasSize = UDim2.new(0, 0, 0, 0)
 	contentGrid.AutomaticCanvasSize = Enum.AutomaticSize.Y
 	contentGrid.Parent = modalFrame

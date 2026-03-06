@@ -79,23 +79,8 @@ end
 -------------------------------------------------
 
 function UIHelper.CreateShadow(parent)
-	local shadow = Instance.new("Frame")
-	shadow.Name = "_Shadow"
-	shadow.Size = UDim2.new(1, 8, 1, 8)
-	shadow.Position = UDim2.new(0.5, 3, 0.5, 3)
-	shadow.AnchorPoint = Vector2.new(0.5, 0.5)
-	shadow.BackgroundColor3 = DesignConfig.Layout.ShadowColor
-	shadow.BackgroundTransparency = DesignConfig.Layout.ShadowTransparency
-	shadow.BorderSizePixel = 0
-	shadow.ZIndex = -1
-
-	local corner = Instance.new("UICorner")
-	local parentCorner = parent:FindFirstChildOfClass("UICorner")
-	corner.CornerRadius = parentCorner and parentCorner.CornerRadius or DesignConfig.Layout.ModalCorner
-	corner.Parent = shadow
-
-	shadow.Parent = parent
-	return shadow
+	-- Disabled globally to avoid corner artifacts on rounded modals.
+	return nil
 end
 
 -------------------------------------------------

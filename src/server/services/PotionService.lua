@@ -4,13 +4,11 @@
 	Tracks active luck/cash/divine potions per player with expiry times.
 	Time stacks (Luck/Cash +5 min per use, Divine +15 min per use, max 3 hours).
 	Divine (Robux) boosts both luck and cash simultaneously (x5).
-	Potion stock and restock timer persist across server restarts (leave/rejoin).
+	Potion stock and restock timer persist per player across server restarts (leave/rejoin).
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
-local DataStoreService = game:GetService("DataStoreService")
-local RunService = game:GetService("RunService")
 
 local Potions = require(ReplicatedStorage.Shared.Config.Potions)
 
@@ -35,29 +33,6 @@ local activeEffects = {}     -- [userId] = { Luck/Cash/Divine/SacrificeLuck }
 local divineInventory = {}   -- [userId] = count
 local ownedPotions = {}      -- [userId] = { Luck = { [tier] = count }, Cash = { [tier] = count } }
 
-local stock = {}             -- ["Luck_1"] = 8, ...
-local lastRestockTime = 0
-
-local POTION_STOCK_KEY = "World_PotionStock"
-local worldDataStore
-local studioMemoryStore = {}
-do
-	local ok, ds = pcall(function()
-		return DataStoreService:GetDataStore("SpinTheStreamer_v2")
-	end)
-	if ok and ds then
-		worldDataStore = ds
-	else
-		worldDataStore = {
-			GetAsync = function(key) return studioMemoryStore[key] end,
-			SetAsync = function(key, value) studioMemoryStore[key] = value end,
-		}
-		if RunService:IsStudio() then
-			print("[PotionStock] Using in-memory mock — enable 'Studio Access to API Services' in Game Settings to persist stock")
-		end
-	end
-end
-
 local function getServerTime()
 	return os.time()
 end
@@ -80,55 +55,56 @@ local function stockKey(potionType, tier)
 	return tostring(potionType) .. "_" .. tostring(tier)
 end
 
-local function savePotionStock()
-	pcall(function()
-		worldDataStore:SetAsync(POTION_STOCK_KEY, {
-			stock = stock,
-			lastRestockTime = lastRestockTime,
-		})
-	end)
-end
-
-local function restockAllStock()
+local function buildFreshPotionStock()
+	local fresh = {}
 	for _, potionType in ipairs({ "Luck", "Cash" }) do
 		local list = Potions.Types[potionType] or {}
 		for _, potion in ipairs(list) do
-			stock[stockKey(potionType, potion.tier)] = MAX_STOCK_PER_POTION
+			fresh[stockKey(potionType, potion.tier)] = MAX_STOCK_PER_POTION
 		end
 	end
-	lastRestockTime = getServerTime()
-	savePotionStock()
+	return fresh
 end
 
-local function loadPersistedPotionStock()
-	local ok, saved = pcall(function()
-		return worldDataStore:GetAsync(POTION_STOCK_KEY)
-	end)
-	if not ok or not saved or type(saved) ~= "table" then return false end
-	local savedStock = saved.stock
-	local savedTime = tonumber(saved.lastRestockTime)
-	if not savedStock or type(savedStock) ~= "table" then return false end
-	stock = {}
+local function sanitizePotionStock(rawStock)
+	local cleaned = {}
 	for _, potionType in ipairs({ "Luck", "Cash" }) do
 		local list = Potions.Types[potionType] or {}
 		for _, potion in ipairs(list) do
 			local key = stockKey(potionType, potion.tier)
-			local v = savedStock[key]
-			stock[key] = (type(v) == "number" and v >= 0) and math.floor(v) or MAX_STOCK_PER_POTION
+			local v = rawStock and rawStock[key]
+			cleaned[key] = (type(v) == "number" and v >= 0) and math.floor(v) or MAX_STOCK_PER_POTION
 		end
 	end
-	lastRestockTime = (type(savedTime) == "number" and savedTime > 0) and savedTime or getServerTime()
-	return true
+	return cleaned
 end
 
-local function getSecondsUntilRestock()
-	local elapsed = getServerTime() - lastRestockTime
+local function ensurePotionStockData(data)
+	if not data.potionShopStock or type(data.potionShopStock) ~= "table" then
+		data.potionShopStock = buildFreshPotionStock()
+	end
+	data.potionShopStock = sanitizePotionStock(data.potionShopStock)
+
+	local n = tonumber(data.potionStockLastRestock)
+	if type(n) ~= "number" or n <= 0 then
+		data.potionStockLastRestock = getServerTime()
+	end
+end
+
+local function restockPotionStock(data)
+	data.potionShopStock = buildFreshPotionStock()
+	data.potionStockLastRestock = getServerTime()
+end
+
+local function getSecondsUntilRestock(data)
+	local elapsed = getServerTime() - (data.potionStockLastRestock or getServerTime())
 	return math.max(0, STOCK_RESTOCK_INTERVAL - elapsed)
 end
 
-local function checkAutoRestock()
-	if getSecondsUntilRestock() <= 0 then
-		restockAllStock()
+local function checkAutoRestock(data)
+	ensurePotionStockData(data)
+	if getSecondsUntilRestock(data) <= 0 then
+		restockPotionStock(data)
 		return true
 	end
 	return false
@@ -195,16 +171,17 @@ local function sendPotionUpdate(player)
 	PotionUpdate:FireClient(player, payload)
 end
 
-local function broadcastPotionStock(justRestocked)
+local function sendPotionStock(player, justRestocked)
+	local data = PlayerData and PlayerData.Get(player)
+	if not data then return end
+	ensurePotionStockData(data)
 	local payload = {
-		stock = stock,
-		restockIn = getSecondsUntilRestock(),
+		stock = data.potionShopStock,
+		restockIn = getSecondsUntilRestock(data),
 		restocked = justRestocked == true,
 		maxStock = MAX_STOCK_PER_POTION,
 	}
-	for _, p in ipairs(Players:GetPlayers()) do
-		PotionStockUpdate:FireClient(p, payload)
-	end
+	PotionStockUpdate:FireClient(player, payload)
 end
 
 local function loadPotionState(player)
@@ -338,13 +315,12 @@ local function buyPotionStock(player, potionType, tier, amount)
 		return
 	end
 
-	checkAutoRestock()
-
 	local data = PlayerData.Get(player)
 	if not data then
 		fail(player, "Data not loaded.", potionType, tier)
 		return
 	end
+	checkAutoRestock(data)
 
 	local rebirthRequired = potionInfo.rebirthRequired or 0
 	if rebirthRequired > 0 and (data.rebirthCount or 0) < rebirthRequired then
@@ -356,7 +332,7 @@ local function buyPotionStock(player, potionType, tier, amount)
 	if requested > 999 then requested = 999 end
 
 	local key = stockKey(potionType, tier)
-	local available = stock[key] or 0
+	local available = data.potionShopStock[key] or 0
 	local toBuy = math.min(requested, available)
 	if toBuy <= 0 then
 		fail(player, "Out of stock!", potionType, tier)
@@ -371,8 +347,7 @@ local function buyPotionStock(player, potionType, tier, amount)
 	end
 
 	data.cash = (data.cash or 0) - potionInfo.cost * toBuy
-	stock[key] = available - toBuy
-	savePotionStock()
+	data.potionShopStock[key] = available - toBuy
 
 	local owned = getOwned(player.UserId)
 	owned[potionType][tier] = (owned[potionType][tier] or 0) + toBuy
@@ -380,13 +355,13 @@ local function buyPotionStock(player, potionType, tier, amount)
 	PlayerData.Replicate(player)
 	persistPotionState(player)
 	sendPotionUpdate(player)
-	broadcastPotionStock(false)
+	sendPotionStock(player, false)
 	BuyPotionResult:FireClient(player, {
 		success = true,
 		potionType = potionType,
 		tier = tier,
 		bought = toBuy,
-		remaining = stock[key],
+		remaining = data.potionShopStock[key],
 		action = "bought",
 	})
 	if QuestService then
@@ -538,10 +513,6 @@ end
 function PotionService.Init(playerDataModule)
 	PlayerData = playerDataModule
 
-	if not loadPersistedPotionStock() then
-		restockAllStock()
-	end
-
 	Players.PlayerAdded:Connect(function(player)
 		task.spawn(loadPotionState, player)
 	end)
@@ -570,19 +541,28 @@ function PotionService.Init(playerDataModule)
 	end)
 
 	GetPotionStock.OnServerEvent:Connect(function(player)
-		checkAutoRestock()
-		GetPotionStock:FireClient(player, {
-			stock = stock,
-			restockIn = getSecondsUntilRestock(),
-			maxStock = MAX_STOCK_PER_POTION,
-		})
+		PlayerData.WithLock(player, function()
+			local data = PlayerData.Get(player)
+			if not data then return end
+			checkAutoRestock(data)
+			GetPotionStock:FireClient(player, {
+				stock = data.potionShopStock,
+				restockIn = getSecondsUntilRestock(data),
+				maxStock = MAX_STOCK_PER_POTION,
+			})
+		end)
 	end)
 
 	task.spawn(function()
 		while true do
 			task.wait(1)
-			if checkAutoRestock() then
-				broadcastPotionStock(true)
+			for _, player in ipairs(Players:GetPlayers()) do
+				PlayerData.WithLock(player, function()
+					local data = PlayerData.Get(player)
+					if data and checkAutoRestock(data) then
+						sendPotionStock(player, true)
+					end
+				end)
 			end
 			for _, player in ipairs(Players:GetPlayers()) do
 				if activeEffects[player.UserId] or (divineInventory[player.UserId] or 0) > 0 then

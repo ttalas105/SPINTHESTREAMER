@@ -139,6 +139,11 @@ local DEFAULT_DATA = {
 	questClaimed = {},
 	-- Owned crates: { [crateId] = count } — bought from Case Shop, opened separately
 	ownedCrates = {},
+	-- Per-player shop stock state (individual timers and quantities)
+	caseShopStock = {},
+	caseStockLastRestock = 0,
+	potionShopStock = {},
+	potionStockLastRestock = 0,
 	-- Lifetime stats (for global leaderboards)
 	totalSpins = 0,
 	totalCashEarned = 0,

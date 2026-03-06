@@ -29,25 +29,16 @@ local overlay
 local scroll
 local isOpen = false
 
-local currentTab = "Premium"
-
 local BUBBLE_FONT = Enum.Font.FredokaOne
 local FONT_SUB = Enum.Font.GothamBold
-local MODAL_BG = Color3.fromRGB(18, 14, 32)
-local CARD_BG = Color3.fromRGB(30, 24, 50)
-local MODAL_W = 700
-local MODAL_H = 720
+local MODAL_BG = Color3.fromRGB(71, 136, 218)
+local CARD_BG = Color3.fromRGB(19, 55, 104)
+local CARD_BORDER = Color3.fromRGB(76, 243, 255)
+local MODAL_W = 920
+local MODAL_H = 760
 
 local HOTBAR_MAX = 9
 local STORAGE_MAX = 200
-
-local TAB_DEFS = {
-	{ id = "Premium", label = "Premium",  accent = Color3.fromRGB(255, 220, 80),  activeColor = Color3.fromRGB(200, 160, 40) },
-	{ id = "Gems",    label = "Gems",     accent = Color3.fromRGB(100, 220, 255), activeColor = Color3.fromRGB(40, 140, 200) },
-	{ id = "Cases",   label = "Cases",    accent = Color3.fromRGB(220, 160, 255), activeColor = Color3.fromRGB(140, 70, 200) },
-}
-
-local tabButtons = {}
 
 -------------------------------------------------
 -- HELPERS
@@ -124,11 +115,33 @@ end
 local productIconCache = {}
 local productPriceCache = {}
 
-local function fetchProductPriceAsync(productId, btn)
+local function formatWithCommas(value)
+	local n = tonumber(value) or 0
+	local rounded = math.floor(n + 0.5)
+	local s = tostring(rounded)
+	local out = s
+	while true do
+		local nextOut, count = out:gsub("^(-?%d+)(%d%d%d)", "%1,%2")
+		out = nextOut
+		if count == 0 then break end
+	end
+	return out
+end
+
+local function setBuyText(btn, prefix, amountText)
+	if not btn or not btn.Parent then return end
+	btn.Text = (prefix or "BUY FOR") .. "\nR$ " .. tostring(amountText or "...")
+end
+
+local function fetchProductPriceAsync(productId, btn, applyPrice)
 	if not productId or productId == 0 then return end
 	if productPriceCache[productId] then
 		if btn and btn.Parent then
-			btn.Text = "R$ " .. productPriceCache[productId]
+			if applyPrice then
+				applyPrice(btn, productPriceCache[productId])
+			else
+				btn.Text = "R$ " .. productPriceCache[productId]
+			end
 		end
 		return
 	end
@@ -137,7 +150,11 @@ local function fetchProductPriceAsync(productId, btn)
 		if ok and info and info.PriceInRobux then
 			productPriceCache[productId] = tostring(info.PriceInRobux)
 			if btn and btn.Parent then
-				btn.Text = "R$ " .. info.PriceInRobux
+				if applyPrice then
+					applyPrice(btn, info.PriceInRobux)
+				else
+					btn.Text = "R$ " .. info.PriceInRobux
+				end
 			end
 		end
 	end)
@@ -226,62 +243,52 @@ local function createBuyButton(parent, cfg)
 end
 
 -------------------------------------------------
--- PREMIUM CARD (VIP / X2 Luck)
+-- SHOP CARD (mockup style for robux products)
 -------------------------------------------------
 
-local function buildPremiumCard(parent, cfg)
-	local owned = cfg.checkOwned()
-
+local function buildRobuxShopCard(parent, cfg)
 	local card = Instance.new("Frame")
 	card.Name = cfg.key .. "Card"
-	card.Size = UDim2.new(1, 0, 0, 100)
-	card.BackgroundColor3 = owned and Color3.fromRGB(20, 50, 30) or CARD_BG
+	card.Size = UDim2.new(0, 268, 0, 252)
+	card.BackgroundColor3 = cfg.cardColor or CARD_BG
 	card.BorderSizePixel = 0
 	card.LayoutOrder = cfg.order
 	card.ZIndex = 52
 	card.Parent = parent
-	Instance.new("UICorner", card).CornerRadius = UDim.new(0, 16)
-	createStroke(card, owned and Color3.fromRGB(60, 200, 90) or cfg.accent, 2.5)
+	Instance.new("UICorner", card).CornerRadius = UDim.new(0, 18)
+	createStroke(card, cfg.borderColor or CARD_BORDER, 3)
+	createStroke(card, Color3.fromRGB(18, 26, 50), 1.2, Enum.ApplyStrokeMode.Contextual)
 
 	local grad = Instance.new("UIGradient")
-	if owned then
-		grad.Color = ColorSequence.new({
-			ColorSequenceKeypoint.new(0, Color3.fromRGB(35, 70, 40)),
-			ColorSequenceKeypoint.new(1, Color3.fromRGB(18, 40, 22)),
-		})
-	else
-		grad.Color = ColorSequence.new({
-			ColorSequenceKeypoint.new(0, Color3.fromRGB(55, 40, 85)),
-			ColorSequenceKeypoint.new(0.5, Color3.fromRGB(40, 30, 65)),
-			ColorSequenceKeypoint.new(1, Color3.fromRGB(25, 18, 45)),
-		})
-	end
+	grad.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, cfg.gradTop or Color3.fromRGB(31, 80, 151)),
+		ColorSequenceKeypoint.new(1, cfg.gradBottom or Color3.fromRGB(18, 51, 100)),
+	})
 	grad.Rotation = 90
 	grad.Parent = card
 
-	addGlow(card, cfg.accent, 0.92)
-
 	local iconFrame = Instance.new("Frame")
-	iconFrame.Size = UDim2.new(0, 68, 0, 68)
-	iconFrame.Position = UDim2.new(0, 16, 0.5, 0)
-	iconFrame.AnchorPoint = Vector2.new(0, 0.5)
-	iconFrame.BackgroundColor3 = Color3.fromRGB(20, 16, 35)
+	iconFrame.Name = "IconFrame"
+	iconFrame.Size = UDim2.new(0, 108, 0, 98)
+	iconFrame.Position = UDim2.new(0.08, 0, 0.08, 0)
+	iconFrame.BackgroundColor3 = Color3.fromRGB(7, 19, 47)
+	iconFrame.BorderSizePixel = 0
 	iconFrame.ZIndex = 53
 	iconFrame.ClipsDescendants = true
 	iconFrame.Parent = card
-	Instance.new("UICorner", iconFrame).CornerRadius = UDim.new(0, 14)
-	createStroke(iconFrame, cfg.accent, 2)
+	Instance.new("UICorner", iconFrame).CornerRadius = UDim.new(0, 16)
+	createStroke(iconFrame, cfg.iconBorderColor or Color3.fromRGB(73, 208, 255), 2.2)
 
-	local iconGlow = Instance.new("UIGradient")
-	iconGlow.Color = ColorSequence.new({
-		ColorSequenceKeypoint.new(0, Color3.fromRGB(60, 50, 90)),
-		ColorSequenceKeypoint.new(1, Color3.fromRGB(25, 20, 40)),
+	local iconBgGradient = Instance.new("UIGradient")
+	iconBgGradient.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(24, 62, 117)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(7, 19, 47)),
 	})
-	iconGlow.Rotation = 135
-	iconGlow.Parent = iconFrame
+	iconBgGradient.Rotation = 90
+	iconBgGradient.Parent = iconFrame
 
 	local icon = Instance.new("ImageLabel")
-	icon.Size = UDim2.new(1, -6, 1, -6)
+	icon.Size = UDim2.new(1, -10, 1, -10)
 	icon.Position = UDim2.new(0.5, 0, 0.5, 0)
 	icon.AnchorPoint = Vector2.new(0.5, 0.5)
 	icon.BackgroundTransparency = 1
@@ -293,60 +300,133 @@ local function buildPremiumCard(parent, cfg)
 	local fallback = Instance.new("TextLabel")
 	fallback.Size = UDim2.new(1, 0, 1, 0)
 	fallback.BackgroundTransparency = 1
-	fallback.Text = cfg.icon
-	fallback.TextColor3 = cfg.accent
+	fallback.Text = cfg.fallbackIcon or "?"
+	fallback.TextColor3 = cfg.fallbackColor or Color3.fromRGB(230, 245, 255)
 	fallback.Font = BUBBLE_FONT
-	fallback.TextSize = 34
+	fallback.TextSize = 42
 	fallback.ZIndex = 54
 	fallback.Parent = iconFrame
 
 	fetchProductIconAsync(cfg.productId, icon, fallback)
 
 	local nameL = Instance.new("TextLabel")
-	nameL.Size = UDim2.new(0.45, 0, 0, 28)
-	nameL.Position = UDim2.new(0, 98, 0, 14)
+	nameL.Size = UDim2.new(1, -18, 0, 38)
+	nameL.Position = UDim2.new(0, 9, 0, 114)
 	nameL.BackgroundTransparency = 1
 	nameL.Text = cfg.title
 	nameL.TextColor3 = Color3.new(1, 1, 1)
 	nameL.Font = BUBBLE_FONT
-	nameL.TextSize = 22
+	nameL.TextWrapped = true
+	nameL.TextSize = 32
 	nameL.TextXAlignment = Enum.TextXAlignment.Left
+	nameL.TextYAlignment = Enum.TextYAlignment.Top
 	nameL.ZIndex = 53
 	nameL.Parent = card
-	createStroke(nameL, Color3.fromRGB(0, 0, 0), 2.5, Enum.ApplyStrokeMode.Contextual)
+	createStroke(nameL, Color3.fromRGB(13, 22, 46), 3, Enum.ApplyStrokeMode.Contextual)
 
 	local descL = Instance.new("TextLabel")
-	descL.Size = UDim2.new(0.5, 0, 0, 18)
-	descL.Position = UDim2.new(0, 98, 0, 44)
+	descL.Size = UDim2.new(1, -18, 0, 17)
+	descL.Position = UDim2.new(0, 9, 0, 166)
 	descL.BackgroundTransparency = 1
-	descL.Text = cfg.desc
-	descL.TextColor3 = cfg.accent
+	descL.Text = cfg.desc or ""
+	descL.TextColor3 = cfg.descColor or Color3.fromRGB(188, 225, 255)
 	descL.Font = FONT_SUB
 	descL.TextSize = 13
 	descL.TextXAlignment = Enum.TextXAlignment.Left
 	descL.ZIndex = 53
 	descL.Parent = card
 
-	local permL = Instance.new("TextLabel")
-	permL.Size = UDim2.new(0, 120, 0, 16)
-	permL.Position = UDim2.new(0, 98, 0, 66)
-	permL.BackgroundTransparency = 1
-	permL.Text = "PERMANENT"
-	permL.TextColor3 = Color3.fromRGB(255, 220, 80)
-	permL.Font = BUBBLE_FONT
-	permL.TextSize = 12
-	permL.TextXAlignment = Enum.TextXAlignment.Left
-	permL.ZIndex = 53
-	permL.Parent = card
-	createStroke(permL, Color3.fromRGB(0, 0, 0), 1.5, Enum.ApplyStrokeMode.Contextual)
+	if cfg.badgeText and cfg.badgeText ~= "" then
+		local badge = Instance.new("TextLabel")
+		badge.Size = UDim2.new(1, -18, 0, 16)
+		badge.Position = UDim2.new(0, 9, 0, 183)
+		badge.BackgroundTransparency = 1
+		badge.Text = cfg.badgeText
+		badge.TextColor3 = cfg.badgeColor or Color3.fromRGB(255, 221, 110)
+		badge.Font = BUBBLE_FONT
+		badge.TextSize = 12
+		badge.TextXAlignment = Enum.TextXAlignment.Left
+		badge.ZIndex = 53
+		badge.Parent = card
+		createStroke(badge, Color3.fromRGB(13, 22, 46), 2, Enum.ApplyStrokeMode.Contextual)
+	end
 
-	createBuyButton(card, {
-		owned = owned,
-		productId = cfg.productId,
-		zIndex = 53,
-	})
+	local buyBtn = Instance.new("TextButton")
+	buyBtn.Name = "BuyBtn"
+	buyBtn.Size = UDim2.new(0.84, 0, 0, 50)
+	buyBtn.Position = UDim2.new(0.5, 0, 1, -11)
+	buyBtn.AnchorPoint = Vector2.new(0.5, 1)
+	buyBtn.BackgroundColor3 = cfg.owned and Color3.fromRGB(45, 140, 64) or Color3.fromRGB(85, 219, 78)
+	buyBtn.TextColor3 = Color3.new(1, 1, 1)
+	buyBtn.Text = cfg.owned and "OWNED" or "BUY FOR\nR$ ..."
+	buyBtn.Font = BUBBLE_FONT
+	buyBtn.TextSize = cfg.owned and 18 or 20
+	buyBtn.TextWrapped = true
+	buyBtn.AutoButtonColor = false
+	buyBtn.BorderSizePixel = 0
+	buyBtn.ZIndex = 54
+	buyBtn.Parent = card
+	Instance.new("UICorner", buyBtn).CornerRadius = UDim.new(0, 12)
+	createStroke(buyBtn, cfg.owned and Color3.fromRGB(33, 100, 47) or Color3.fromRGB(38, 146, 58), 2.5)
+	createStroke(buyBtn, Color3.fromRGB(255, 255, 255), 1.2, Enum.ApplyStrokeMode.Contextual)
+
+	if cfg.owned then
+		buyBtn.TextColor3 = Color3.fromRGB(193, 255, 201)
+	else
+		if cfg.priceText then
+			setBuyText(buyBtn, "BUY FOR", cfg.priceText)
+		elseif cfg.productId and cfg.productId > 0 then
+			fetchProductPriceAsync(cfg.productId, buyBtn, function(button, rawPrice)
+				setBuyText(button, "BUY FOR", formatWithCommas(rawPrice))
+			end)
+		end
+
+		local hoverTI = TweenInfo.new(0.12, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+		buyBtn.MouseEnter:Connect(function()
+			TweenService:Create(buyBtn, hoverTI, {
+				BackgroundColor3 = Color3.fromRGB(107, 240, 98),
+				Size = UDim2.new(0.88, 0, 0, 53),
+			}):Play()
+		end)
+		buyBtn.MouseLeave:Connect(function()
+			TweenService:Create(buyBtn, hoverTI, {
+				BackgroundColor3 = Color3.fromRGB(85, 219, 78),
+				Size = UDim2.new(0.84, 0, 0, 50),
+			}):Play()
+		end)
+		buyBtn.MouseButton1Click:Connect(function()
+			if cfg.onPurchase then
+				cfg.onPurchase()
+				return
+			end
+			if cfg.productId and cfg.productId > 0 then
+				MarketplaceService:PromptProductPurchase(player, cfg.productId)
+			end
+		end)
+	end
 
 	return card
+end
+
+local function buildPremiumCard(parent, cfg)
+	local owned = cfg.checkOwned()
+	return buildRobuxShopCard(parent, {
+		key = cfg.key,
+		title = cfg.title,
+		desc = cfg.desc,
+		badgeText = "PERMANENT",
+		badgeColor = Color3.fromRGB(255, 229, 133),
+		fallbackIcon = cfg.icon,
+		fallbackColor = cfg.accent,
+		borderColor = Color3.fromRGB(255, 227, 118),
+		iconBorderColor = cfg.accent,
+		gradTop = owned and Color3.fromRGB(54, 106, 73) or Color3.fromRGB(75, 60, 130),
+		gradBottom = owned and Color3.fromRGB(27, 65, 41) or Color3.fromRGB(35, 31, 93),
+		cardColor = owned and Color3.fromRGB(35, 79, 51) or Color3.fromRGB(40, 41, 112),
+		productId = cfg.productId,
+		owned = owned,
+		order = cfg.order,
+	})
 end
 
 -------------------------------------------------
@@ -354,99 +434,21 @@ end
 -------------------------------------------------
 
 local function buildGemCard(parent, cfg)
-	local card = Instance.new("Frame")
-	card.Name = "GemPack_" .. cfg.key
-	card.Size = UDim2.new(1, 0, 0, 100)
-	card.BackgroundColor3 = CARD_BG
-	card.BorderSizePixel = 0
-	card.LayoutOrder = cfg.order
-	card.ZIndex = 52
-	card.Parent = parent
-	Instance.new("UICorner", card).CornerRadius = UDim.new(0, 16)
-	createStroke(card, Color3.fromRGB(60, 160, 255), 2)
-
-	local grad = Instance.new("UIGradient")
-	grad.Color = ColorSequence.new({
-		ColorSequenceKeypoint.new(0, Color3.fromRGB(30, 45, 80)),
-		ColorSequenceKeypoint.new(0.5, Color3.fromRGB(25, 30, 60)),
-		ColorSequenceKeypoint.new(1, Color3.fromRGB(18, 20, 45)),
-	})
-	grad.Rotation = 90
-	grad.Parent = card
-
-	addGlow(card, Color3.fromRGB(80, 180, 255), 0.92)
-
-	local gemIconFrame = Instance.new("Frame")
-	gemIconFrame.Size = UDim2.new(0, 68, 0, 68)
-	gemIconFrame.Position = UDim2.new(0, 16, 0.5, 0)
-	gemIconFrame.AnchorPoint = Vector2.new(0, 0.5)
-	gemIconFrame.BackgroundColor3 = Color3.fromRGB(15, 20, 45)
-	gemIconFrame.ZIndex = 53
-	gemIconFrame.ClipsDescendants = true
-	gemIconFrame.Parent = card
-	Instance.new("UICorner", gemIconFrame).CornerRadius = UDim.new(0, 14)
-	createStroke(gemIconFrame, Color3.fromRGB(80, 180, 255), 2)
-
-	local iconGlow = Instance.new("UIGradient")
-	iconGlow.Color = ColorSequence.new({
-		ColorSequenceKeypoint.new(0, Color3.fromRGB(40, 60, 110)),
-		ColorSequenceKeypoint.new(1, Color3.fromRGB(15, 20, 45)),
-	})
-	iconGlow.Rotation = 135
-	iconGlow.Parent = gemIconFrame
-
-	local gemIcon = Instance.new("ImageLabel")
-	gemIcon.Size = UDim2.new(1, -6, 1, -6)
-	gemIcon.Position = UDim2.new(0.5, 0, 0.5, 0)
-	gemIcon.AnchorPoint = Vector2.new(0.5, 0.5)
-	gemIcon.BackgroundTransparency = 1
-	gemIcon.ScaleType = Enum.ScaleType.Fit
-	gemIcon.ZIndex = 54
-	gemIcon.Visible = false
-	gemIcon.Parent = gemIconFrame
-
-	local fallbackGem = Instance.new("TextLabel")
-	fallbackGem.Size = UDim2.new(1, 0, 1, 0)
-	fallbackGem.BackgroundTransparency = 1
-	fallbackGem.Text = "\u{1F48E}"
-	fallbackGem.TextSize = 34
-	fallbackGem.ZIndex = 54
-	fallbackGem.Parent = gemIconFrame
-
-	fetchProductIconAsync(cfg.productId, gemIcon, fallbackGem)
-
-	local nameL = Instance.new("TextLabel")
-	nameL.Size = UDim2.new(0.45, 0, 0, 28)
-	nameL.Position = UDim2.new(0, 98, 0, 18)
-	nameL.BackgroundTransparency = 1
-	nameL.Text = cfg.label
-	nameL.TextColor3 = Color3.fromRGB(120, 220, 255)
-	nameL.Font = BUBBLE_FONT
-	nameL.TextSize = 22
-	nameL.TextXAlignment = Enum.TextXAlignment.Left
-	nameL.ZIndex = 53
-	nameL.Parent = card
-	createStroke(nameL, Color3.fromRGB(0, 0, 0), 2.5, Enum.ApplyStrokeMode.Contextual)
-
-	local descL = Instance.new("TextLabel")
-	descL.Size = UDim2.new(0.5, 0, 0, 18)
-	descL.Position = UDim2.new(0, 98, 0, 50)
-	descL.BackgroundTransparency = 1
-	descL.Text = "Instant delivery"
-	descL.TextColor3 = Color3.fromRGB(160, 200, 230)
-	descL.Font = FONT_SUB
-	descL.TextSize = 13
-	descL.TextXAlignment = Enum.TextXAlignment.Left
-	descL.ZIndex = 53
-	descL.Parent = card
-
-	createBuyButton(card, {
-		owned = false,
+	return buildRobuxShopCard(parent, {
+		key = "GemPack_" .. cfg.key,
+		title = cfg.label,
+		desc = "",
+		fallbackIcon = "\u{1F48E}",
+		fallbackColor = Color3.fromRGB(161, 229, 255),
+		borderColor = CARD_BORDER,
+		iconBorderColor = Color3.fromRGB(89, 216, 255),
+		gradTop = Color3.fromRGB(31, 88, 154),
+		gradBottom = Color3.fromRGB(18, 55, 105),
+		cardColor = CARD_BG,
 		productId = cfg.productId,
-		zIndex = 53,
+		owned = false,
+		order = cfg.order,
 	})
-
-	return card
 end
 
 -------------------------------------------------
@@ -473,9 +475,9 @@ local function buildEnhancedCaseCard(parent, caseData, order)
 
 	local grad = Instance.new("UIGradient")
 	grad.Color = ColorSequence.new({
-		ColorSequenceKeypoint.new(0, Color3.fromRGB(50, 38, 80)),
-		ColorSequenceKeypoint.new(0.5, Color3.fromRGB(35, 26, 60)),
-		ColorSequenceKeypoint.new(1, Color3.fromRGB(22, 16, 40)),
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(84, 116, 208)),
+		ColorSequenceKeypoint.new(0.5, Color3.fromRGB(64, 88, 170)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(48, 68, 133)),
 	})
 	grad.Rotation = 90
 	grad.Parent = card
@@ -680,94 +682,391 @@ end
 local function clearScroll()
 	if not scroll then return end
 	for _, child in ipairs(scroll:GetChildren()) do
-		if not child:IsA("UIListLayout") and not child:IsA("UIPadding") then
-			child:Destroy()
-		end
+		child:Destroy()
 	end
 	scroll.CanvasPosition = Vector2.new(0, 0)
 end
 
-local function buildPremiumTab()
-	buildPremiumCard(scroll, {
-		key = "VIP",
-		title = "VIP Pass",
-		desc = "1.5x Luck + 1.5x Money Earned",
-		icon = "\u{1F451}",
-		accent = Color3.fromRGB(255, 200, 60),
-		productId = Economy.Products.VIP,
-		checkOwned = function() return HUDController.Data.hasVIP == true end,
-		order = 1,
-	})
+local function setupShowcaseRoot()
+	local layout = Instance.new("UIListLayout")
+	layout.FillDirection = Enum.FillDirection.Vertical
+	layout.SortOrder = Enum.SortOrder.LayoutOrder
+	layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	layout.Padding = UDim.new(0, 12)
+	layout.Parent = scroll
 
-	buildPremiumCard(scroll, {
-		key = "X2Luck",
-		title = "2x Luck",
-		desc = "Permanently double your luck",
-		icon = "\u{1F340}",
-		accent = Color3.fromRGB(80, 220, 255),
-		productId = Economy.Products.X2Luck,
-		checkOwned = function() return HUDController.Data.hasX2Luck == true end,
-		order = 2,
-	})
+	local pad = Instance.new("UIPadding")
+	pad.PaddingTop = UDim.new(0, 10)
+	pad.PaddingBottom = UDim.new(0, 14)
+	pad.PaddingLeft = UDim.new(0, 10)
+	pad.PaddingRight = UDim.new(0, 10)
+	pad.Parent = scroll
 end
 
-local function buildGemsTab()
-	for i, pack in ipairs(Economy.GemPacks) do
-		buildGemCard(scroll, {
-			key = pack.key,
-			label = pack.label,
-			productId = Economy.Products[pack.key],
-			order = i,
-		})
-	end
+local function createRowFrame(order, height)
+	local row = Instance.new("Frame")
+	row.Size = UDim2.new(1, 0, 0, height)
+	row.BackgroundTransparency = 1
+	row.LayoutOrder = order
+	row.ZIndex = 52
+	row.Parent = scroll
+	return row
 end
 
-local function buildCasesTab()
-	for i, caseData in ipairs(EnhancedCases.List) do
-		buildEnhancedCaseCard(scroll, caseData, i)
-	end
-end
+local function makeGreenBuyButton(parent, widthScale, yOffset, productId, onClick)
+	local btn = Instance.new("TextButton")
+	btn.Name = "BuyBtn"
+	btn.Size = UDim2.new(widthScale or 0.62, 0, 0, 52)
+	btn.Position = UDim2.new(0.5, 0, 1, yOffset or -10)
+	btn.AnchorPoint = Vector2.new(0.5, 1)
+	btn.BackgroundColor3 = Color3.fromRGB(93, 215, 84)
+	btn.BorderSizePixel = 0
+	btn.AutoButtonColor = false
+	btn.Font = BUBBLE_FONT
+	btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	btn.TextSize = 22
+	btn.TextWrapped = true
+	btn.Text = "BUY FOR\nR$ ..."
+	btn.TextStrokeColor3 = Color3.fromRGB(28, 84, 30)
+	btn.TextStrokeTransparency = 0.3
+	btn.ZIndex = 55
+	btn.Parent = parent
+	Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 14)
+	createStroke(btn, Color3.fromRGB(59, 149, 56), 2.6)
+	createStroke(btn, Color3.fromRGB(255, 255, 255), 1.2, Enum.ApplyStrokeMode.Contextual)
 
-local TAB_BUILDERS = {
-	Premium = buildPremiumTab,
-	Gems    = buildGemsTab,
-	Cases   = buildCasesTab,
-}
+	fetchProductPriceAsync(productId, btn, function(button, rawPrice)
+		setBuyText(button, "BUY FOR", formatWithCommas(rawPrice))
+	end)
 
--------------------------------------------------
--- TAB STYLING
--------------------------------------------------
-
-local INACTIVE_BG    = Color3.fromRGB(40, 32, 60)
-local INACTIVE_TEXT  = Color3.fromRGB(160, 150, 190)
-local INACTIVE_STROKE = Color3.fromRGB(60, 50, 85)
-
-local function updateTabStyles()
-	for _, def in ipairs(TAB_DEFS) do
-		local btn = tabButtons[def.id]
-		if not btn then continue end
-		local active = (currentTab == def.id)
-		local stroke = btn:FindFirstChildOfClass("UIStroke")
-
-		if active then
-			btn.BackgroundColor3 = def.activeColor
-			btn.TextColor3 = Color3.new(1, 1, 1)
-			if stroke then stroke.Color = def.accent end
-		else
-			btn.BackgroundColor3 = INACTIVE_BG
-			btn.TextColor3 = INACTIVE_TEXT
-			if stroke then stroke.Color = INACTIVE_STROKE end
+	local hoverTI = TweenInfo.new(0.11, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+	btn.MouseEnter:Connect(function()
+		TweenService:Create(btn, hoverTI, {
+			Size = UDim2.new((widthScale or 0.62) + 0.03, 0, 0, 55),
+			BackgroundColor3 = Color3.fromRGB(111, 236, 101),
+		}):Play()
+	end)
+	btn.MouseLeave:Connect(function()
+		TweenService:Create(btn, hoverTI, {
+			Size = UDim2.new(widthScale or 0.62, 0, 0, 52),
+			BackgroundColor3 = Color3.fromRGB(93, 215, 84),
+		}):Play()
+	end)
+	btn.MouseButton1Click:Connect(function()
+		if onClick then
+			onClick()
+		elseif productId and productId > 0 then
+			MarketplaceService:PromptProductPurchase(player, productId)
 		end
-	end
+	end)
+
+	return btn
 end
 
-local function switchTab(tabId)
-	if currentTab == tabId then return end
-	currentTab = tabId
-	updateTabStyles()
-	clearScroll()
-	local builder = TAB_BUILDERS[tabId]
-	if builder then builder() end
+local function buildCaseShowCard(parent, caseData, xScale, buttonColor)
+	local productId = Economy.Products[caseData.key]
+	local card = Instance.new("Frame")
+	card.Size = UDim2.new(0.485, 0, 1, 0)
+	card.Position = UDim2.new(xScale, 0, 0, 0)
+	card.BackgroundColor3 = Color3.fromRGB(20, 38, 125)
+	card.BorderSizePixel = 0
+	card.ZIndex = 53
+	card.Parent = parent
+	Instance.new("UICorner", card).CornerRadius = UDim.new(0, 18)
+	createStroke(card, Color3.fromRGB(233, 219, 124), 2.8)
+	createStroke(card, Color3.fromRGB(70, 98, 201), 1.5, Enum.ApplyStrokeMode.Contextual)
+
+	local grad = Instance.new("UIGradient")
+	grad.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(32, 64, 163)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(16, 35, 106)),
+	})
+	grad.Rotation = 90
+	grad.Parent = card
+
+	local iconBubble = Instance.new("Frame")
+	iconBubble.Size = UDim2.new(0, 76, 0, 76)
+	iconBubble.Position = UDim2.new(0, 10, 0, 10)
+	iconBubble.BackgroundColor3 = Color3.fromRGB(17, 23, 82)
+	iconBubble.BorderSizePixel = 0
+	iconBubble.ZIndex = 54
+	iconBubble.Parent = card
+	Instance.new("UICorner", iconBubble).CornerRadius = UDim.new(1, 0)
+	createStroke(iconBubble, caseData.accent, 2.4)
+
+	local icon = Instance.new("ImageLabel")
+	icon.Size = UDim2.new(1, -8, 1, -8)
+	icon.Position = UDim2.new(0.5, 0, 0.5, 0)
+	icon.AnchorPoint = Vector2.new(0.5, 0.5)
+	icon.BackgroundTransparency = 1
+	icon.ScaleType = Enum.ScaleType.Fit
+	icon.Visible = false
+	icon.ZIndex = 55
+	icon.Parent = iconBubble
+	fetchProductIconAsync(productId, icon, nil)
+
+	local title = Instance.new("TextLabel")
+	title.Size = UDim2.new(1, -96, 0, 34)
+	title.Position = UDim2.new(0, 92, 0, 12)
+	title.BackgroundTransparency = 1
+	title.Text = caseData.name
+	title.TextColor3 = Color3.new(1, 1, 1)
+	title.Font = BUBBLE_FONT
+	title.TextSize = 21
+	title.TextXAlignment = Enum.TextXAlignment.Left
+	title.TextWrapped = true
+	title.ZIndex = 54
+	title.Parent = card
+	createStroke(title, Color3.fromRGB(0, 0, 0), 2.6, Enum.ApplyStrokeMode.Contextual)
+
+	local subtitle = Instance.new("TextLabel")
+	subtitle.Size = UDim2.new(1, -96, 0, 16)
+	subtitle.Position = UDim2.new(0, 92, 0, 46)
+	subtitle.BackgroundTransparency = 1
+	subtitle.Text = "Exclusive Robux Case • 1 Spin"
+	subtitle.TextColor3 = Color3.fromRGB(210, 230, 255)
+	subtitle.Font = FONT_SUB
+	subtitle.TextSize = 12
+	subtitle.TextXAlignment = Enum.TextXAlignment.Left
+	subtitle.ZIndex = 54
+	subtitle.Parent = card
+
+	local hero = Instance.new("ImageLabel")
+	hero.Size = UDim2.new(0, 120, 0, 94)
+	hero.Position = UDim2.new(0.5, 0, 0, 76)
+	hero.AnchorPoint = Vector2.new(0.5, 0)
+	hero.BackgroundTransparency = 1
+	hero.ScaleType = Enum.ScaleType.Fit
+	hero.Visible = false
+	hero.ZIndex = 54
+	hero.Parent = card
+	fetchProductIconAsync(productId, hero, nil)
+
+	for i, entry in ipairs(caseData.pool) do
+		local streamerInfo = Streamers.ById[entry.streamerId]
+		local rarityText = streamerInfo and streamerInfo.rarity or "?"
+
+		local row = Instance.new("Frame")
+		row.Size = UDim2.new(1, -14, 0, 24)
+		row.Position = UDim2.new(0, 7, 0, 174 + ((i - 1) * 24))
+		row.BackgroundTransparency = 1
+		row.ZIndex = 54
+		row.Parent = card
+
+		local n = Instance.new("TextLabel")
+		n.Size = UDim2.new(0.46, 0, 1, 0)
+		n.BackgroundTransparency = 1
+		n.Text = entry.streamerId
+		n.TextColor3 = Color3.new(1, 1, 1)
+		n.Font = BUBBLE_FONT
+		n.TextSize = 19
+		n.TextXAlignment = Enum.TextXAlignment.Left
+		n.ZIndex = 55
+		n.Parent = row
+		createStroke(n, Color3.fromRGB(0, 0, 0), 2.4, Enum.ApplyStrokeMode.Contextual)
+
+		local rarity = Instance.new("TextLabel")
+		rarity.Size = UDim2.new(0.25, 0, 1, 0)
+		rarity.Position = UDim2.new(0.49, 0, 0, 0)
+		rarity.BackgroundTransparency = 1
+		rarity.Text = rarityText
+		rarity.TextColor3 = Color3.fromRGB(228, 178, 255)
+		rarity.Font = BUBBLE_FONT
+		rarity.TextSize = 16
+		rarity.TextXAlignment = Enum.TextXAlignment.Center
+		rarity.ZIndex = 55
+		rarity.Parent = row
+		createStroke(rarity, Color3.fromRGB(0, 0, 0), 1.8, Enum.ApplyStrokeMode.Contextual)
+
+		local odds = Instance.new("TextLabel")
+		odds.Size = UDim2.new(0.29, 0, 1, 0)
+		odds.Position = UDim2.new(0.71, 0, 0, 0)
+		odds.BackgroundTransparency = 1
+		odds.Text = tostring(entry.weight) .. "%"
+		odds.TextColor3 = (entry.weight <= 5) and Color3.fromRGB(255, 112, 120) or Color3.fromRGB(130, 255, 145)
+		odds.Font = BUBBLE_FONT
+		odds.TextSize = 21
+		odds.TextXAlignment = Enum.TextXAlignment.Right
+		odds.ZIndex = 55
+		odds.Parent = row
+		createStroke(odds, Color3.fromRGB(0, 0, 0), 2.4, Enum.ApplyStrokeMode.Contextual)
+	end
+
+	local btn = makeGreenBuyButton(card, 0.56, -10, productId, function()
+		if isInventoryFull() then
+			showStoreToast("Inventory & storage are full!")
+			return
+		end
+		if productId and productId > 0 then
+			MarketplaceService:PromptProductPurchase(player, productId)
+		end
+	end)
+	btn.BackgroundColor3 = buttonColor
+
+	return card
+end
+
+local function buildGemTile(parent, xScale, pack, order)
+	local productId = Economy.Products[pack.key]
+	local tile = Instance.new("Frame")
+	tile.Size = UDim2.new(0.32, 0, 1, 0)
+	tile.Position = UDim2.new(xScale, 0, 0, 0)
+	tile.BackgroundColor3 = Color3.fromRGB(15, 82, 116)
+	tile.BorderSizePixel = 0
+	tile.ZIndex = 53
+	tile.Parent = parent
+	Instance.new("UICorner", tile).CornerRadius = UDim.new(0, 16)
+	createStroke(tile, CARD_BORDER, 3)
+
+	local iconBox = Instance.new("Frame")
+	iconBox.Size = UDim2.new(0, 108, 0, 90)
+	iconBox.Position = UDim2.new(0, 12, 0, 12)
+	iconBox.BackgroundColor3 = Color3.fromRGB(7, 19, 47)
+	iconBox.BorderSizePixel = 0
+	iconBox.ZIndex = 54
+	iconBox.Parent = tile
+	Instance.new("UICorner", iconBox).CornerRadius = UDim.new(0, 14)
+	createStroke(iconBox, Color3.fromRGB(77, 224, 255), 2.2)
+
+	local icon = Instance.new("ImageLabel")
+	icon.Size = UDim2.new(1, -8, 1, -8)
+	icon.Position = UDim2.new(0.5, 0, 0.5, 0)
+	icon.AnchorPoint = Vector2.new(0.5, 0.5)
+	icon.BackgroundTransparency = 1
+	icon.ScaleType = Enum.ScaleType.Fit
+	icon.Visible = false
+	icon.ZIndex = 55
+	icon.Parent = iconBox
+	fetchProductIconAsync(productId, icon, nil)
+
+	local title = Instance.new("TextLabel")
+	title.Size = UDim2.new(1, -130, 0, 56)
+	title.Position = UDim2.new(0, 126, 0, 16)
+	title.BackgroundTransparency = 1
+	title.Text = pack.label:gsub(" ", "\n", 1)
+	title.TextColor3 = Color3.new(1, 1, 1)
+	title.Font = BUBBLE_FONT
+	title.TextSize = 28
+	title.TextWrapped = true
+	title.TextXAlignment = Enum.TextXAlignment.Left
+	title.TextYAlignment = Enum.TextYAlignment.Top
+	title.ZIndex = 55
+	title.Parent = tile
+	createStroke(title, Color3.fromRGB(0, 0, 0), 2.8, Enum.ApplyStrokeMode.Contextual)
+
+	makeGreenBuyButton(tile, 0.62, -10, productId, nil).LayoutOrder = order
+	return tile
+end
+
+local function buildPremiumTile(parent, xScale, cfg)
+	local productId = cfg.productId
+	local owned = cfg.owned
+	local tile = Instance.new("Frame")
+	tile.Size = UDim2.new(0.485, 0, 1, 0)
+	tile.Position = UDim2.new(xScale, 0, 0, 0)
+	tile.BackgroundColor3 = Color3.fromRGB(47, 36, 77)
+	tile.BorderSizePixel = 0
+	tile.ZIndex = 53
+	tile.Parent = parent
+	Instance.new("UICorner", tile).CornerRadius = UDim.new(0, 18)
+	createStroke(tile, Color3.fromRGB(227, 185, 95), 3)
+
+	local iconBox = Instance.new("Frame")
+	iconBox.Size = UDim2.new(0, 118, 0, 98)
+	iconBox.Position = UDim2.new(0, 14, 0, 12)
+	iconBox.BackgroundColor3 = Color3.fromRGB(9, 17, 45)
+	iconBox.BorderSizePixel = 0
+	iconBox.ZIndex = 54
+	iconBox.Parent = tile
+	Instance.new("UICorner", iconBox).CornerRadius = UDim.new(0, 14)
+	createStroke(iconBox, Color3.fromRGB(250, 209, 103), 2.2)
+
+	local icon = Instance.new("ImageLabel")
+	icon.Size = UDim2.new(1, -8, 1, -8)
+	icon.Position = UDim2.new(0.5, 0, 0.5, 0)
+	icon.AnchorPoint = Vector2.new(0.5, 0.5)
+	icon.BackgroundTransparency = 1
+	icon.ScaleType = Enum.ScaleType.Fit
+	icon.Visible = false
+	icon.ZIndex = 55
+	icon.Parent = iconBox
+	fetchProductIconAsync(productId, icon, nil)
+
+	local title = Instance.new("TextLabel")
+	title.Size = UDim2.new(1, -145, 0, 42)
+	title.Position = UDim2.new(0, 138, 0, 18)
+	title.BackgroundTransparency = 1
+	title.Text = cfg.title
+	title.TextColor3 = Color3.new(1, 1, 1)
+	title.Font = BUBBLE_FONT
+	title.TextSize = 43
+	title.TextWrapped = true
+	title.TextXAlignment = Enum.TextXAlignment.Left
+	title.ZIndex = 55
+	title.Parent = tile
+	createStroke(title, Color3.fromRGB(0, 0, 0), 2.8, Enum.ApplyStrokeMode.Contextual)
+
+	local sub = Instance.new("TextLabel")
+	sub.Size = UDim2.new(1, -145, 0, 44)
+	sub.Position = UDim2.new(0, 138, 0, 60)
+	sub.BackgroundTransparency = 1
+	sub.Text = cfg.desc
+	sub.TextColor3 = Color3.fromRGB(255, 232, 146)
+	sub.Font = BUBBLE_FONT
+	sub.TextSize = 19
+	sub.TextWrapped = true
+	sub.TextXAlignment = Enum.TextXAlignment.Left
+	sub.TextYAlignment = Enum.TextYAlignment.Top
+	sub.ZIndex = 55
+	sub.Parent = tile
+	createStroke(sub, Color3.fromRGB(0, 0, 0), 2, Enum.ApplyStrokeMode.Contextual)
+
+	if not owned then
+		makeGreenBuyButton(tile, 0.52, -10, productId, nil)
+	else
+		local ownedL = Instance.new("TextLabel")
+		ownedL.Size = UDim2.new(0.52, 0, 0, 52)
+		ownedL.Position = UDim2.new(0.5, 0, 1, -10)
+		ownedL.AnchorPoint = Vector2.new(0.5, 1)
+		ownedL.BackgroundColor3 = Color3.fromRGB(45, 140, 64)
+		ownedL.Text = "OWNED"
+		ownedL.TextColor3 = Color3.fromRGB(205, 255, 206)
+		ownedL.Font = BUBBLE_FONT
+		ownedL.TextSize = 24
+		ownedL.ZIndex = 55
+		ownedL.Parent = tile
+		Instance.new("UICorner", ownedL).CornerRadius = UDim.new(0, 14)
+		createStroke(ownedL, Color3.fromRGB(33, 100, 47), 2.6)
+	end
+
+	return tile
+end
+
+local function buildShowcaseTab()
+	setupShowcaseRoot()
+
+	local caseRow = createRowFrame(1, 336)
+	buildCaseShowCard(caseRow, EnhancedCases.List[1], 0, Color3.fromRGB(78, 190, 245))
+	buildCaseShowCard(caseRow, EnhancedCases.List[2], 0.515, Color3.fromRGB(100, 206, 85))
+
+	local gemsRow = createRowFrame(2, 188)
+	buildGemTile(gemsRow, 0, Economy.GemPacks[1], 1)
+	buildGemTile(gemsRow, 0.34, Economy.GemPacks[2], 2)
+	buildGemTile(gemsRow, 0.68, Economy.GemPacks[3], 3)
+
+	local premiumRow = createRowFrame(3, 188)
+	buildPremiumTile(premiumRow, 0, {
+		title = "VIP Pass",
+		desc = "1.5x Luck\nPermanent",
+		productId = Economy.Products.VIP,
+		owned = HUDController.Data.hasVIP == true,
+	})
+	buildPremiumTile(premiumRow, 0.515, {
+		title = "2x Luck",
+		desc = "2x Luck\nPermanent",
+		productId = Economy.Products.X2Luck,
+		owned = HUDController.Data.hasX2Luck == true,
+	})
 end
 
 -------------------------------------------------
@@ -794,62 +1093,35 @@ function StoreController.Init()
 	modalFrame.ZIndex = 50
 	modalFrame.ClipsDescendants = true
 	modalFrame.Parent = screenGui
-	Instance.new("UICorner", modalFrame).CornerRadius = UDim.new(0, 22)
+	Instance.new("UICorner", modalFrame).CornerRadius = UDim.new(0, 24)
 	UIHelper.SinkInput(modalFrame)
 
-	local modalGrad = Instance.new("UIGradient")
-	modalGrad.Color = ColorSequence.new({
-		ColorSequenceKeypoint.new(0, Color3.fromRGB(30, 22, 55)),
-		ColorSequenceKeypoint.new(0.5, Color3.fromRGB(18, 14, 32)),
-		ColorSequenceKeypoint.new(1, Color3.fromRGB(12, 8, 22)),
-	})
-	modalGrad.Rotation = 170
-	modalGrad.Parent = modalFrame
-
-	createStroke(modalFrame, Color3.fromRGB(120, 80, 200), 3)
+	createStroke(modalFrame, Color3.fromRGB(255, 255, 255), 3)
 	UIHelper.CreateShadow(modalFrame)
 	UIHelper.MakeResponsiveModal(modalFrame, MODAL_W, MODAL_H)
-
-	-- Top bar background
-	local topBar = Instance.new("Frame")
-	topBar.Name = "TopBar"
-	topBar.Size = UDim2.new(1, 0, 0, 70)
-	topBar.BackgroundColor3 = Color3.fromRGB(25, 18, 50)
-	topBar.BackgroundTransparency = 0.3
-	topBar.BorderSizePixel = 0
-	topBar.ZIndex = 52
-	topBar.Parent = modalFrame
-
-	local topBarGrad = Instance.new("UIGradient")
-	topBarGrad.Color = ColorSequence.new({
-		ColorSequenceKeypoint.new(0, Color3.fromRGB(50, 30, 90)),
-		ColorSequenceKeypoint.new(1, Color3.fromRGB(20, 14, 40)),
-	})
-	topBarGrad.Rotation = 90
-	topBarGrad.Parent = topBar
 
 	-- Title
 	local title = Instance.new("TextLabel")
 	title.Name = "Title"
-	title.Size = UDim2.new(0.5, 0, 0, 38)
-	title.Position = UDim2.new(0, 24, 0, 8)
+	title.Size = UDim2.new(0.6, 0, 0, 40)
+	title.Position = UDim2.new(0, 26, 0, 10)
 	title.BackgroundTransparency = 1
-	title.Text = "STORE"
+	title.Text = "STORE!"
 	title.TextColor3 = Color3.fromRGB(255, 255, 255)
 	title.Font = BUBBLE_FONT
-	title.TextSize = 34
+	title.TextSize = 52
 	title.TextXAlignment = Enum.TextXAlignment.Left
 	title.ZIndex = 53
 	title.Parent = modalFrame
-	createStroke(title, Color3.fromRGB(80, 40, 160), 3, Enum.ApplyStrokeMode.Contextual)
+	createStroke(title, Color3.fromRGB(24, 40, 88), 3, Enum.ApplyStrokeMode.Contextual)
 
 	-- Subtitle
 	local sub = Instance.new("TextLabel")
-	sub.Size = UDim2.new(0.5, 0, 0, 16)
-	sub.Position = UDim2.new(0, 26, 0, 46)
+	sub.Size = UDim2.new(0.62, 0, 0, 16)
+	sub.Position = UDim2.new(0, 28, 0, 56)
 	sub.BackgroundTransparency = 1
 	sub.Text = "Premium upgrades, gem packs & exclusive cases"
-	sub.TextColor3 = Color3.fromRGB(180, 160, 220)
+	sub.TextColor3 = Color3.fromRGB(236, 243, 255)
 	sub.Font = FONT_SUB
 	sub.TextSize = 12
 	sub.TextXAlignment = Enum.TextXAlignment.Left
@@ -859,139 +1131,54 @@ function StoreController.Init()
 	-- Close button
 	local closeBtn = Instance.new("TextButton")
 	closeBtn.Name = "CloseBtn"
-	closeBtn.Size = UDim2.new(0, 44, 0, 44)
-	closeBtn.Position = UDim2.new(1, -16, 0, 13)
+	closeBtn.Size = UDim2.new(0, 56, 0, 56)
+	closeBtn.Position = UDim2.new(1, -16, 0, 12)
 	closeBtn.AnchorPoint = Vector2.new(1, 0)
-	closeBtn.BackgroundColor3 = Color3.fromRGB(220, 50, 50)
+	closeBtn.BackgroundColor3 = Color3.fromRGB(248, 87, 87)
 	closeBtn.Text = "X"
 	closeBtn.TextColor3 = Color3.new(1, 1, 1)
+	closeBtn.TextStrokeColor3 = Color3.fromRGB(122, 41, 41)
+	closeBtn.TextStrokeTransparency = 0
 	closeBtn.Font = BUBBLE_FONT
-	closeBtn.TextSize = 24
+	closeBtn.TextSize = 34
 	closeBtn.BorderSizePixel = 0
 	closeBtn.AutoButtonColor = false
 	closeBtn.ZIndex = 55
 	closeBtn.Parent = modalFrame
 	Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(1, 0)
-	createStroke(closeBtn, Color3.fromRGB(180, 30, 30), 2.5)
-	createStroke(closeBtn, Color3.fromRGB(100, 0, 0), 1.5, Enum.ApplyStrokeMode.Contextual)
+	createStroke(closeBtn, Color3.fromRGB(255, 255, 255), 2.8)
+	createStroke(closeBtn, Color3.fromRGB(122, 41, 41), 1.8, Enum.ApplyStrokeMode.Contextual)
 
 	local closeBounce = TweenInfo.new(0.12, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 	closeBtn.MouseEnter:Connect(function()
-		TweenService:Create(closeBtn, closeBounce, { Size = UDim2.new(0, 50, 0, 50), BackgroundColor3 = Color3.fromRGB(255, 75, 75) }):Play()
+		TweenService:Create(closeBtn, closeBounce, { Size = UDim2.new(0, 61, 0, 61), BackgroundColor3 = Color3.fromRGB(255, 107, 107) }):Play()
 	end)
 	closeBtn.MouseLeave:Connect(function()
-		TweenService:Create(closeBtn, closeBounce, { Size = UDim2.new(0, 44, 0, 44), BackgroundColor3 = Color3.fromRGB(220, 50, 50) }):Play()
+		TweenService:Create(closeBtn, closeBounce, { Size = UDim2.new(0, 56, 0, 56), BackgroundColor3 = Color3.fromRGB(248, 87, 87) }):Play()
 	end)
 	closeBtn.MouseButton1Click:Connect(function()
 		StoreController.Close()
 	end)
-
-	-- Divider below header
-	local divider = Instance.new("Frame")
-	divider.Size = UDim2.new(1, -30, 0, 2)
-	divider.Position = UDim2.new(0.5, 0, 0, 70)
-	divider.AnchorPoint = Vector2.new(0.5, 0)
-	divider.BackgroundColor3 = Color3.fromRGB(120, 80, 200)
-	divider.BackgroundTransparency = 0.4
-	divider.BorderSizePixel = 0
-	divider.ZIndex = 52
-	divider.Parent = modalFrame
-	Instance.new("UICorner", divider).CornerRadius = UDim.new(1, 0)
-
-	local divGrad = Instance.new("UIGradient")
-	divGrad.Transparency = NumberSequence.new({
-		NumberSequenceKeypoint.new(0, 0.9),
-		NumberSequenceKeypoint.new(0.5, 0),
-		NumberSequenceKeypoint.new(1, 0.9),
-	})
-	divGrad.Parent = divider
-
-	-------------------------------------------------
-	-- TAB ROW
-	-------------------------------------------------
-	local tabRow = Instance.new("Frame")
-	tabRow.Name = "TabRow"
-	tabRow.Size = UDim2.new(1, -24, 0, 38)
-	tabRow.Position = UDim2.new(0.5, 0, 0, 78)
-	tabRow.AnchorPoint = Vector2.new(0.5, 0)
-	tabRow.BackgroundTransparency = 1
-	tabRow.ZIndex = 52
-	tabRow.Parent = modalFrame
-
-	local tabLayout = Instance.new("UIListLayout")
-	tabLayout.FillDirection = Enum.FillDirection.Horizontal
-	tabLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-	tabLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-	tabLayout.Padding = UDim.new(0, 10)
-	tabLayout.Parent = tabRow
-
-	local hoverTI = TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-
-	for _, def in ipairs(TAB_DEFS) do
-		local btn = Instance.new("TextButton")
-		btn.Name = "Tab_" .. def.id
-		btn.Size = UDim2.new(0, 160, 0, 34)
-		btn.BackgroundColor3 = INACTIVE_BG
-		btn.Text = def.label
-		btn.TextColor3 = INACTIVE_TEXT
-		btn.Font = BUBBLE_FONT
-		btn.TextSize = 17
-		btn.BorderSizePixel = 0
-		btn.AutoButtonColor = false
-		btn.ZIndex = 53
-		btn.Parent = tabRow
-		Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 10)
-		createStroke(btn, INACTIVE_STROKE, 1.5)
-
-		btn.MouseEnter:Connect(function()
-			if currentTab == def.id then return end
-			TweenService:Create(btn, hoverTI, { BackgroundColor3 = Color3.fromRGB(55, 45, 80) }):Play()
-		end)
-		btn.MouseLeave:Connect(function()
-			if currentTab == def.id then return end
-			TweenService:Create(btn, hoverTI, { BackgroundColor3 = INACTIVE_BG }):Play()
-		end)
-		btn.MouseButton1Click:Connect(function()
-			switchTab(def.id)
-		end)
-
-		tabButtons[def.id] = btn
-	end
 
 	-------------------------------------------------
 	-- SCROLL CONTENT AREA
 	-------------------------------------------------
 	scroll = Instance.new("ScrollingFrame")
 	scroll.Name = "StoreScroll"
-	scroll.Size = UDim2.new(1, -20, 1, -128)
-	scroll.Position = UDim2.new(0.5, 0, 0, 122)
+	scroll.Size = UDim2.new(1, -20, 1, -102)
+	scroll.Position = UDim2.new(0.5, 0, 0, 94)
 	scroll.AnchorPoint = Vector2.new(0.5, 0)
 	scroll.BackgroundTransparency = 1
 	scroll.BorderSizePixel = 0
 	scroll.ScrollBarThickness = 5
-	scroll.ScrollBarImageColor3 = Color3.fromRGB(120, 80, 200)
+	scroll.ScrollBarImageColor3 = Color3.fromRGB(87, 120, 213)
 	scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
 	scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
 	scroll.ZIndex = 51
 	scroll.Parent = modalFrame
 
-	local layout = Instance.new("UIListLayout")
-	layout.FillDirection = Enum.FillDirection.Vertical
-	layout.SortOrder = Enum.SortOrder.LayoutOrder
-	layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-	layout.Padding = UDim.new(0, 12)
-	layout.Parent = scroll
-
-	local pad = Instance.new("UIPadding")
-	pad.PaddingTop = UDim.new(0, 10)
-	pad.PaddingBottom = UDim.new(0, 16)
-	pad.PaddingLeft = UDim.new(0, 10)
-	pad.PaddingRight = UDim.new(0, 10)
-	pad.Parent = scroll
-
-	-- Build initial tab
-	updateTabStyles()
-	buildPremiumTab()
+	-- Build single store section
+	buildShowcaseTab()
 end
 
 -------------------------------------------------
@@ -1000,17 +1187,12 @@ end
 
 function StoreController.Open(tabId)
 	if isOpen then return end
-	if tabId and TAB_BUILDERS[tabId] then
-		currentTab = tabId
-	end
 	isOpen = true
 	overlay.Visible = true
 	modalFrame.Visible = true
 
 	clearScroll()
-	local builder = TAB_BUILDERS[currentTab]
-	if builder then builder() end
-	updateTabStyles()
+	buildShowcaseTab()
 
 	UIHelper.ScaleIn(modalFrame, 0.25)
 end
