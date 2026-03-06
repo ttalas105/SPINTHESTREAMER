@@ -1407,9 +1407,9 @@ function SpinController.Init()
 		end
 	end)
 
-	MythicAlert.OnClientEvent:Connect(function(data)
-		showMythicAlert(data)
-	end)
+	-- MythicAlert.OnClientEvent:Connect(function(data)
+	-- 	showMythicAlert(data)
+	-- end)
 end
 
 -------------------------------------------------
