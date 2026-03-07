@@ -713,7 +713,7 @@ local function createRowFrame(order, height)
 	return row
 end
 
-local function makeGreenBuyButton(parent, widthScale, yOffset, productId, onClick)
+local function makeGreenBuyButton(parent, widthScale, yOffset, productId, onClick, priceOverride)
 	local btn = Instance.new("TextButton")
 	btn.Name = "BuyBtn"
 	btn.Size = UDim2.new(widthScale or 0.62, 0, 0, 52)
@@ -735,9 +735,13 @@ local function makeGreenBuyButton(parent, widthScale, yOffset, productId, onClic
 	createStroke(btn, Color3.fromRGB(59, 149, 56), 2.6)
 	createStroke(btn, Color3.fromRGB(255, 255, 255), 1.2, Enum.ApplyStrokeMode.Contextual)
 
-	fetchProductPriceAsync(productId, btn, function(button, rawPrice)
-		setBuyText(button, "BUY FOR", formatWithCommas(rawPrice))
-	end)
+	if priceOverride then
+		setBuyText(btn, "BUY FOR", formatWithCommas(priceOverride))
+	else
+		fetchProductPriceAsync(productId, btn, function(button, rawPrice)
+			setBuyText(button, "BUY FOR", formatWithCommas(rawPrice))
+		end)
+	end
 
 	local hoverTI = TweenInfo.new(0.11, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 	btn.MouseEnter:Connect(function()
@@ -763,7 +767,7 @@ local function makeGreenBuyButton(parent, widthScale, yOffset, productId, onClic
 	return btn
 end
 
-local function buildCaseShowCard(parent, caseData, xScale, buttonColor)
+local function buildCaseShowCard(parent, caseData, xScale, buttonColor, priceOverride)
 	local productId = Economy.Products[caseData.key]
 	local card = Instance.new("Frame")
 	card.Size = UDim2.new(0.485, 0, 1, 0)
@@ -900,13 +904,13 @@ local function buildCaseShowCard(parent, caseData, xScale, buttonColor)
 		if productId and productId > 0 then
 			MarketplaceService:PromptProductPurchase(player, productId)
 		end
-	end)
+	end, priceOverride)
 	btn.BackgroundColor3 = buttonColor
 
 	return card
 end
 
-local function buildGemTile(parent, xScale, pack, order)
+local function buildGemTile(parent, xScale, pack, order, priceOverride)
 	local productId = Economy.Products[pack.key]
 	local tile = Instance.new("Frame")
 	tile.Size = UDim2.new(0.32, 0, 1, 0)
@@ -954,11 +958,11 @@ local function buildGemTile(parent, xScale, pack, order)
 	title.Parent = tile
 	createStroke(title, Color3.fromRGB(0, 0, 0), 2.8, Enum.ApplyStrokeMode.Contextual)
 
-	makeGreenBuyButton(tile, 0.62, -10, productId, nil).LayoutOrder = order
+	makeGreenBuyButton(tile, 0.62, -10, productId, nil, priceOverride).LayoutOrder = order
 	return tile
 end
 
-local function buildPremiumTile(parent, xScale, cfg)
+local function buildPremiumTile(parent, xScale, cfg, priceOverride)
 	local productId = cfg.productId
 	local owned = cfg.owned
 	local tile = Instance.new("Frame")
@@ -1022,7 +1026,7 @@ local function buildPremiumTile(parent, xScale, cfg)
 	createStroke(sub, Color3.fromRGB(0, 0, 0), 2, Enum.ApplyStrokeMode.Contextual)
 
 	if not owned then
-		makeGreenBuyButton(tile, 0.52, -10, productId, nil)
+		makeGreenBuyButton(tile, 0.52, -10, productId, nil, priceOverride)
 	else
 		local ownedL = Instance.new("TextLabel")
 		ownedL.Size = UDim2.new(0.52, 0, 0, 52)
@@ -1045,14 +1049,16 @@ end
 local function buildShowcaseTab()
 	setupShowcaseRoot()
 
+	local prices = Economy.RobuxPrices
+
 	local caseRow = createRowFrame(1, 336)
-	buildCaseShowCard(caseRow, EnhancedCases.List[1], 0, Color3.fromRGB(78, 190, 245))
-	buildCaseShowCard(caseRow, EnhancedCases.List[2], 0.515, Color3.fromRGB(100, 206, 85))
+	buildCaseShowCard(caseRow, EnhancedCases.List[1], 0, Color3.fromRGB(78, 190, 245), prices.LunarEnhanced)
+	buildCaseShowCard(caseRow, EnhancedCases.List[2], 0.515, Color3.fromRGB(100, 206, 85), prices.SolarEnhanced)
 
 	local gemsRow = createRowFrame(2, 188)
-	buildGemTile(gemsRow, 0, Economy.GemPacks[1], 1)
-	buildGemTile(gemsRow, 0.34, Economy.GemPacks[2], 2)
-	buildGemTile(gemsRow, 0.68, Economy.GemPacks[3], 3)
+	buildGemTile(gemsRow, 0, Economy.GemPacks[1], 1, prices.Gems1K)
+	buildGemTile(gemsRow, 0.34, Economy.GemPacks[2], 2, prices.Gems10K)
+	buildGemTile(gemsRow, 0.68, Economy.GemPacks[3], 3, prices.Gems100K)
 
 	local premiumRow = createRowFrame(3, 188)
 	buildPremiumTile(premiumRow, 0, {
@@ -1060,13 +1066,13 @@ local function buildShowcaseTab()
 		desc = "1.5x Luck\nPermanent",
 		productId = Economy.Products.VIP,
 		owned = HUDController.Data.hasVIP == true,
-	})
+	}, prices.VIP)
 	buildPremiumTile(premiumRow, 0.515, {
 		title = "2x Luck",
 		desc = "2x Luck\nPermanent",
 		productId = Economy.Products.X2Luck,
 		owned = HUDController.Data.hasX2Luck == true,
-	})
+	}, prices.X2Luck)
 end
 
 -------------------------------------------------

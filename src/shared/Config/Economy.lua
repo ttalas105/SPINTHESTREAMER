@@ -292,6 +292,16 @@ Economy.Products = {
 	PremiumSlot     = 0,
 }
 
+Economy.RobuxPrices = {
+	LunarEnhanced = 1299,
+	SolarEnhanced = 1999,
+	Gems1K        = 299,
+	Gems10K       = 999,
+	Gems100K      = 1999,
+	VIP           = 199,
+	X2Luck        = 99,
+}
+
 Economy.GemPacks = {
 	{ key = "Gems1K",  amount = 1000,   label = "1,000 Gems"   },
 	{ key = "Gems10K", amount = 10000,  label = "10,000 Gems"  },
