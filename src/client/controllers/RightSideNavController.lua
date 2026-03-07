@@ -20,13 +20,15 @@ local playerGui = player:WaitForChild("PlayerGui")
 local buttons = {}
 local onButtonClicked = {}
 
+local isMobile = UIHelper.IsMobile()
+
 -------------------------------------------------
--- Nav button style (match left nav)
+-- Nav button style (match left nav; smaller on mobile)
 -------------------------------------------------
-local BUTTON_W = 120
-local BUTTON_H = 130
-local BUTTON_PADDING = 30
-local BUBBLE_CORNER = 22
+local BUTTON_W = isMobile and 80 or 120
+local BUTTON_H = isMobile and 88 or 130
+local BUTTON_PADDING = isMobile and 14 or 30
+local BUBBLE_CORNER = isMobile and 16 or 22
 local STROKE_THICKNESS = 1.5
 local STROKE_COLOR = Color3.fromRGB(30, 25, 50)
 
@@ -47,7 +49,8 @@ local function layoutNav(container, btnFrames, viewportHeight)
 	local padding = BUTTON_PADDING
 	local totalNatural = (count * BUTTON_H) + ((count - 1) * padding)
 
-	local maxH = viewportHeight - TOP_BAR_RESERVE - 20
+	local bottomReserve = isMobile and 100 or 20
+	local maxH = viewportHeight - TOP_BAR_RESERVE - bottomReserve
 	local scale = 1
 	if totalNatural > maxH and maxH > 0 then
 		scale = maxH / totalNatural
@@ -60,7 +63,8 @@ local function layoutNav(container, btnFrames, viewportHeight)
 
 	container.Size = UDim2.new(0, btnW + 12, 0, totalH)
 
-	local centerY = TOP_BAR_RESERVE + (viewportHeight - TOP_BAR_RESERVE) * 0.5
+	local usableHeight = viewportHeight - TOP_BAR_RESERVE - bottomReserve
+	local centerY = TOP_BAR_RESERVE + usableHeight * 0.5
 	container.Position = UDim2.new(1, -12, 0, math.floor(centerY))
 	container.AnchorPoint = Vector2.new(1, 0.5)
 

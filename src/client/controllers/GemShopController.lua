@@ -1173,7 +1173,7 @@ function GemShopController.Init()
 			pendingGemSpin = false
 			SpinController._startSpin(result)
 		else
-			if pendingGemSpin then
+			if pendingGemSpin or SpinController.IsVisible() then
 				pendingGemSpin = false
 				SpinController.Hide()
 			end

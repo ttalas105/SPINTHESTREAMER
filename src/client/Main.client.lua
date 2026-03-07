@@ -16,8 +16,14 @@ local ContentProvider = game:GetService("ContentProvider")
 -- LOADING SCREEN (shown immediately)
 -------------------------------------------------
 
+local UserInputService = game:GetService("UserInputService")
+
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
+
+if UserInputService.TouchEnabled then
+	playerGui.ScreenOrientation = Enum.ScreenOrientation.LandscapeSensor
+end
 
 local loadGui = Instance.new("ScreenGui")
 loadGui.Name = "LoadingScreen"
@@ -767,6 +773,27 @@ TutorialController.Init()
 QuestController.Init()
 SlotPadController.Init(HoldController, InventoryController)
 setLoadProgress(0.95, "Finishing up...")
+
+-------------------------------------------------
+-- MOBILE: Shrink streamer billboard stats so they don't overwhelm small screens
+-------------------------------------------------
+if UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled then
+	local MOBILE_BB_SCALE = 0.55
+	local function shrinkBillboard(bb)
+		if not bb:IsA("BillboardGui") then return end
+		if bb.Name ~= "DisplayInfo" then return end
+		local origW = bb.Size.X.Offset
+		local origH = bb.Size.Y.Offset
+		bb.Size = UDim2.new(bb.Size.X.Scale, math.floor(origW * MOBILE_BB_SCALE),
+			bb.Size.Y.Scale, math.floor(origH * MOBILE_BB_SCALE))
+		bb.StudsOffset = bb.StudsOffset - Vector3.new(0, 1.5, 0)
+	end
+
+	for _, desc in ipairs(workspace:GetDescendants()) do
+		shrinkBillboard(desc)
+	end
+	workspace.DescendantAdded:Connect(shrinkBillboard)
+end
 
 -------------------------------------------------
 -- DEBUG: Give all streamers + Skip tutorial (Studio only)

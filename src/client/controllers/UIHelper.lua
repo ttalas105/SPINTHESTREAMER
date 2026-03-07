@@ -275,11 +275,13 @@ function UIHelper.CreateIconButton(props)
 		bgStroke.Parent = container
 	end
 
+	local mobile = UIHelper.IsMobile()
+
 	if hasImage then
 		local icon = Instance.new("ImageLabel")
 		icon.Name = "Icon"
-		icon.Size = UDim2.new(0, 90, 0, 90)
-		icon.Position = UDim2.new(0.5, 0, 0.5, -12)
+		icon.Size = UDim2.new(0.75, 0, 0.65, 0)
+		icon.Position = UDim2.new(0.5, 0, 0.42, 0)
 		icon.AnchorPoint = Vector2.new(0.5, 0.5)
 		icon.BackgroundTransparency = 1
 		icon.Image = props.ImageId
@@ -288,8 +290,8 @@ function UIHelper.CreateIconButton(props)
 	else
 		local icon = Instance.new("TextLabel")
 		icon.Name = "Icon"
-		icon.Size = UDim2.new(0, 100, 0, 70)
-		icon.Position = UDim2.new(0.5, 0, 0.5, -12)
+		icon.Size = UDim2.new(0.85, 0, 0.55, 0)
+		icon.Position = UDim2.new(0.5, 0, 0.42, 0)
 		icon.AnchorPoint = Vector2.new(0.5, 0.5)
 		icon.BackgroundTransparency = 1
 		icon.TextColor3 = props.IconColor3 or DesignConfig.Colors.White
@@ -299,6 +301,9 @@ function UIHelper.CreateIconButton(props)
 		icon.Parent = container
 	end
 
+	local labelTextSize = mobile and 16 or 24
+	local labelStrokeThick = mobile and 1.5 or 2.5
+
 	local label = Instance.new("TextLabel")
 	label.Name = "Label"
 	label.BackgroundTransparency = 1
@@ -306,31 +311,31 @@ function UIHelper.CreateIconButton(props)
 	label.Parent = container
 
 	if hasImage then
-		label.Size = UDim2.new(1, 0, 0, 30)
-		label.Position = UDim2.new(0.5, 0, 1, -6)
+		label.Size = UDim2.new(1, 0, 0.22, 0)
+		label.Position = UDim2.new(0.5, 0, 1, -4)
 		label.AnchorPoint = Vector2.new(0.5, 1)
 		label.TextColor3 = Color3.new(1, 1, 1)
 		label.Font = Enum.Font.FredokaOne
-		label.TextSize = 24
+		label.TextSize = labelTextSize
 		label.TextScaled = false
 
 		local labelStroke = Instance.new("UIStroke")
 		labelStroke.Color = Color3.fromRGB(30, 30, 30)
-		labelStroke.Thickness = 2.5
+		labelStroke.Thickness = labelStrokeThick
 		labelStroke.Transparency = 0
 		labelStroke.Parent = label
 	else
-		label.Size = UDim2.new(1, 0, 0, 30)
-		label.Position = UDim2.new(0.5, 0, 1, -6)
+		label.Size = UDim2.new(1, 0, 0.22, 0)
+		label.Position = UDim2.new(0.5, 0, 1, -4)
 		label.AnchorPoint = Vector2.new(0.5, 1)
 		label.TextColor3 = Color3.new(1, 1, 1)
 		label.Font = props.LabelFont or Enum.Font.FredokaOne
-		label.TextSize = 24
+		label.TextSize = labelTextSize
 		label.TextScaled = false
 
 		local labelStroke = Instance.new("UIStroke")
 		labelStroke.Color = Color3.fromRGB(30, 30, 30)
-		labelStroke.Thickness = 2.5
+		labelStroke.Thickness = labelStrokeThick
 		labelStroke.Transparency = 0
 		labelStroke.Parent = label
 	end
@@ -582,6 +587,10 @@ end
 	Useful for controllers that want to adjust layout on mobile.
 ]]
 function UIHelper.IsMobile()
+	local UIS = game:GetService("UserInputService")
+	if UIS.TouchEnabled and not UIS.KeyboardEnabled then
+		return true
+	end
 	local camera = workspace.CurrentCamera
 	if not camera then return false end
 	local vp = camera.ViewportSize

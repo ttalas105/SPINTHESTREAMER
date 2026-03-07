@@ -29,6 +29,7 @@ local SpinRequest = RemoteEvents:WaitForChild("SpinRequest")
 local SpinResult = RemoteEvents:WaitForChild("SpinResult")
 local MythicAlert = RemoteEvents:WaitForChild("MythicAlert")
 local SetPlayerBusy = RemoteEvents:WaitForChild("SetPlayerBusy")
+local BuyGemCase    = RemoteEvents:WaitForChild("BuyGemCase")
 
 -------------------------------------------------
 -- STYLE CONSTANTS
@@ -1088,6 +1089,21 @@ local function showResult(data)
 					end
 					SpinController.Hide()
 				end
+			elseif currentGemCaseId then
+				local caseData = GemCases.ById[currentGemCaseId]
+				local gems = HUDController.Data.gems or 0
+				if caseData and gems >= caseData.cost then
+					BuyGemCase:FireServer(currentGemCaseId)
+					SpinController.WaitForResult()
+				else
+					autoSpinEnabled = false
+					if autoSpinButton then
+						autoSpinButton.BackgroundColor3 = Color3.fromRGB(55, 50, 80)
+						autoSpinButton.Text = "AUTO"
+						autoSpinButton.TextColor3 = Color3.fromRGB(180, 180, 210)
+					end
+					SpinController.Hide()
+				end
 			else
 				SpinController.RequestSpin()
 			end
@@ -1494,6 +1510,8 @@ function SpinController.RequestSpin()
 	if isOwnedCrateOpen and currentCrateId then
 		local OpenOwnedCrate = RemoteEvents:WaitForChild("OpenOwnedCrate")
 		OpenOwnedCrate:FireServer(currentCrateId)
+	elseif currentGemCaseId then
+		BuyGemCase:FireServer(currentGemCaseId)
 	elseif currentCrateId then
 		local BuyCrateRequest = RemoteEvents:WaitForChild("BuyCrateRequest")
 		BuyCrateRequest:FireServer(currentCrateId)
