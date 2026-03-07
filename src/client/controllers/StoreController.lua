@@ -1051,16 +1051,7 @@ local function buildShowcaseTab()
 
 	local prices = Economy.RobuxPrices
 
-	local caseRow = createRowFrame(1, 336)
-	buildCaseShowCard(caseRow, EnhancedCases.List[1], 0, Color3.fromRGB(78, 190, 245), prices.LunarEnhanced)
-	buildCaseShowCard(caseRow, EnhancedCases.List[2], 0.515, Color3.fromRGB(100, 206, 85), prices.SolarEnhanced)
-
-	local gemsRow = createRowFrame(2, 188)
-	buildGemTile(gemsRow, 0, Economy.GemPacks[1], 1, prices.Gems1K)
-	buildGemTile(gemsRow, 0.34, Economy.GemPacks[2], 2, prices.Gems10K)
-	buildGemTile(gemsRow, 0.68, Economy.GemPacks[3], 3, prices.Gems100K)
-
-	local premiumRow = createRowFrame(3, 188)
+	local premiumRow = createRowFrame(1, 188)
 	buildPremiumTile(premiumRow, 0, {
 		title = "VIP Pass",
 		desc = "1.5x Luck\nPermanent",
@@ -1073,6 +1064,15 @@ local function buildShowcaseTab()
 		productId = Economy.Products.X2Luck,
 		owned = HUDController.Data.hasX2Luck == true,
 	}, prices.X2Luck)
+
+	local caseRow = createRowFrame(2, 336)
+	buildCaseShowCard(caseRow, EnhancedCases.List[1], 0, Color3.fromRGB(78, 190, 245), prices.LunarEnhanced)
+	buildCaseShowCard(caseRow, EnhancedCases.List[2], 0.515, Color3.fromRGB(100, 206, 85), prices.SolarEnhanced)
+
+	local gemsRow = createRowFrame(3, 188)
+	buildGemTile(gemsRow, 0, Economy.GemPacks[1], 1, prices.Gems1K)
+	buildGemTile(gemsRow, 0.34, Economy.GemPacks[2], 2, prices.Gems10K)
+	buildGemTile(gemsRow, 0.68, Economy.GemPacks[3], 3, prices.Gems100K)
 end
 
 -------------------------------------------------

@@ -287,10 +287,13 @@ local function setTab(tab)
 	refreshQuests()
 end
 
+local MODAL_INTENDED_SIZE = UDim2.new(0, MODAL_W, 0, MODAL_H)
+
 function QuestController.Open()
 	if isOpen then QuestController.Close(); return end
 	isOpen = true
 	if modalFrame then
+		modalFrame.Size = MODAL_INTENDED_SIZE
 		overlay.Visible = true
 		modalFrame.Visible = true
 		refreshQuests()
@@ -302,7 +305,10 @@ function QuestController.Close()
 	if not isOpen then return end
 	isOpen = false
 	if overlay then overlay.Visible = false end
-	if modalFrame then UIHelper.ScaleOut(modalFrame, 0.2) end
+	if modalFrame then
+		modalFrame.Visible = false
+		modalFrame.Size = MODAL_INTENDED_SIZE
+	end
 end
 
 function QuestController.IsOpen()
