@@ -19,6 +19,8 @@ local playerGui = player:WaitForChild("PlayerGui")
 
 local buttons = {}
 local onButtonClicked = {}
+local lastClickTime = 0
+local CLICK_COOLDOWN = 0.4
 
 local isMobile = UIHelper.IsMobile()
 
@@ -138,6 +140,9 @@ function RightSideNavController.Init()
 			UISounds.PlayHover()
 		end)
 		clickZone.MouseButton1Click:Connect(function()
+			local now = tick()
+			if now - lastClickTime < CLICK_COOLDOWN then return end
+			lastClickTime = now
 			UISounds.PlayClick()
 			if onButtonClicked[item.name] then
 				onButtonClicked[item.name]()

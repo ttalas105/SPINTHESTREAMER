@@ -38,6 +38,10 @@ local TAB_COLORS = {
 }
 
 local bounceTween = TweenInfo.new(0.12, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+local lastClaimTime = 0
+local CLAIM_COOLDOWN = 1.0
+local lastTabTime = 0
+local TAB_COOLDOWN = 0.3
 
 local function fmtNum(n)
 	if n >= 1e9 then return string.format("%.1fB", n / 1e9)
@@ -235,6 +239,9 @@ local function buildQuestRow(quest, parent, order)
 			TweenService:Create(claimBtn, bounceTween, { Size = UDim2.new(0, 80, 0, 30) }):Play()
 		end)
 		claimBtn.MouseButton1Click:Connect(function()
+			local now = tick()
+			if now - lastClaimTime < CLAIM_COOLDOWN then return end
+			lastClaimTime = now
 			ClaimQuestReward:FireServer(quest.id)
 			claimBtn.Text = "..."
 			claimBtn.BackgroundColor3 = Color3.fromRGB(50, 45, 65)
@@ -396,6 +403,9 @@ function QuestController.Init()
 
 		tabButtons[tabName] = tab
 		tab.MouseButton1Click:Connect(function()
+			local now = tick()
+			if now - lastTabTime < TAB_COOLDOWN then return end
+			lastTabTime = now
 			setTab(tabName)
 		end)
 	end

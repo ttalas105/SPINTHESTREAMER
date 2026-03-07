@@ -19,6 +19,8 @@ local playerGui = player:WaitForChild("PlayerGui")
 local activeTab = "BASE" -- default tab
 local tabButtons = {}
 local onTabChanged = {}
+local lastTabClickTime = 0
+local TAB_CLICK_COOLDOWN = 0.5
 
 -------------------------------------------------
 -- TAB DEFINITIONS — BASE / SHOP teleport only
@@ -122,6 +124,9 @@ function TopNavController.Init()
 		}
 
 		btn.MouseButton1Click:Connect(function()
+			local now = tick()
+			if now - lastTabClickTime < TAB_CLICK_COOLDOWN then return end
+			lastTabClickTime = now
 			UISounds.PlayClick()
 			TopNavController.SetActiveTab(tabInfo.name)
 		end)
