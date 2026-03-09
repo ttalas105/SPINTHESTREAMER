@@ -78,16 +78,17 @@ local function getModelBounds(model)
 	local max = Vector3.new(-math.huge, -math.huge, -math.huge)
 	for _, part in ipairs(model:GetDescendants()) do
 		if part:IsA("BasePart") then
-			local pos = part.Position
+			local cf = part.CFrame
 			local half = part.Size / 2
-			min = Vector3.new(
-				math.min(min.X, pos.X - half.X),
-				math.min(min.Y, pos.Y - half.Y),
-				math.min(min.Z, pos.Z - half.Z))
-			max = Vector3.new(
-				math.max(max.X, pos.X + half.X),
-				math.max(max.Y, pos.Y + half.Y),
-				math.max(max.Z, pos.Z + half.Z))
+			for _, sx in ipairs({-1, 1}) do
+				for _, sy in ipairs({-1, 1}) do
+					for _, sz in ipairs({-1, 1}) do
+						local corner = cf:PointToWorldSpace(Vector3.new(half.X * sx, half.Y * sy, half.Z * sz))
+						min = Vector3.new(math.min(min.X, corner.X), math.min(min.Y, corner.Y), math.min(min.Z, corner.Z))
+						max = Vector3.new(math.max(max.X, corner.X), math.max(max.Y, corner.Y), math.max(max.Z, corner.Z))
+					end
+				end
+			end
 		end
 	end
 	return min, max
@@ -725,10 +726,12 @@ local function buildBaseSlots()
 			local clone = baseTemplate:Clone()
 			clone.Name = name
 
-			for _, part in ipairs(clone:GetDescendants()) do
+			local descendants = clone:GetDescendants()
+
+			for _, part in ipairs(descendants) do
 				if part:IsA("BasePart") then part.Anchored = true end
 			end
-			for _, hum in ipairs(clone:GetDescendants()) do
+			for _, hum in ipairs(descendants) do
 				if hum:IsA("Humanoid") then
 					hum.WalkSpeed = 0
 					hum.JumpPower = 0
@@ -736,11 +739,14 @@ local function buildBaseSlots()
 				end
 			end
 
-			for _, part in ipairs(clone:GetDescendants()) do
-				if part:IsA("BasePart") then
+			local toRemove = {}
+			for _, part in ipairs(descendants) do
+				if part:IsA("SpawnLocation") then
+					table.insert(toRemove, part)
+				elseif part:IsA("BasePart") then
 					local sz = part.Size
 					if sz.X < 2 and sz.Y < 2 and sz.Z < 2 then
-						part:Destroy()
+						table.insert(toRemove, part)
 					else
 						local r, g, b = part.Color.R, part.Color.G, part.Color.B
 						local isYellow = (r > 0.7 and g > 0.6 and b < 0.4)
@@ -748,21 +754,24 @@ local function buildBaseSlots()
 							and math.max(sz.X, sz.Y, sz.Z) < 10
 						local isGlowing = part.Material == Enum.Material.Neon
 						if (isYellow and (isSmallCircle or isGlowing)) or (isGlowing and isYellow) then
-							part:Destroy()
+							table.insert(toRemove, part)
 						end
 					end
 				end
-				if part:IsA("SpawnLocation") then part:Destroy() end
+			end
+			for _, part in ipairs(toRemove) do
+				part:Destroy()
 			end
 
 			positionModel(clone, basePos, rotation)
 			clone.Parent = basesFolder
 			print("[WorldBuilder] Placed base slot " .. i .. " (asset) at " .. tostring(basePos))
 		else
-			-- Always-visible procedural base (old style): raised platform with border
 			buildProceduralBaseSlot(name, basePos, basesFolder)
 			print("[WorldBuilder] Placed base slot " .. i .. " (procedural) at " .. tostring(basePos))
 		end
+
+		task.wait()
 	end
 
 	print("[WorldBuilder] All " .. #DesignConfig.BasePositions .. " base structures placed!")
