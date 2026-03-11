@@ -13,35 +13,44 @@ local Streamers = {}
 Streamers.List = {
 	-- COMMON
 	{ id = "Rakai",          displayName = "Rakai",           rarity = "Common",    odds = 5,        cashPerSecond = 10 },
+	{ id = "HassanAbi",     displayName = "HasanAbi",        rarity = "Common",    odds = 7,        cashPerSecond = 17 },
 	{ id = "Fanum",          displayName = "Fanum",           rarity = "Common",    odds = 12,       cashPerSecond = 22 },
 	{ id = "Silky",          displayName = "Silky",           rarity = "Common",    odds = 17,       cashPerSecond = 30 },
 	{ id = "Emiru",          displayName = "Emiru",           rarity = "Common",    odds = 27,       cashPerSecond = 40 },
+	{ id = "Ludwig",         displayName = "Ludwig",          rarity = "Common",    odds = 35,       cashPerSecond = 50 },
 	{ id = "Duke Dennis",    displayName = "Duke Dennis",     rarity = "Common",    odds = 45,       cashPerSecond = 60 },
 	{ id = "Marlon",         displayName = "Marlon",          rarity = "Common",    odds = 50,       cashPerSecond = 90 },
+	{ id = "LosPollos",     displayName = "LosPollos",       rarity = "Common",    odds = 70,       cashPerSecond = 95 },
 
 	-- RARE
 	{ id = "Kreek Craft",    displayName = "Kreek Craft",     rarity = "Rare",      odds = 90,       cashPerSecond = 100 },
 	{ id = "Valkyrae",       displayName = "Valkyrae",        rarity = "Rare",      odds = 113,      cashPerSecond = 120 },
 	{ id = "Shroud",         displayName = "Shroud",          rarity = "Rare",      odds = 225,      cashPerSecond = 150 },
 	{ id = "StableRonaldo",  displayName = "Stable Ronaldo",  rarity = "Rare",      odds = 450,      cashPerSecond = 300 },
+	{ id = "Clix",           displayName = "Clix",            rarity = "Rare",      odds = 900,      cashPerSecond = 450 },
 	{ id = "Train",          displayName = "Trainwrecks",     rarity = "Rare",      odds = 1125,     cashPerSecond = 500 },
 	{ id = "Lacy",           displayName = "Lacy",            rarity = "Rare",      odds = 2250,     cashPerSecond = 1000 },
 
 	-- EPIC
 	{ id = "Cinna",          displayName = "Cinna",           rarity = "Epic",      odds = 4500,     cashPerSecond = 3000 },
+	{ id = "QTCinderella",   displayName = "QTCinderella",    rarity = "Epic",      odds = 8500,     cashPerSecond = 5000 },
 	{ id = "CaseOh",         displayName = "CaseOh",          rarity = "Epic",      odds = 11250,    cashPerSecond = 6500 },
 	{ id = "Pokimane",       displayName = "Pokimane",        rarity = "Epic",      odds = 19125,    cashPerSecond = 10000 },
 	{ id = "Adapt",          displayName = "Adapt",           rarity = "Epic",      odds = 29250,    cashPerSecond = 18000 },
+	{ id = "Adin Ross",      displayName = "Adin Ross",       rarity = "Epic",      odds = 40000,    cashPerSecond = 25000 },
 	{ id = "OhnePixel",      displayName = "ohnePixel",       rarity = "Epic",      odds = 51750,    cashPerSecond = 30000 },
 	{ id = "JasondaWeen",    displayName = "JasondaWeen",     rarity = "Epic",      odds = 81000,    cashPerSecond = 50000 },
 
 	-- LEGENDARY
+	{ id = "Sketch",         displayName = "Sketch",          rarity = "Legendary", odds = 150000,   cashPerSecond = 130000 },
 	{ id = "Ninja",          displayName = "Ninja",           rarity = "Legendary", odds = 225000,   cashPerSecond = 200000 },
 	{ id = "Kai Cenat",      displayName = "Kai Cenat",       rarity = "Legendary", odds = 1125000,  cashPerSecond = 500000 },
 	{ id = "Jynxzi",         displayName = "Jynxzi",          rarity = "Legendary", odds = 2250000,  cashPerSecond = 1000000 },
 
 	-- MYTHIC
+	{ id = "Tyler1",         displayName = "Tyler1",          rarity = "Mythic",    odds = 8500000,  cashPerSecond = 3500000 },
 	{ id = "IShowSpeed",     displayName = "IShowSpeed",      rarity = "Mythic",    odds = 11250000, cashPerSecond = 5000000 },
+	{ id = "MoistCr1TiKaL",  displayName = "MoistCr1TiKaL",  rarity = "Mythic",    odds = 17500000, cashPerSecond = 8000000 },
 	{ id = "XQC",            displayName = "xQc",             rarity = "Mythic",    odds = 22500000, cashPerSecond = 10000000 },
 }
 

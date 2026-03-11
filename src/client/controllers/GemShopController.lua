@@ -33,6 +33,15 @@ local screenGui, overlay, modalFrame
 local isOpen      = false
 local balanceLabel
 local autoOpenEnabled  = false
+
+local HOTBAR_MAX = 9
+local STORAGE_MAX = 200
+
+local function isStorageFull()
+	local inv = HUDController.Data.inventory or {}
+	local sto = HUDController.Data.storage or {}
+	return #inv >= HOTBAR_MAX and #sto >= STORAGE_MAX
+end
 local autoOpenCaseId   = nil
 local pendingGemSpin = false
 
@@ -804,13 +813,17 @@ local function showCaseOpenAnimation(caseData, resultData)
 				task.delay(0.3, function()
 					cleanupCaseAnim()
 					if autoOpenEnabled and autoOpenCaseId and isOpen then
-						local autoCaseData = GemCases.ById[autoOpenCaseId]
-						if autoCaseData then
-							local gems = HUDController.Data.gems or 0
-							if gems >= autoCaseData.cost then
-								BuyGemCase:FireServer(autoOpenCaseId)
-							else
-								autoOpenEnabled = false; autoOpenCaseId = nil
+						if isStorageFull() then
+							autoOpenEnabled = false; autoOpenCaseId = nil
+						else
+							local autoCaseData = GemCases.ById[autoOpenCaseId]
+							if autoCaseData then
+								local gems = HUDController.Data.gems or 0
+								if gems >= autoCaseData.cost then
+									BuyGemCase:FireServer(autoOpenCaseId)
+								else
+									autoOpenEnabled = false; autoOpenCaseId = nil
+								end
 							end
 						end
 					end
@@ -943,13 +956,18 @@ local function buildCaseCard(caseData, parent, order)
 			TweenService:Create(buyBtn, bounceTween, { Size = UDim2.new(1, -24, 0, 34) }):Play()
 		end)
 		buyBtn.MouseButton1Click:Connect(function()
+			if isStorageFull() then
+				buyBtn.Text = "STORAGE FULL!"
+				task.delay(2, function()
+					buyBtn.Text = "OPEN"
+				end)
+				return
+			end
 			local gems = HUDController.Data.gems or 0
 			if gems < caseData.cost then
 				showNotEnoughGemsPopup()
 				return
 			end
-			-- Route gem case openings through SpinController so animation/flow
-			-- exactly matches regular case openings.
 			pendingGemSpin = true
 			GemShopController.Close()
 			SpinController.SetCurrentCost(0)

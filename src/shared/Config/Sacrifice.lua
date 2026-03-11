@@ -35,13 +35,14 @@ Sacrifice.OneTime = {
 	},
 	GirlPower = {
 		name    = "Girl Power",
-		gems    = 2000,
+		gems    = 2500,
 		req     = {
-			{ streamerId = "Emiru",    effect = nil, count = 1 },
-			{ streamerId = "Valkyrae", effect = nil, count = 1 },
-			{ streamerId = "Lacy",     effect = nil, count = 1 },
-			{ streamerId = "Cinna",    effect = nil, count = 1 },
-			{ streamerId = "Pokimane", effect = nil, count = 1 },
+			{ streamerId = "Emiru",        effect = nil, count = 1 },
+			{ streamerId = "Valkyrae",     effect = nil, count = 1 },
+			{ streamerId = "Lacy",         effect = nil, count = 1 },
+			{ streamerId = "QTCinderella", effect = nil, count = 1 },
+			{ streamerId = "Cinna",        effect = nil, count = 1 },
+			{ streamerId = "Pokimane",     effect = nil, count = 1 },
 		},
 	},
 	Rainbow = {
