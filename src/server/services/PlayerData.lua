@@ -109,6 +109,7 @@ local DEFAULT_DATA = {
 	rebirthCount = 0,
 	luck = 0,                 -- personal luck stat; 1 luck = +1% drop luck (stacked with crate luck)
 	cashUpgrade = 0,          -- coin multiplier upgrade count; each +1 = +2% cash production
+	mutationLuckUpgrade = 0,  -- mutation luck upgrade count; each +1 = +2% mutation chance
 	premiumSlotUnlocked = false,
 	doubleCash = false,
 	hasVIP = false,
@@ -300,6 +301,7 @@ local function buildFullPayload(player, data)
 		rebirthCount = data.rebirthCount,
 		luck = data.luck or 0,
 		cashUpgrade = data.cashUpgrade or 0,
+		mutationLuckUpgrade = data.mutationLuckUpgrade or 0,
 		premiumSlotUnlocked = data.premiumSlotUnlocked,
 		doubleCash = data.doubleCash,
 		hasVIP = data.hasVIP or false,
@@ -329,7 +331,7 @@ end
 -- OPTIMIZATION: Only send changed top-level fields (delta replication)
 -- Scalar fields use == comparison; tables always resend (cheap enough for correctness)
 local SCALAR_FIELDS = {
-	"cash", "gems", "rebirthCount", "luck", "cashUpgrade",
+	"cash", "gems", "rebirthCount", "luck", "cashUpgrade", "mutationLuckUpgrade",
 	"premiumSlotUnlocked", "doubleCash", "hasVIP", "hasX2Luck",
 	"spinCredits", "totalSlots", "tutorialComplete",
 }
@@ -1171,6 +1173,27 @@ end
 --- Get the cash upgrade multiplier (1.0 + cashUpgrade * 0.02)
 function PlayerData.GetCashUpgradeMultiplier(player): number
 	local upgrades = PlayerData.GetCashUpgrade(player)
+	return 1 + (upgrades * 0.02)
+end
+
+-------------------------------------------------
+-- MUTATION LUCK UPGRADE (each level = +2% mutation chance)
+-------------------------------------------------
+
+function PlayerData.GetMutationLuckUpgrade(player): number
+	local data = PlayerData.Get(player)
+	return data and (data.mutationLuckUpgrade or 0) or 0
+end
+
+function PlayerData.AddMutationLuckUpgrade(player, amount: number)
+	local data = PlayerData.Get(player)
+	if not data then return end
+	data.mutationLuckUpgrade = math.max(0, (data.mutationLuckUpgrade or 0) + amount)
+	PlayerData.Replicate(player)
+end
+
+function PlayerData.GetMutationLuckMultiplier(player): number
+	local upgrades = PlayerData.GetMutationLuckUpgrade(player)
 	return 1 + (upgrades * 0.02)
 end
 

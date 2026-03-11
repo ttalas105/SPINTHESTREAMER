@@ -1,7 +1,8 @@
 --[[
 	UpgradeStandController.lua
 	Upgrade UI — dark-themed panel matching Case Shop / Potion Shop style.
-	Two upgrades: Luck (+5 per purchase) and Coin Multiplier (+2% per purchase).
+	Three upgrades: Luck (+5 per purchase), Coin Multiplier (+2% per purchase),
+	and Mutation Luck (+2% mutation chance per purchase).
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -24,16 +25,20 @@ local UpgradeLuckRequest = RemoteEvents:WaitForChild("UpgradeLuckRequest")
 local UpgradeLuckResult = RemoteEvents:WaitForChild("UpgradeLuckResult")
 local UpgradeCashRequest = RemoteEvents:WaitForChild("UpgradeCashRequest")
 local UpgradeCashResult = RemoteEvents:WaitForChild("UpgradeCashResult")
+local UpgradeMutationLuckRequest = RemoteEvents:WaitForChild("UpgradeMutationLuckRequest")
+local UpgradeMutationLuckResult = RemoteEvents:WaitForChild("UpgradeMutationLuckResult")
 
 local screenGui, overlay, modalFrame
 local isOpen = false
 
 local LUCK_PER_LEVEL = 5
 local CASH_BONUS_PER_LEVEL = 2
+local MUTATION_BONUS_PER_LEVEL = 2
 
 local refs = {
 	luck = {},
 	cash = {},
+	mutationLuck = {},
 }
 
 local FONT = Enum.Font.FredokaOne
@@ -43,7 +48,7 @@ local RED = Color3.fromRGB(248, 87, 87)
 local RED_DARK = Color3.fromRGB(130, 35, 35)
 local CARD_BG = Color3.fromRGB(57, 79, 150)
 local CARD_BG_DIM = Color3.fromRGB(48, 67, 127)
-local MODAL_W, MODAL_H = 760, 600
+local MODAL_W, MODAL_H = 760, 720
 local CASH_TOUCH_SOUND_ID = "rbxassetid://7112275565"
 local CASH_SOUND_START_OFFSET = 0.28
 local cachedUpgradeCashSound = nil
@@ -413,6 +418,28 @@ local function refreshModal()
 		rC.affordHint.Text = "After upgrade: $" .. fmtNum(math.max(0, cash - cashCost)) .. "  •  Next: $" .. fmtNum(nextCashCost)
 		rC.affordHint.TextColor3 = Color3.fromRGB(245, 220, 140)
 	end
+
+	local mutLevel = HUDController.Data.mutationLuckUpgrade or 0
+	local currentMutBonus = mutLevel * MUTATION_BONUS_PER_LEVEL
+	local nextMutBonus = currentMutBonus + MUTATION_BONUS_PER_LEVEL
+	local mutCost = Economy.GetMutationLuckUpgradeCost(mutLevel)
+	local nextMutCost = Economy.GetMutationLuckUpgradeCost(mutLevel + 1)
+
+	local rM = refs.mutationLuck
+	rM.level.Text = "Level " .. mutLevel
+	rM.flow.Text = ("Current +%d%%  ->  Next +%d%%"):format(currentMutBonus, nextMutBonus)
+	rM.current.Visible = false
+	rM.next.Text = ("Next bonus: +%d%%"):format(nextMutBonus)
+	rM.btnText.Text = "Upgrade: $" .. fmtNum(mutCost)
+	refreshProgress(rM.dots, mutLevel, Color3.fromRGB(200, 130, 255))
+	rM.scale.Text = ""
+	setAffordableState(rM, cash >= mutCost, {
+		btnColor = Color3.fromRGB(160, 80, 220),
+	})
+	if cash >= mutCost then
+		rM.affordHint.Text = "After upgrade: $" .. fmtNum(math.max(0, cash - mutCost)) .. "  •  Next: $" .. fmtNum(nextMutCost)
+		rM.affordHint.TextColor3 = Color3.fromRGB(210, 180, 255)
+	end
 end
 
 local function flashButton(btn, color)
@@ -602,6 +629,21 @@ function UpgradeStandController.Init()
 		UpgradeCashRequest:FireServer()
 	end)
 
+	-- MUTATION LUCK CARD
+	refs.mutationLuck = buildUpgradeCard(cardsContainer, {
+		name = "MutationLuck",
+		title = "Mutation Luck",
+		accent = Color3.fromRGB(190, 130, 255),
+		valueColor = Color3.fromRGB(220, 180, 255),
+		btnColor = Color3.fromRGB(160, 80, 220),
+		btnStroke = Color3.fromRGB(100, 40, 160),
+		scalingText = "x6.0 per level",
+		tooltip = "Increases elemental mutation odds. Each level adds +2% mutation chance. Stacks multiplicatively with base effect rates.",
+	})
+	refs.mutationLuck.btn.MouseButton1Click:Connect(function()
+		UpgradeMutationLuckRequest:FireServer()
+	end)
+
 	-------------------------------------------------
 	-- EVENTS
 	-------------------------------------------------
@@ -622,6 +664,14 @@ function UpgradeStandController.Init()
 		if result.success then
 			playUpgradeCashSound()
 			flashButton(refs.cash.btn, Color3.fromRGB(240, 180, 40))
+			if isOpen then refreshModal() end
+		end
+	end)
+
+	UpgradeMutationLuckResult.OnClientEvent:Connect(function(result)
+		if result.success then
+			playUpgradeCashSound()
+			flashButton(refs.mutationLuck.btn, Color3.fromRGB(160, 80, 220))
 			if isOpen then refreshModal() end
 		end
 	end)

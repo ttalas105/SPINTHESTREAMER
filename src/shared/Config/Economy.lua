@@ -274,6 +274,18 @@ function Economy.GetCashUpgradeCost(currentLevel: number): number
 end
 
 -------------------------------------------------
+-- MUTATION LUCK UPGRADE (at Upgrade stand; +2% mutation chance per level)
+-------------------------------------------------
+Economy.MutationLuckCostFirst      = 1000000
+Economy.MutationLuckCostMultiplier = 6
+
+--- Cost for the next mutation luck upgrade
+function Economy.GetMutationLuckUpgradeCost(currentLevel: number): number
+	local level = currentLevel or 0
+	return Economy.MutationLuckCostFirst * (Economy.MutationLuckCostMultiplier ^ level)
+end
+
+-------------------------------------------------
 -- ROBUX PRODUCT IDS
 -------------------------------------------------
 Economy.Products = {

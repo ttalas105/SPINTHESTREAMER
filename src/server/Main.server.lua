@@ -21,6 +21,8 @@ do
 		"SettingsUpdate",
 		"SacrificeQueueAction",
 		"HoldUpdate", "HoldSync",
+		"UpgradeMutationLuckRequest", "UpgradeMutationLuckResult",
+		"CancelPotionRequest",
 	}
 	for _, name in ipairs(newRemotes) do
 		if not remotes:FindFirstChild(name) then
@@ -442,6 +444,8 @@ do
 		"BuyCrateStock", "BuyCrateResult", "OpenOwnedCrate", "OpenCrateResult",
 		"GetCaseStock", "CaseStockUpdate",
 		"GetPotionStock", "PotionStockUpdate", "BuyPotionStock", "UseOwnedPotion",
+		"UpgradeMutationLuckRequest", "UpgradeMutationLuckResult",
+		"CancelPotionRequest",
 	}
 	for _, name in ipairs(newRemotes) do
 		if not remotes:FindFirstChild(name) then

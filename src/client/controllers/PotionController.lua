@@ -30,6 +30,7 @@ local GetPotionStock = RemoteEvents:WaitForChild("GetPotionStock")
 local PotionStockUpdate = RemoteEvents:WaitForChild("PotionStockUpdate")
 local BuyPotionStock = RemoteEvents:WaitForChild("BuyPotionStock")
 local UseOwnedPotion = RemoteEvents:WaitForChild("UseOwnedPotion")
+local CancelPotionRequest = RemoteEvents:WaitForChild("CancelPotionRequest")
 
 local screenGui
 local shopModal
@@ -354,6 +355,102 @@ local MODAL_W      = 760
 local MODAL_H      = 690
 
 
+local function showCancelConfirmation(potionType, potionName)
+	if not screenGui then return end
+
+	local overlay = Instance.new("Frame")
+	overlay.Name = "CancelConfirmOverlay"
+	overlay.Size = UDim2.new(1, 0, 1, 0)
+	overlay.BackgroundColor3 = Color3.new(0, 0, 0)
+	overlay.BackgroundTransparency = 0.4
+	overlay.BorderSizePixel = 0
+	overlay.ZIndex = 80
+	overlay.Parent = screenGui
+
+	local box = Instance.new("Frame")
+	box.Name = "ConfirmBox"
+	box.Size = UDim2.new(0, 400, 0, 160)
+	box.Position = UDim2.new(0.5, 0, 0.5, 0)
+	box.AnchorPoint = Vector2.new(0.5, 0.5)
+	box.BackgroundColor3 = Color3.fromRGB(40, 35, 60)
+	box.BorderSizePixel = 0
+	box.ZIndex = 81
+	box.Parent = overlay
+	Instance.new("UICorner", box).CornerRadius = UDim.new(0, 16)
+	local boxStroke = Instance.new("UIStroke")
+	boxStroke.Color = Color3.fromRGB(255, 100, 100)
+	boxStroke.Thickness = 2
+	boxStroke.Parent = box
+
+	local msg = Instance.new("TextLabel")
+	msg.Size = UDim2.new(1, -30, 0, 60)
+	msg.Position = UDim2.new(0.5, 0, 0, 18)
+	msg.AnchorPoint = Vector2.new(0.5, 0)
+	msg.BackgroundTransparency = 1
+	msg.Text = 'Are you sure you want to remove your "' .. potionName .. '" timer?'
+	msg.TextColor3 = Color3.new(1, 1, 1)
+	msg.Font = BUBBLE_FONT
+	msg.TextSize = 16
+	msg.TextWrapped = true
+	msg.ZIndex = 82
+	msg.Parent = box
+
+	local function closePrompt()
+		overlay:Destroy()
+	end
+
+	local yesBtn = Instance.new("TextButton")
+	yesBtn.Size = UDim2.new(0, 140, 0, 38)
+	yesBtn.Position = UDim2.new(0.5, -78, 1, -22)
+	yesBtn.AnchorPoint = Vector2.new(0, 1)
+	yesBtn.BackgroundColor3 = Color3.fromRGB(220, 60, 60)
+	yesBtn.Text = "YES, REMOVE"
+	yesBtn.TextColor3 = Color3.new(1, 1, 1)
+	yesBtn.Font = BUBBLE_FONT
+	yesBtn.TextSize = 14
+	yesBtn.BorderSizePixel = 0
+	yesBtn.AutoButtonColor = false
+	yesBtn.ZIndex = 82
+	yesBtn.Parent = box
+	Instance.new("UICorner", yesBtn).CornerRadius = UDim.new(0, 10)
+
+	local noBtn = Instance.new("TextButton")
+	noBtn.Size = UDim2.new(0, 100, 0, 38)
+	noBtn.Position = UDim2.new(0.5, 72, 1, -22)
+	noBtn.AnchorPoint = Vector2.new(0, 1)
+	noBtn.BackgroundColor3 = Color3.fromRGB(80, 80, 100)
+	noBtn.Text = "CANCEL"
+	noBtn.TextColor3 = Color3.new(1, 1, 1)
+	noBtn.Font = BUBBLE_FONT
+	noBtn.TextSize = 14
+	noBtn.BorderSizePixel = 0
+	noBtn.AutoButtonColor = false
+	noBtn.ZIndex = 82
+	noBtn.Parent = box
+	Instance.new("UICorner", noBtn).CornerRadius = UDim.new(0, 10)
+
+	yesBtn.MouseButton1Click:Connect(function()
+		CancelPotionRequest:FireServer(potionType)
+		closePrompt()
+	end)
+
+	noBtn.MouseButton1Click:Connect(function()
+		closePrompt()
+	end)
+
+	overlay.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			if not box:FindFirstAncestorWhichIsA("Frame") then return end
+			local absPos = box.AbsolutePosition
+			local absSize = box.AbsoluteSize
+			local mx, my = input.Position.X, input.Position.Y
+			if mx < absPos.X or mx > absPos.X + absSize.X or my < absPos.Y or my > absPos.Y + absSize.Y then
+				closePrompt()
+			end
+		end
+	end)
+end
+
 local function buildPotionRow(potionType, potion, parent, ownedCount, stockCount)
 	local row = Instance.new("Frame")
 	row.Name = potionType .. "Row_" .. potion.tier
@@ -574,11 +671,23 @@ local function buildPotionRow(potionType, potion, parent, ownedCount, stockCount
 		return btn
 	end
 
+	local activeData = PotionController.ActivePotions or {}
+	local activeInfo = activeData[potionType]
+	local isThisTierActive = activeInfo and activeInfo.remaining and activeInfo.remaining > 0 and activeInfo.tier == potion.tier
+
 	local canBuy = (not isLocked) and (stockCount or 0) > 0
 	local canUse = (ownedCount or 0) > 0 and not isLocked
+	local cancelBtn = makeBtn("CancelBtn", "CANCEL", -224, isThisTierActive and Color3.fromRGB(220, 60, 60) or Color3.fromRGB(67, 77, 97))
 	local buy1Btn = makeBtn("Buy1Btn", isLocked and "LOCKED" or "BUY 1", -154, canBuy and Color3.fromRGB(66, 166, 255) or Color3.fromRGB(67, 77, 97))
 	local buyMaxBtn = makeBtn("BuyMaxBtn", "BUY MAX", -84, canBuy and Color3.fromRGB(140, 98, 255) or Color3.fromRGB(67, 77, 97))
 	local useBtn = makeBtn("UseBtn", "USE (" .. tostring(ownedCount or 0) .. ")", -14, canUse and Color3.fromRGB(81, 208, 94) or Color3.fromRGB(67, 77, 97))
+
+	cancelBtn.Visible = isThisTierActive == true
+	if isThisTierActive then
+		cancelBtn.MouseButton1Click:Connect(function()
+			showCancelConfirmation(potionType, potion.name)
+		end)
+	end
 
 	if canBuy then
 		buy1Btn.MouseButton1Click:Connect(function()
@@ -989,6 +1098,31 @@ local function buildShopModal()
 		TweenService:Create(useBtn, TweenInfo.new(0.1), { BackgroundColor3 = Color3.fromRGB(180, 80, 220) }):Play()
 	end)
 
+	local divineCancelBtn = Instance.new("TextButton")
+	divineCancelBtn.Name = "DivineCancelBtn"
+	divineCancelBtn.Size = UDim2.new(0, 70, 0, 28)
+	divineCancelBtn.Position = UDim2.new(0, prisTextX + 210, 0, 56)
+	divineCancelBtn.BackgroundColor3 = Color3.fromRGB(220, 60, 60)
+	divineCancelBtn.Text = "CANCEL"
+	divineCancelBtn.TextColor3 = Color3.new(1, 1, 1)
+	divineCancelBtn.Font = BUBBLE_FONT
+	divineCancelBtn.TextSize = 12
+	divineCancelBtn.BorderSizePixel = 0
+	divineCancelBtn.AutoButtonColor = false
+	divineCancelBtn.ZIndex = 53
+	divineCancelBtn.Visible = false
+	divineCancelBtn.Parent = prisRow
+	Instance.new("UICorner", divineCancelBtn).CornerRadius = UDim.new(0, 8)
+	local dcStroke = Instance.new("UIStroke")
+	dcStroke.Color = Color3.fromRGB(140, 30, 30)
+	dcStroke.Thickness = 1.2
+	dcStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+	dcStroke.Parent = divineCancelBtn
+
+	divineCancelBtn.MouseButton1Click:Connect(function()
+		showCancelConfirmation("Divine", prisData.name)
+	end)
+
 	-- Purchase pack buttons (bottom of prismatic card, horizontal)
 	local packRow = Instance.new("Frame")
 	packRow.Name = "PackRow"
@@ -1120,6 +1254,12 @@ local function buildShopModal()
 			local payload = PotionController.ActivePotions or {}
 			local count = payload._divineCount or 0
 			divineCountLabel.Text = "You have: " .. count .. " potion" .. (count ~= 1 and "s" or "")
+		end
+
+		if divineCancelBtn then
+			local payload = PotionController.ActivePotions or {}
+			local divineActive = payload.Divine and payload.Divine.remaining and payload.Divine.remaining > 0
+			divineCancelBtn.Visible = divineActive == true
 		end
 
 		if currentTab == "Luck" then

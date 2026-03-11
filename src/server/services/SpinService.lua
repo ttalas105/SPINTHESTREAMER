@@ -151,9 +151,10 @@ end
 -- So Acid (15% base, 2x harder) = 7.5% chance per pull.
 -------------------------------------------------
 
-local function rollEffect()
+local function rollEffect(mutationMult)
+	local mult = mutationMult or 1
 	for _, effect in ipairs(Effects.List) do
-		local chance = (effect.rollChance or 0) / (effect.rarityMult or 1)
+		local chance = ((effect.rollChance or 0) / (effect.rarityMult or 1)) * mult
 		if rng:NextNumber() < chance then
 			return effect.name
 		end
@@ -295,7 +296,8 @@ local function handleSpin(player)
 	-- Reset pity for the obtained rarity (and all lower)
 	resetPityForRarity(data, streamer.rarity)
 
-	local effect = rollEffect()
+	local mutationMult = PlayerData.GetMutationLuckMultiplier(player)
+	local effect = rollEffect(mutationMult)
 	local destination = PlayerData.AddToInventory(player, streamer.id, effect)
 
 	local displayName = streamer.displayName
@@ -429,7 +431,8 @@ local function handleCrateSpin(player, crateId: number)
 	-- Reset pity for the obtained rarity (and all lower)
 	resetPityForRarity(data, streamer.rarity)
 
-	local effect = rollEffect()
+	local mutationMult = PlayerData.GetMutationLuckMultiplier(player)
+	local effect = rollEffect(mutationMult)
 	local destination = PlayerData.AddToInventory(player, streamer.id, effect)
 
 	local displayName = streamer.displayName
@@ -544,7 +547,8 @@ function SpinService._handleCrateOpen(player, crateId: number)
 
 	resetPityForRarity(data, streamer.rarity)
 
-	local effect = rollEffect()
+	local mutationMult = PlayerData.GetMutationLuckMultiplier(player)
+	local effect = rollEffect(mutationMult)
 	local destination = PlayerData.AddToInventory(player, streamer.id, effect)
 
 	local displayName = streamer.displayName
