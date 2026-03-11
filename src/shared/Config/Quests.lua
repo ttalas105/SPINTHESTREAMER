@@ -132,95 +132,95 @@ Quests.Lifetime = {
 		reward = { gems = 2000 },
 	},
 
-	-- Index completion: Default (23 streamers, 1,150 base gems x2 = 2,300)
+	-- Index completion: Default (32 streamers, 1,785 base gems x2 = 3,570)
 	{
 		id = "life_index_default",
 		name = "Default Collector",
 		desc = "Complete the Default Index",
 		type = "indexDefault",
-		goal = 23,
-		reward = { gems = 2300 },
+		goal = 32,
+		reward = { gems = 3570 },
 	},
-	-- Index completion: Acid (x2 multiplier, 2,300 base gems x2 = 4,600)
+	-- Index completion: Acid (x2 multiplier, 1,785 x2 x2 = 7,140)
 	{
 		id = "life_index_acid",
 		name = "Acid Collector",
 		desc = "Complete the Acid Index",
 		type = "indexAcid",
-		goal = 23,
-		reward = { gems = 4600 },
+		goal = 32,
+		reward = { gems = 7140 },
 	},
-	-- Index completion: Snow (x3 multiplier, 3,450 base gems x2 = 6,900)
+	-- Index completion: Snow (x3 multiplier, 1,785 x3 x2 = 10,710)
 	{
 		id = "life_index_snow",
 		name = "Snow Collector",
 		desc = "Complete the Snow Index",
 		type = "indexSnow",
-		goal = 23,
-		reward = { gems = 6900 },
+		goal = 32,
+		reward = { gems = 10710 },
 	},
-	-- Index completion: Lava (x4 multiplier, 4,600 base gems x2 = 9,200)
+	-- Index completion: Lava (x4 multiplier, 1,785 x4 x2 = 14,280)
 	{
 		id = "life_index_lava",
 		name = "Lava Collector",
 		desc = "Complete the Lava Index",
 		type = "indexLava",
-		goal = 23,
-		reward = { gems = 9200 },
+		goal = 32,
+		reward = { gems = 14280 },
 	},
-	-- Index completion: Lightning (x5 multiplier, 5,750 base gems x2 = 11,500)
+	-- Index completion: Lightning (x5 multiplier, 1,785 x5 x2 = 17,850)
 	{
 		id = "life_index_lightning",
 		name = "Lightning Collector",
 		desc = "Complete the Lightning Index",
 		type = "indexLightning",
-		goal = 23,
-		reward = { gems = 11500 },
+		goal = 32,
+		reward = { gems = 17850 },
 	},
-	-- Index completion: Shadow (x6 multiplier, 6,900 base gems x2 = 13,800)
+	-- Index completion: Shadow (x6 multiplier, 1,785 x6 x2 = 21,420)
 	{
 		id = "life_index_shadow",
 		name = "Shadow Collector",
 		desc = "Complete the Shadow Index",
 		type = "indexShadow",
-		goal = 23,
-		reward = { gems = 13800 },
+		goal = 32,
+		reward = { gems = 21420 },
 	},
-	-- Index completion: Glitchy (x7 multiplier, 8,050 base gems x2 = 16,100)
+	-- Index completion: Glitchy (x7 multiplier, 1,785 x7 x2 = 24,990)
 	{
 		id = "life_index_glitchy",
 		name = "Glitchy Collector",
 		desc = "Complete the Glitchy Index",
 		type = "indexGlitchy",
-		goal = 23,
-		reward = { gems = 16100 },
+		goal = 32,
+		reward = { gems = 24990 },
 	},
-	-- Index completion: Lunar (x8 multiplier, 9,200 base gems x2 = 18,400)
+	-- Index completion: Lunar (x8 multiplier, 1,785 x8 x2 = 28,560)
 	{
 		id = "life_index_lunar",
 		name = "Lunar Collector",
 		desc = "Complete the Lunar Index",
 		type = "indexLunar",
-		goal = 23,
-		reward = { gems = 18400 },
+		goal = 32,
+		reward = { gems = 28560 },
 	},
-	-- Index completion: Solar (x9 multiplier, 10,350 base gems x2 = 20,700)
+	-- Index completion: Solar (x9 multiplier, 1,785 x9 x2 = 32,130)
 	{
 		id = "life_index_solar",
 		name = "Solar Collector",
 		desc = "Complete the Solar Index",
 		type = "indexSolar",
-		goal = 23,
-		reward = { gems = 20700 },
+		goal = 32,
+		reward = { gems = 32130 },
 	},
-	-- Index completion: Void (x10 multiplier, 11,500 base gems x2 = 23,000)
+	-- Index completion: Void (x10 multiplier, 1,785 x10 x2 = 35,700)
 	{
 		id = "life_index_void",
 		name = "Void Collector",
 		desc = "Complete the Void Index",
 		type = "indexVoid",
-		goal = 23,
-		reward = { gems = 23000 },
+		goal = 32,
+		reward = { gems = 35700 },
 	},
 }
 

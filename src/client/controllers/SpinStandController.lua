@@ -515,6 +515,13 @@ local function buildCaseRow(crateId, parent)
 		if isTutorialActive() and crateId ~= 1 then return end
 		local SpinController = require(script.Parent.SpinController)
 		if SpinController.IsActive() then return end
+		local inv = HUDController.Data.inventory or {}
+		local sto = HUDController.Data.storage or {}
+		if #inv >= 9 and #sto >= 200 then
+			openBtnText.Text = "STORAGE FULL!"
+			task.delay(2, function() updateAllCards() end)
+			return
+		end
 		local owned = getOwnedCount(crateId)
 		if owned <= 0 then
 			openBtnText.Text = "NONE!"

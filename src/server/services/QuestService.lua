@@ -94,6 +94,12 @@ local function syncLifetimeProgress(data)
 			if actual > current then
 				data.questProgress[q.id] = actual
 			end
+			-- If the goal was raised (new streamers added) and the player hasn't
+			-- reached the new goal yet, unclaim so they can work toward it again.
+			if data.questClaimed[q.id] and count < q.goal then
+				data.questClaimed[q.id] = nil
+				data.questProgress[q.id] = count
+			end
 		end
 	end
 end

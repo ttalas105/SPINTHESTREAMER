@@ -73,6 +73,15 @@ local onSpinResult = nil
 local isOwnedCrateOpen = false
 local currentGemCaseId = nil
 
+local HOTBAR_MAX = 9
+local STORAGE_MAX = 200
+
+local function isStorageFull()
+	local inv = HUDController.Data.inventory or {}
+	local sto = HUDController.Data.storage or {}
+	return #inv >= HOTBAR_MAX and #sto >= STORAGE_MAX
+end
+
 local spinSessionActive = false
 
 
@@ -869,6 +878,12 @@ local function showResult(data)
 		viewport.Parent = receivedMessage
 
 		local vpModel = modelTemplate:Clone()
+		-- Face the model toward the camera so it starts facing forward
+		local preOk, preCF = pcall(function() return vpModel:GetBoundingBox() end)
+		if preOk and preCF then
+			local center = preCF.Position
+			vpModel:PivotTo(CFrame.new(center) * CFrame.Angles(0, math.rad(225), 0))
+		end
 		vpModel.Parent = viewport
 
 		local vpCamera = Instance.new("Camera")
@@ -1069,6 +1084,15 @@ local function showResult(data)
 		animationDone = false
 
 		if autoSpinEnabled then
+			if isStorageFull() then
+				autoSpinEnabled = false
+				updateAutoSpinVisual()
+				if spinButton then spinButton.Text = "STORAGE FULL!" end
+				task.delay(2, function()
+					SpinController.Hide()
+				end)
+				return
+			end
 			resultFrame.Visible = false
 			spinContainer.Visible = true
 			if carouselFrame then carouselFrame.Visible = true end
@@ -1489,6 +1513,27 @@ end
 function SpinController.RequestSpin()
 	if isSpinning and not animationDone then return end
 
+	if isStorageFull() then
+		if autoSpinEnabled then
+			autoSpinEnabled = false
+			updateAutoSpinVisual()
+		end
+		stopPreSpinVisual()
+		isSpinning = false
+		animationDone = false
+		if spinButton then
+			spinButton.Text = "STORAGE FULL!"
+			task.delay(2, function()
+				if currentSpinCost <= 0 then
+					spinButton.Text = "OPEN"
+				else
+					spinButton.Text = "SPIN  (" .. formatCash(currentSpinCost) .. ")"
+				end
+			end)
+		end
+		return
+	end
+
 	if isSpinning and animationDone then
 		local existingMsg = screenGui:FindFirstChild("ReceivedMessage")
 		if existingMsg then existingMsg:Destroy() end
@@ -1506,6 +1551,36 @@ function SpinController.RequestSpin()
 	startPreSpinVisual()
 
 	spinButton.Text = "SPINNING..."
+
+	local safetyGen = spinGeneration
+	task.delay(15, function()
+		if spinGeneration == safetyGen and isSpinning and not animationDone then
+			warn("[SpinController] Spin timed out — no result received from server")
+			stopPreSpinVisual()
+			isSpinning = false
+			animationDone = false
+			if autoSpinEnabled then
+				autoSpinEnabled = false
+				if autoSpinButton then
+					autoSpinButton.BackgroundColor3 = Color3.fromRGB(55, 50, 80)
+					autoSpinButton.Text = "AUTO"
+					autoSpinButton.TextColor3 = Color3.fromRGB(180, 180, 210)
+				end
+			end
+			if spinButton then
+				spinButton.Text = "TIMED OUT - TRY AGAIN"
+				task.delay(2, function()
+					if spinGeneration == safetyGen then
+						if currentSpinCost <= 0 then
+							spinButton.Text = "OPEN"
+						else
+							spinButton.Text = "SPIN  (" .. formatCash(currentSpinCost) .. ")"
+						end
+					end
+				end)
+			end
+		end
+	end)
 
 	if isOwnedCrateOpen and currentCrateId then
 		local OpenOwnedCrate = RemoteEvents:WaitForChild("OpenOwnedCrate")
