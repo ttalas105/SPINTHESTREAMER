@@ -455,13 +455,23 @@ end
 -- Initialize services (order matters: PlayerData first, then BaseService)
 PlayerData.Init()
 
--- One-time manual reset for a specific account (applies once globally via token).
+-- One-time manual reset for specific accounts (applies once globally via token).
 do
-	local TARGET_USER_ID = 7538347577
-	local RESET_TOKEN = "manual_default_reset_7538347577_v1"
+	local RESET_TARGETS = {
+		{ userId = 50394010,     token = "manual_default_reset_50394010_v1" },
+		{ userId = 7538347577,   token = "manual_default_reset_7538347577_v2" },
+		{ userId = 10614690474,  token = "manual_default_reset_10614690474_v1" },
+	}
+
+	local targetLookup = {}
+	for _, entry in ipairs(RESET_TARGETS) do
+		targetLookup[entry.userId] = entry.token
+	end
 
 	local function tryApplyOneTimeReset(player)
-		if not player or player.UserId ~= TARGET_USER_ID then return end
+		if not player then return end
+		local token = targetLookup[player.UserId]
+		if not token then return end
 		task.spawn(function()
 			for _ = 1, 40 do
 				if PlayerData.Get(player) then break end
@@ -469,9 +479,9 @@ do
 			end
 			if not PlayerData.Get(player) then return end
 			PlayerData.WithLock(player, function()
-				local didReset = PlayerData.ResetToDefault(player, RESET_TOKEN)
+				local didReset = PlayerData.ResetToDefault(player, token)
 				if didReset then
-					print("[Server] Applied one-time default reset for userId " .. tostring(TARGET_USER_ID))
+					print("[Server] Applied one-time default reset for userId " .. tostring(player.UserId))
 				end
 			end)
 		end)
