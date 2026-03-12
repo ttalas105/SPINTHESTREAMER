@@ -77,13 +77,12 @@ end
 
 local LOCKED_PAD_COLOR = Color3.fromRGB(180, 40, 40)
 
+local PREMIUM_PAD_SLOT = MAX_BASE_DISPLAYS -- last sequential pad is the premium slot
+
 local function isPadSlotUnlocked(player: Player, padSlot: number): boolean
 	local data = PlayerData and PlayerData.Get(player)
 	if not data then return false end
-	-- BaseService numbers pads sequentially (1..MAX_BASE_DISPLAYS).
-	-- Slots 1..StartingSlots are free; each rebirth adds one more.
-	-- The premium slot is always the last index (PremiumSlotIndex).
-	if padSlot == SlotsConfig.PremiumSlotIndex then
+	if padSlot == PREMIUM_PAD_SLOT then
 		return data.premiumSlotUnlocked == true
 	end
 	local rebirthUnlocked = SlotsConfig.GetSlotsForRebirth(data.rebirthCount or 0)
@@ -91,7 +90,7 @@ local function isPadSlotUnlocked(player: Player, padSlot: number): boolean
 end
 
 local function getRebirthNeededForPadSlot(padSlot: number): number
-	if padSlot == SlotsConfig.PremiumSlotIndex then
+	if padSlot == PREMIUM_PAD_SLOT then
 		return -1
 	end
 	if padSlot <= SlotsConfig.StartingSlots then
@@ -105,7 +104,9 @@ local function updatePadVisuals(player: Player, padSlot: number)
 	local displayInfo = baseInfo and baseInfo.displays and baseInfo.displays[padSlot]
 	if not displayInfo or not displayInfo.greenPart then return end
 
-	if isPadSlotUnlocked(player, padSlot) then
+	local data = PlayerData and PlayerData.Get(player)
+	local hasEquipped = data and data.equippedPads and data.equippedPads[tostring(padSlot)] ~= nil
+	if hasEquipped or isPadSlotUnlocked(player, padSlot) then
 		if displayInfo.originalGreenColor then
 			displayInfo.greenPart.Color = displayInfo.originalGreenColor
 		end
@@ -903,7 +904,10 @@ local function updatePromptText(player: Player, padSlot: number)
 	local displayInfo = baseInfo and baseInfo.displays and baseInfo.displays[padSlot]
 	if not displayInfo or not displayInfo.prompt then return end
 
-	if not isPadSlotUnlocked(player, padSlot) then
+	local data = PlayerData and PlayerData.Get(player)
+	local hasPlaced = data and data.equippedPads and data.equippedPads[tostring(padSlot)] ~= nil
+
+	if not hasPlaced and not isPadSlotUnlocked(player, padSlot) then
 		local rebirthNeeded = getRebirthNeededForPadSlot(padSlot)
 		displayInfo.prompt.ActionText = "Locked"
 		if rebirthNeeded < 0 then
@@ -914,8 +918,6 @@ local function updatePromptText(player: Player, padSlot: number)
 		return
 	end
 
-	local data = PlayerData and PlayerData.Get(player)
-	local hasPlaced = data and data.equippedPads and data.equippedPads[tostring(padSlot)] ~= nil
 	displayInfo.prompt.ActionText = hasPlaced and "Remove Streamer" or "Place Streamer"
 	displayInfo.prompt.ObjectText = "Base Slot " .. tostring(padSlot)
 end
