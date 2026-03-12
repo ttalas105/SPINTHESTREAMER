@@ -39,6 +39,7 @@ local PlayerData
 local PotionService
 local DISPLAY_SCALE_MULT = 1.15
 local MAX_BASE_DISPLAYS = SlotsConfig.MaxTotalSlots
+local _assignLock = false
 
 local function formatNumber(n)
 	local s = tostring(math.floor(n))
@@ -79,10 +80,13 @@ local LOCKED_PAD_COLOR = Color3.fromRGB(180, 40, 40)
 local function isPadSlotUnlocked(player: Player, padSlot: number): boolean
 	local data = PlayerData and PlayerData.Get(player)
 	if not data then return false end
-	local rebirthUnlocked = SlotsConfig.GetSlotsForRebirth(data.rebirthCount or 0)
+	-- BaseService numbers pads sequentially (1..MAX_BASE_DISPLAYS).
+	-- Slots 1..StartingSlots are free; each rebirth adds one more.
+	-- The premium slot is always the last index (PremiumSlotIndex).
 	if padSlot == SlotsConfig.PremiumSlotIndex then
 		return data.premiumSlotUnlocked == true
 	end
+	local rebirthUnlocked = SlotsConfig.GetSlotsForRebirth(data.rebirthCount or 0)
 	return padSlot >= 1 and padSlot <= rebirthUnlocked
 end
 
@@ -1077,36 +1081,85 @@ local function addBaseOwnerSign(baseModel: Model, player: Player)
 	userStroke.Parent = userLabel
 end
 
+local function cleanBaseModel(baseModel: Model)
+	if not baseModel or not baseModel:IsA("Model") then return end
+	for _, d in ipairs(baseModel:GetDescendants()) do
+		if d:IsA("BasePart") then
+			local oldGui = d:FindFirstChild("MoneyCounterGui")
+			if oldGui then pcall(function() oldGui:Destroy() end) end
+			d:SetAttribute("OwnerUserId", nil)
+		end
+		if d.Name == "OwnerSignAnchor" or string.match(d.Name, "^DisplayPromptAnchor_") then
+			pcall(function() d:Destroy() end)
+		end
+		if d.Name == "DisplayInfo" and d:IsA("BillboardGui") then
+			pcall(function() d:Destroy() end)
+		end
+	end
+	for _, child in ipairs(baseModel:GetChildren()) do
+		if string.match(child.Name, "^DisplaySlot_") then
+			pcall(function() child:Destroy() end)
+		end
+	end
+end
+
+local function isPlayerValid(player: Player): boolean
+	local ok, result = pcall(function() return player.Parent ~= nil end)
+	return ok and result == true
+end
+
 local function assignBase(player)
+	while _assignLock do
+		task.wait()
+	end
+	_assignLock = true
+
+	if BaseService._bases[player.UserId] then
+		_assignLock = false
+		return
+	end
+
+	if not isPlayerValid(player) then
+		_assignLock = false
+		return
+	end
+
 	local slot = findAvailableSlot()
 	if not slot then
+		_assignLock = false
 		warn("[BaseService] Server full (no base slot) for " .. player.Name)
 		return
 	end
 
 	BaseService._occupiedSlots[slot] = true
+	BaseService._bases[player.UserId] = {
+		position = BASE_POSITIONS[slot].position,
+		slotIndex = slot,
+		baseModel = nil,
+		displays = {},
+	}
+	_assignLock = false
+
+	-- Everything below can safely yield; the slot is already reserved.
+	-- After every yield we check the player is still connected and still
+	-- owns this slot (PlayerRemoving may have freed it while we yielded).
+
 	local slotInfo = BASE_POSITIONS[slot]
 	local playerBasesFolder = Workspace:FindFirstChild("PlayerBases")
 	if not playerBasesFolder then
 		playerBasesFolder = Workspace:WaitForChild("PlayerBases", 15)
 	end
+
+	if not isPlayerValid(player) or not BaseService._bases[player.UserId] then return end
+
 	local baseModel = playerBasesFolder and playerBasesFolder:FindFirstChild("BaseSlot_" .. slot)
 	if not baseModel and playerBasesFolder then
 		baseModel = playerBasesFolder:WaitForChild("BaseSlot_" .. slot, 10)
 	end
 
-	-- Clean up any leftover artifacts from previous occupants
-	if baseModel and baseModel:IsA("Model") then
-		for _, d in ipairs(baseModel:GetDescendants()) do
-			if d:IsA("BasePart") then
-				local oldGui = d:FindFirstChild("MoneyCounterGui")
-				if oldGui then pcall(function() oldGui:Destroy() end) end
-				d:SetAttribute("OwnerUserId", nil)
-			end
-		end
-		local oldSign = baseModel:FindFirstChild("OwnerSignAnchor")
-		if oldSign then pcall(function() oldSign:Destroy() end) end
-	end
+	if not isPlayerValid(player) or not BaseService._bases[player.UserId] then return end
+
+	cleanBaseModel(baseModel)
 
 	local displays = {}
 	if baseModel and baseModel:IsA("Model") then
@@ -1114,7 +1167,19 @@ local function assignBase(player)
 			displays = buildDisplayPairs(baseModel, slotInfo.rotation)
 			if next(displays) ~= nil then break end
 			task.wait(1)
+			if not isPlayerValid(player) or not BaseService._bases[player.UserId] then return end
 		end
+	end
+
+	if not isPlayerValid(player) or not BaseService._bases[player.UserId] then return end
+
+	-- Wait for PlayerData to be fully loaded so that rebirth count, premium
+	-- slot, VIP, etc. are all available before we set up visuals/prompts.
+	-- The caller already polls, but this is a safety net for the catch-up path.
+	for _ = 1, 40 do
+		if PlayerData and PlayerData.Get(player) then break end
+		task.wait(0.25)
+		if not isPlayerValid(player) or not BaseService._bases[player.UserId] then return end
 	end
 
 	BaseService._bases[player.UserId] = {
@@ -1131,13 +1196,9 @@ local function assignBase(player)
 	if next(displays) ~= nil then
 		for padSlot, displayInfo in pairs(displays) do
 			bindPrompt(displayInfo, player)
-			updatePromptText(player, padSlot)
-			updateMoneyText(player, padSlot)
-			updatePadVisuals(player, padSlot)
 		end
 
 		-- Restore previously equipped streamers from saved data.
-		-- Also recover any items on pad slots that no longer exist (e.g., from old 20-slot system).
 		local data = PlayerData and PlayerData.Get(player)
 		if data and data.equippedPads then
 			local strandedKeys = {}
@@ -1148,14 +1209,11 @@ local function assignBase(player)
 						local pendingBySlot = getNestedTable(BaseService._pendingMoney, player.UserId)
 						pendingBySlot[padSlot] = 0
 						resetSlotIncomeTimer(player.UserId, padSlot)
-						updateMoneyText(player, padSlot)
-						updatePromptText(player, padSlot)
 					end
 				elseif padSlot then
 					table.insert(strandedKeys, key)
 				end
 			end
-			-- Return stranded items to inventory/storage
 			for _, key in ipairs(strandedKeys) do
 				local item = data.equippedPads[key]
 				if item then
@@ -1170,27 +1228,31 @@ local function assignBase(player)
 				PlayerData.Replicate(player)
 			end
 		end
+
+		-- Final visual pass: now that data is loaded and streamers are placed,
+		-- set all pad colors, prompt text, and money text with correct state.
+		for padSlot in pairs(displays) do
+			updatePadVisuals(player, padSlot)
+			updatePromptText(player, padSlot)
+			updateMoneyText(player, padSlot)
+		end
 	else
 		warn("[BaseService] Could not find green/grey display pairs in BaseSlot_" .. tostring(slot))
 	end
 
 	addBaseOwnerSign(baseModel, player)
 
-	BaseReady:FireClient(player, {
-		position = slotInfo.position,
-		floorSize = DesignConfig.Base.FloorSize,
-	})
+	if isPlayerValid(player) then
+		BaseReady:FireClient(player, {
+			position = slotInfo.position,
+			floorSize = DesignConfig.Base.FloorSize,
+		})
+	end
 end
 
 function BaseService.Init(playerDataModule, potionServiceModule)
 	PlayerData = playerDataModule
 	PotionService = potionServiceModule
-
-	print("[BaseService DEBUG] === All Players ===")
-	for i, player in ipairs(Players:GetPlayers()) do
-		print(string.format("  [%d] %s (UserId: %d)", i, player.Name, player.UserId))
-	end
-	print(string.format("[BaseService DEBUG] Total players: %d", #Players:GetPlayers()))
 
 	-- Resolve result remotes during init so we bind post-dedup instances.
 	BaseReady = RemoteEvents:WaitForChild("BaseReady")
@@ -1204,8 +1266,6 @@ function BaseService.Init(playerDataModule, potionServiceModule)
 	end
 
 	Players.PlayerAdded:Connect(function(player)
-		-- Wait for PlayerData to be fully loaded before assigning base.
-		-- DataStore can take several seconds under load; a fixed delay is unreliable.
 		for _ = 1, 40 do
 			if PlayerData and PlayerData.Get(player) then break end
 			task.wait(0.25)
@@ -1213,7 +1273,9 @@ function BaseService.Init(playerDataModule, potionServiceModule)
 		if not PlayerData.Get(player) then
 			warn("[BaseService] PlayerData not loaded after 10s for " .. player.Name .. " — assigning base with defaults")
 		end
-		assignBase(player)
+		if not BaseService._bases[player.UserId] then
+			assignBase(player)
+		end
 	end)
 
 	Players.PlayerRemoving:Connect(function(player)
@@ -1221,13 +1283,6 @@ function BaseService.Init(playerDataModule, potionServiceModule)
 		local baseInfo = BaseService._bases[userId]
 		if baseInfo then
 			clearPlacedModel(player)
-			-- Remove owner sign
-			if baseInfo.baseModel then
-				local signAnchor = baseInfo.baseModel:FindFirstChild("OwnerSignAnchor")
-				if signAnchor then
-					pcall(function() signAnchor:Destroy() end)
-				end
-			end
 			for _, displayInfo in pairs(baseInfo.displays or {}) do
 				if displayInfo.prompt then
 					pcall(function() displayInfo.prompt:Destroy() end)
@@ -1235,20 +1290,18 @@ function BaseService.Init(playerDataModule, potionServiceModule)
 				if displayInfo.promptAnchor then
 					pcall(function() displayInfo.promptAnchor:Destroy() end)
 				end
-				-- Disconnect touch events so they don't leak
 				if displayInfo.touchConnection then
 					pcall(function() displayInfo.touchConnection:Disconnect() end)
 					displayInfo.touchConnection = nil
 				end
-				-- Remove MoneyCounterGui from green parts
-				if displayInfo.greenPart then
-					local gui = displayInfo.greenPart:FindFirstChild("MoneyCounterGui")
-					if gui then
-						pcall(function() gui:Destroy() end)
-					end
-					displayInfo.greenPart:SetAttribute("OwnerUserId", nil)
+				-- Restore green pad to its original color
+				if displayInfo.greenPart and displayInfo.originalGreenColor then
+					pcall(function()
+						displayInfo.greenPart.Color = displayInfo.originalGreenColor
+					end)
 				end
 			end
+			cleanBaseModel(baseInfo.baseModel)
 			BaseService._occupiedSlots[baseInfo.slotIndex] = nil
 			BaseService._bases[userId] = nil
 		end
@@ -1267,7 +1320,9 @@ function BaseService.Init(playerDataModule, potionServiceModule)
 					if PlayerData and PlayerData.Get(player) then break end
 					task.wait(0.25)
 				end
-				assignBase(player)
+				if not BaseService._bases[player.UserId] and isPlayerValid(player) then
+					assignBase(player)
+				end
 			end)
 		end
 	end
