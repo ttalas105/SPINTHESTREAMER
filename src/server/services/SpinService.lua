@@ -78,6 +78,23 @@ local RARITY_EXPONENTS = {
 	Mythic    =  3.1,
 }
 
+-------------------------------------------------
+-- 3RD SPIN BONUS (first-time players only)
+-- On exactly the 3rd lifetime spin, override result
+-- with a 50/50 Cinna or QTCinderella.
+-------------------------------------------------
+local FIRST_JOIN_BONUS_SPIN = 3
+local FIRST_JOIN_BONUS_POOL = { "Cinna", "QTCinderella" }
+
+local function checkFirstJoinBonus(data)
+	if data.firstJoinBonusUsed then return nil end
+	local currentSpins = data.totalSpins or 0
+	if currentSpins + 1 ~= FIRST_JOIN_BONUS_SPIN then return nil end
+	data.firstJoinBonusUsed = true
+	local pick = FIRST_JOIN_BONUS_POOL[rng:NextInteger(1, #FIRST_JOIN_BONUS_POOL)]
+	return Streamers.ById[pick]
+end
+
 local function pickStreamerByOdds(luckMultiplier: number)
 	local list = Streamers.List
 	if not list or #list == 0 then
@@ -274,19 +291,26 @@ local function handleSpin(player)
 	local x2Luck = PlayerData.HasX2Luck(player) and X2L_LUCK or 1
 	local totalLuck = SpinService.ServerLuckMultiplier * rebirthLuck * (1 + playerLuckPercent) * potionLuckMult * vipLuck * x2Luck
 
+	-- 3rd spin bonus check
+	local bonusStreamer = checkFirstJoinBonus(data)
+
 	-- Increment pity counters
 	incrementPityCounters(data)
 
-	-- Check for pity guarantee
-	local pityRarity = checkPityGuarantee(data)
 	local streamer
 	local isPityHit = false
 
-	if pityRarity then
-		streamer = pickStreamerFromRarity(pityRarity)
-		isPityHit = true
+	if bonusStreamer then
+		streamer = bonusStreamer
 	else
-		streamer = pickStreamerByOdds(totalLuck)
+		-- Check for pity guarantee
+		local pityRarity = checkPityGuarantee(data)
+		if pityRarity then
+			streamer = pickStreamerFromRarity(pityRarity)
+			isPityHit = true
+		else
+			streamer = pickStreamerByOdds(totalLuck)
+		end
 	end
 
 	if not streamer then
@@ -408,19 +432,26 @@ local function handleCrateSpin(player, crateId: number)
 	local x2Luck = PlayerData.HasX2Luck(player) and X2L_LUCK or 1
 	local totalLuck = SpinService.ServerLuckMultiplier * rebirthLuck * (1 + playerLuckPercent + luckBonus) * potionLuckMult * vipLuck * x2Luck
 
+	-- 3rd spin bonus check
+	local bonusStreamer = checkFirstJoinBonus(data)
+
 	-- Increment pity counters
 	incrementPityCounters(data)
 
-	-- Check for pity guarantee
-	local pityRarity = checkPityGuarantee(data)
 	local streamer
 	local isPityHit = false
 
-	if pityRarity then
-		streamer = pickStreamerFromRarity(pityRarity)
-		isPityHit = true
+	if bonusStreamer then
+		streamer = bonusStreamer
 	else
-		streamer = pickStreamerByOdds(totalLuck)
+		-- Check for pity guarantee
+		local pityRarity = checkPityGuarantee(data)
+		if pityRarity then
+			streamer = pickStreamerFromRarity(pityRarity)
+			isPityHit = true
+		else
+			streamer = pickStreamerByOdds(totalLuck)
+		end
 	end
 
 	if not streamer then
@@ -528,17 +559,24 @@ function SpinService._handleCrateOpen(player, crateId: number)
 	local x2Luck = PlayerData.HasX2Luck(player) and X2L_LUCK or 1
 	local totalLuck = SpinService.ServerLuckMultiplier * rebirthLuck * (1 + playerLuckPercent + luckBonus) * potionLuckMult * vipLuck * x2Luck
 
+	-- 3rd spin bonus check
+	local bonusStreamer = checkFirstJoinBonus(data)
+
 	incrementPityCounters(data)
 
-	local pityRarity = checkPityGuarantee(data)
 	local streamer
 	local isPityHit = false
 
-	if pityRarity then
-		streamer = pickStreamerFromRarity(pityRarity)
-		isPityHit = true
+	if bonusStreamer then
+		streamer = bonusStreamer
 	else
-		streamer = pickStreamerByOdds(totalLuck)
+		local pityRarity = checkPityGuarantee(data)
+		if pityRarity then
+			streamer = pickStreamerFromRarity(pityRarity)
+			isPityHit = true
+		else
+			streamer = pickStreamerByOdds(totalLuck)
+		end
 	end
 
 	if not streamer then
@@ -628,16 +666,23 @@ function SpinService._handlePremiumCrateOpen(player, caseKey: string)
 		return
 	end
 
-	local streamerId = EnhancedCases.Roll(caseKey)
-	if not streamerId then
-		SpinResult:FireClient(player, { success = false, reason = "Config error." })
-		return
-	end
+	-- 3rd spin bonus check
+	local bonusStreamer = checkFirstJoinBonus(data)
+	local streamer
 
-	local streamer = Streamers.ById[streamerId]
-	if not streamer then
-		SpinResult:FireClient(player, { success = false, reason = "Config error." })
-		return
+	if bonusStreamer then
+		streamer = bonusStreamer
+	else
+		local streamerId = EnhancedCases.Roll(caseKey)
+		if not streamerId then
+			SpinResult:FireClient(player, { success = false, reason = "Config error." })
+			return
+		end
+		streamer = Streamers.ById[streamerId]
+		if not streamer then
+			SpinResult:FireClient(player, { success = false, reason = "Config error." })
+			return
+		end
 	end
 
 	local effect = rollEffect(1)

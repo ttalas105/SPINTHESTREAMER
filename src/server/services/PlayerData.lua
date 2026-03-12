@@ -157,6 +157,7 @@ local DEFAULT_DATA = {
 	caseStockLastRestock = 0,
 	potionShopStock = {},
 	potionStockLastRestock = 0,
+	firstJoinBonusUsed = false,
 	-- Lifetime stats (for global leaderboards)
 	totalSpins = 0,
 	totalCashEarned = 0,

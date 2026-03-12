@@ -260,7 +260,17 @@ local function handleGemTrade(player, tradeIndex)
 		end
 	end
 
-	PlayerData.ConsumeSacrificeQueue(player, queueId)
+	local consumed = PlayerData.ConsumeSacrificeQueue(player, queueId)
+	if #consumed > trade.count then
+		for ei = trade.count + 1, #consumed do
+			local item = consumed[ei]
+			if item and item ~= false then
+				local sid = type(item) == "table" and item.id or item
+				local eff = type(item) == "table" and item.effect or nil
+				PlayerData.AddToInventory(player, sid, eff)
+			end
+		end
+	end
 	PlayerData.AddGems(player, trade.gems)
 	SacrificeResult:FireClient(player, { success = true, sacrificeType = "GemTrade", gems = trade.gems })
 	if QuestService then
@@ -351,7 +361,17 @@ local function handleOneTime(player, oneTimeId)
 		end
 	end
 
-	PlayerData.ConsumeSacrificeQueue(player, queueId)
+	local consumed = PlayerData.ConsumeSacrificeQueue(player, queueId)
+	if #consumed > totalNeeded then
+		for ei = totalNeeded + 1, #consumed do
+			local item = consumed[ei]
+			if item and item ~= false then
+				local sid = type(item) == "table" and item.id or item
+				local eff = type(item) == "table" and item.effect or nil
+				PlayerData.AddToInventory(player, sid, eff)
+			end
+		end
+	end
 	PlayerData.SetSacrificeOneTimeCompleted(player, oneTimeId)
 	PlayerData.AddGems(player, cfg.gems)
 	SacrificeResult:FireClient(player, { success = true, sacrificeType = "OneTime", oneTimeId = oneTimeId, gems = cfg.gems })
@@ -390,7 +410,17 @@ local function handleElemental(player, effect, rarity)
 		end
 	end
 
-	PlayerData.ConsumeSacrificeQueue(player, queueId)
+	local consumed = PlayerData.ConsumeSacrificeQueue(player, queueId)
+	if #consumed > need then
+		for ei = need + 1, #consumed do
+			local item = consumed[ei]
+			if item and item ~= false then
+				local sid = type(item) == "table" and item.id or item
+				local eff = type(item) == "table" and item.effect or nil
+				PlayerData.AddToInventory(player, sid, eff)
+			end
+		end
+	end
 	local newId = randomStreamerOfRarity(rarity)
 	if newId then
 		PlayerData.AddToInventory(player, newId, effect)
