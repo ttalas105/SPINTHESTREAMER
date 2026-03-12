@@ -9,6 +9,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 
 local Economy = require(ReplicatedStorage.Shared.Config.Economy)
+local EnhancedCases = require(ReplicatedStorage.Shared.Config.EnhancedCases)
 
 local CaseStockService = {}
 
@@ -222,7 +223,7 @@ local function handleOpenCrate(player, crateId)
 	end
 
 	local hasInventorySpace = (#(data.inventory or {}) < PlayerData.HOTBAR_MAX)
-	local hasStorageSpace = (#(data.storage or {}) < PlayerData.STORAGE_MAX)
+	local hasStorageSpace = (#(data.storage or {}) < PlayerData.GetStorageMax(player))
 	if not hasInventorySpace and not hasStorageSpace then
 		local OpenCrateResult = RemoteEvents:FindFirstChild("OpenCrateResult")
 		if OpenCrateResult then
@@ -239,6 +240,47 @@ local function handleOpenCrate(player, crateId)
 	PlayerData.Replicate(player)
 
 	SpinService._handleCrateOpen(player, crateId)
+end
+
+-------------------------------------------------
+-- OPEN PREMIUM CRATE (Wraith / Starlight — from ownedCrates)
+-------------------------------------------------
+
+local function handleOpenPremiumCrate(player, caseKey)
+	if type(caseKey) ~= "string" then return end
+	local caseData = EnhancedCases.ByKey[caseKey]
+	if not caseData then return end
+
+	local data = PlayerData.Get(player)
+	if not data then return end
+
+	if not data.ownedCrates then data.ownedCrates = {} end
+	if (data.ownedCrates[caseKey] or 0) <= 0 then
+		local OpenCrateResult = RemoteEvents:FindFirstChild("OpenCrateResult")
+		if OpenCrateResult then
+			OpenCrateResult:FireClient(player, { success = false, reason = "You don't own any of this case!" })
+		end
+		return
+	end
+
+	local hasInventorySpace = (#(data.inventory or {}) < PlayerData.HOTBAR_MAX)
+	local hasStorageSpace = (#(data.storage or {}) < PlayerData.GetStorageMax(player))
+	if not hasInventorySpace and not hasStorageSpace then
+		local SpinResult = RemoteEvents:FindFirstChild("SpinResult")
+		if SpinResult then
+			SpinResult:FireClient(player, { success = false, reason = "Inventory and storage are full!" })
+		end
+		return
+	end
+
+	data.ownedCrates[caseKey] = data.ownedCrates[caseKey] - 1
+	if data.ownedCrates[caseKey] <= 0 then
+		data.ownedCrates[caseKey] = nil
+	end
+
+	PlayerData.Replicate(player)
+
+	SpinService._handlePremiumCrateOpen(player, caseKey)
 end
 
 -------------------------------------------------
@@ -278,6 +320,13 @@ function CaseStockService.Init(playerDataModule, spinServiceModule, questService
 	OpenOwnedCrate.OnServerEvent:Connect(function(player, crateId)
 		PlayerData.WithLock(player, function()
 			handleOpenCrate(player, crateId)
+		end)
+	end)
+
+	local OpenPremiumCrate = RemoteEvents:WaitForChild("OpenPremiumCrate")
+	OpenPremiumCrate.OnServerEvent:Connect(function(player, caseKey)
+		PlayerData.WithLock(player, function()
+			handleOpenPremiumCrate(player, caseKey)
 		end)
 	end)
 

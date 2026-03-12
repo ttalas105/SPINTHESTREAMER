@@ -1,7 +1,8 @@
 --[[
 	UpgradeStandController.lua
 	Upgrade UI — dark-themed panel matching Case Shop / Potion Shop style.
-	Two upgrades: Luck (+5 per purchase) and Coin Multiplier (+2% per purchase).
+	Three upgrades: Luck (+5 per purchase), Coin Multiplier (+2% per purchase),
+	and Mutation Luck (+2% mutation chance per purchase).
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -24,16 +25,20 @@ local UpgradeLuckRequest = RemoteEvents:WaitForChild("UpgradeLuckRequest")
 local UpgradeLuckResult = RemoteEvents:WaitForChild("UpgradeLuckResult")
 local UpgradeCashRequest = RemoteEvents:WaitForChild("UpgradeCashRequest")
 local UpgradeCashResult = RemoteEvents:WaitForChild("UpgradeCashResult")
+local UpgradeMutationLuckRequest = RemoteEvents:WaitForChild("UpgradeMutationLuckRequest")
+local UpgradeMutationLuckResult = RemoteEvents:WaitForChild("UpgradeMutationLuckResult")
 
 local screenGui, overlay, modalFrame
 local isOpen = false
 
 local LUCK_PER_LEVEL = 5
 local CASH_BONUS_PER_LEVEL = 2
+local MUTATION_BONUS_PER_LEVEL = 2
 
 local refs = {
 	luck = {},
 	cash = {},
+	mutationLuck = {},
 }
 
 local FONT = Enum.Font.FredokaOne
@@ -43,7 +48,7 @@ local RED = Color3.fromRGB(248, 87, 87)
 local RED_DARK = Color3.fromRGB(130, 35, 35)
 local CARD_BG = Color3.fromRGB(57, 79, 150)
 local CARD_BG_DIM = Color3.fromRGB(48, 67, 127)
-local MODAL_W, MODAL_H = 760, 600
+local MODAL_W, MODAL_H = 760, 720
 local CASH_TOUCH_SOUND_ID = "rbxassetid://7112275565"
 local CASH_SOUND_START_OFFSET = 0.28
 local cachedUpgradeCashSound = nil
@@ -204,9 +209,32 @@ local function buildUpgradeCard(parent, cfg)
 	cardGrad.Rotation = 18
 	cardGrad.Parent = card
 
+	local textLeft = 16
+	if cfg.imageId and cfg.imageId ~= "" then
+		local iconFrame = Instance.new("Frame")
+		iconFrame.Size = UDim2.new(0, 72, 0, 72)
+		iconFrame.Position = UDim2.new(0, 14, 0, 10)
+		iconFrame.BackgroundColor3 = Color3.fromRGB(30, 40, 80)
+		iconFrame.BorderSizePixel = 0
+		iconFrame.Parent = card
+		Instance.new("UICorner", iconFrame).CornerRadius = UDim.new(0, 14)
+		addStroke(iconFrame, cfg.accent, 2)
+
+		local icon = Instance.new("ImageLabel")
+		icon.Size = UDim2.new(1, -8, 1, -8)
+		icon.Position = UDim2.new(0.5, 0, 0.5, 0)
+		icon.AnchorPoint = Vector2.new(0.5, 0.5)
+		icon.BackgroundTransparency = 1
+		icon.ScaleType = Enum.ScaleType.Fit
+		icon.Image = cfg.imageId
+		icon.Parent = iconFrame
+
+		textLeft = 96
+	end
+
 	local title = Instance.new("TextLabel")
-	title.Size = UDim2.new(0.7, 0, 0, 24)
-	title.Position = UDim2.new(0, 16, 0, 10)
+	title.Size = UDim2.new(0.7, -textLeft, 0, 24)
+	title.Position = UDim2.new(0, textLeft, 0, 10)
 	title.BackgroundTransparency = 1
 	title.Text = cfg.title
 	title.TextColor3 = cfg.accent
@@ -231,8 +259,8 @@ local function buildUpgradeCard(parent, cfg)
 	level.Parent = card
 
 	local flow = Instance.new("TextLabel")
-	flow.Size = UDim2.new(1, -32, 0, 20)
-	flow.Position = UDim2.new(0, 16, 0, 38)
+	flow.Size = UDim2.new(1, -textLeft - 16, 0, 20)
+	flow.Position = UDim2.new(0, textLeft, 0, 38)
 	flow.BackgroundTransparency = 1
 	flow.Text = "Current: +0%  ->  Next: +0%"
 	flow.TextColor3 = cfg.accent
@@ -244,7 +272,7 @@ local function buildUpgradeCard(parent, cfg)
 
 	local current = Instance.new("TextLabel")
 	current.Size = UDim2.new(0.47, 0, 0, 18)
-	current.Position = UDim2.new(0, 16, 0, 62)
+	current.Position = UDim2.new(0, textLeft, 0, 62)
 	current.BackgroundTransparency = 1
 	current.Text = "Current bonus: +0%"
 	current.TextColor3 = Color3.fromRGB(145, 140, 170)
@@ -278,7 +306,7 @@ local function buildUpgradeCard(parent, cfg)
 	scaleTxt.Parent = card
 
 	local dotsHolder, dots = buildProgressDots(card)
-	dotsHolder.Position = UDim2.new(0, 16, 0, 104)
+	dotsHolder.Position = UDim2.new(0, textLeft, 0, 104)
 
 	local btn = Instance.new("TextButton")
 	btn.Name = "UpgradeBtn"
@@ -412,6 +440,28 @@ local function refreshModal()
 	if cash >= cashCost then
 		rC.affordHint.Text = "After upgrade: $" .. fmtNum(math.max(0, cash - cashCost)) .. "  •  Next: $" .. fmtNum(nextCashCost)
 		rC.affordHint.TextColor3 = Color3.fromRGB(245, 220, 140)
+	end
+
+	local mutLevel = HUDController.Data.mutationLuckUpgrade or 0
+	local currentMutBonus = mutLevel * MUTATION_BONUS_PER_LEVEL
+	local nextMutBonus = currentMutBonus + MUTATION_BONUS_PER_LEVEL
+	local mutCost = Economy.GetMutationLuckUpgradeCost(mutLevel)
+	local nextMutCost = Economy.GetMutationLuckUpgradeCost(mutLevel + 1)
+
+	local rM = refs.mutationLuck
+	rM.level.Text = "Level " .. mutLevel
+	rM.flow.Text = ("Current +%d%%  ->  Next +%d%%"):format(currentMutBonus, nextMutBonus)
+	rM.current.Visible = false
+	rM.next.Text = ("Next bonus: +%d%%"):format(nextMutBonus)
+	rM.btnText.Text = "Upgrade: $" .. fmtNum(mutCost)
+	refreshProgress(rM.dots, mutLevel, Color3.fromRGB(200, 130, 255))
+	rM.scale.Text = ""
+	setAffordableState(rM, cash >= mutCost, {
+		btnColor = Color3.fromRGB(160, 80, 220),
+	})
+	if cash >= mutCost then
+		rM.affordHint.Text = "After upgrade: $" .. fmtNum(math.max(0, cash - mutCost)) .. "  •  Next: $" .. fmtNum(nextMutCost)
+		rM.affordHint.TextColor3 = Color3.fromRGB(210, 180, 255)
 	end
 end
 
@@ -556,13 +606,18 @@ function UpgradeStandController.Init()
 	divider.ZIndex = 3
 	divider.Parent = modalFrame
 
-	-- ===== CARDS AREA =====
-	local cardsContainer = Instance.new("Frame")
+	-- ===== CARDS AREA (scrollable) =====
+	local cardsContainer = Instance.new("ScrollingFrame")
 	cardsContainer.Name = "Cards"
-	cardsContainer.Size = UDim2.new(1, -30, 1, -90)
+	cardsContainer.Size = UDim2.new(1, -30, 1, -82)
 	cardsContainer.Position = UDim2.new(0.5, 0, 0, 72)
 	cardsContainer.AnchorPoint = Vector2.new(0.5, 0)
 	cardsContainer.BackgroundTransparency = 1
+	cardsContainer.BorderSizePixel = 0
+	cardsContainer.ScrollBarThickness = 6
+	cardsContainer.ScrollBarImageColor3 = Color3.fromRGB(180, 200, 255)
+	cardsContainer.ScrollBarImageTransparency = 0.3
+	cardsContainer.AutomaticCanvasSize = Enum.AutomaticSize.Y
 	cardsContainer.ZIndex = 3
 	cardsContainer.Parent = modalFrame
 
@@ -571,6 +626,15 @@ function UpgradeStandController.Init()
 	layout.Padding = UDim.new(0, 12)
 	layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 	layout.Parent = cardsContainer
+
+	local padding = Instance.new("UIPadding")
+	padding.PaddingBottom = UDim.new(0, 10)
+	padding.Parent = cardsContainer
+
+	local function updateCanvasSize()
+		cardsContainer.CanvasSize = UDim2.new(0, 0, 0, layout.AbsoluteContentSize.Y + 20)
+	end
+	layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(updateCanvasSize)
 
 	-- LUCK CARD
 	refs.luck = buildUpgradeCard(cardsContainer, {
@@ -582,6 +646,7 @@ function UpgradeStandController.Init()
 		btnStroke = Color3.fromRGB(30, 140, 50),
 		scalingText = "x3.0 per level",
 		tooltip = "Increases drop odds. Each level adds +5% luck. Stacks with rebirth, VIP, and potion luck.",
+		imageId = "rbxassetid://80665977760972",
 	})
 	refs.luck.btn.MouseButton1Click:Connect(function()
 		UpgradeLuckRequest:FireServer()
@@ -597,10 +662,30 @@ function UpgradeStandController.Init()
 		btnStroke = Color3.fromRGB(180, 120, 20),
 		scalingText = "x3.0 per level",
 		tooltip = "Increases streamer income. Each level adds +2% coins. Stacks with VIP and potions.",
+		imageId = "rbxassetid://122793197665026",
 	})
 	refs.cash.btn.MouseButton1Click:Connect(function()
 		UpgradeCashRequest:FireServer()
 	end)
+
+	-- MUTATION LUCK CARD
+	refs.mutationLuck = buildUpgradeCard(cardsContainer, {
+		name = "MutationLuck",
+		title = "Mutation Luck",
+		accent = Color3.fromRGB(190, 130, 255),
+		valueColor = Color3.fromRGB(220, 180, 255),
+		btnColor = Color3.fromRGB(160, 80, 220),
+		btnStroke = Color3.fromRGB(100, 40, 160),
+		scalingText = "x6.0 per level",
+		tooltip = "Increases elemental mutation odds. Each level adds +2% mutation chance. Stacks multiplicatively with base effect rates.",
+		imageId = "rbxassetid://88936868067548",
+	})
+	refs.mutationLuck.btn.MouseButton1Click:Connect(function()
+		UpgradeMutationLuckRequest:FireServer()
+	end)
+
+	-- Force canvas size now that all cards are built
+	task.defer(updateCanvasSize)
 
 	-------------------------------------------------
 	-- EVENTS
@@ -622,6 +707,14 @@ function UpgradeStandController.Init()
 		if result.success then
 			playUpgradeCashSound()
 			flashButton(refs.cash.btn, Color3.fromRGB(240, 180, 40))
+			if isOpen then refreshModal() end
+		end
+	end)
+
+	UpgradeMutationLuckResult.OnClientEvent:Connect(function(result)
+		if result.success then
+			playUpgradeCashSound()
+			flashButton(refs.mutationLuck.btn, Color3.fromRGB(160, 80, 220))
 			if isOpen then refreshModal() end
 		end
 	end)

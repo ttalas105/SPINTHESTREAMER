@@ -25,6 +25,7 @@ local GetPotionStock = RemoteEvents:WaitForChild("GetPotionStock")
 local PotionStockUpdate = RemoteEvents:WaitForChild("PotionStockUpdate")
 local BuyPotionStock = RemoteEvents:WaitForChild("BuyPotionStock")
 local UseOwnedPotion = RemoteEvents:WaitForChild("UseOwnedPotion")
+local CancelPotionRequest = RemoteEvents:WaitForChild("CancelPotionRequest")
 
 local MAX_STOCK_PER_POTION = 8
 local STOCK_RESTOCK_INTERVAL = 5 * 60
@@ -55,12 +56,20 @@ local function stockKey(potionType, tier)
 	return tostring(potionType) .. "_" .. tostring(tier)
 end
 
+local function rollPotionStock()
+	local r = math.random()
+	if r < 0.60 then return 0
+	elseif r < 0.80 then return 4
+	elseif r < 0.90 then return 6
+	else return 8 end
+end
+
 local function buildFreshPotionStock()
 	local fresh = {}
 	for _, potionType in ipairs({ "Luck", "Cash" }) do
 		local list = Potions.Types[potionType] or {}
 		for _, potion in ipairs(list) do
-			fresh[stockKey(potionType, potion.tier)] = MAX_STOCK_PER_POTION
+			fresh[stockKey(potionType, potion.tier)] = rollPotionStock()
 		end
 	end
 	return fresh
@@ -140,7 +149,7 @@ local function persistPotionState(player)
 			savedEffects[potionType] = {
 				multiplier = tonumber(info.multiplier) or 1,
 				tier = tonumber(info.tier) or 0,
-				expiresAt = math.floor(info.expiresAt),
+				remainingSeconds = math.floor(info.expiresAt - now),
 			}
 		end
 	end
@@ -204,14 +213,18 @@ local function loadPotionState(player)
 	local savedEffects = type(data.activePotionEffects) == "table" and data.activePotionEffects or {}
 	for potionType, info in pairs(savedEffects) do
 		if (potionType == "Luck" or potionType == "Cash" or potionType == "Divine")
-			and type(info) == "table"
-			and type(info.expiresAt) == "number"
-			and info.expiresAt > now then
-			activeEffects[userId][potionType] = {
-				multiplier = tonumber(info.multiplier) or 1,
-				tier = tonumber(info.tier) or 0,
-				expiresAt = math.floor(info.expiresAt),
-			}
+			and type(info) == "table" then
+			local remaining = tonumber(info.remainingSeconds)
+			if not remaining and type(info.expiresAt) == "number" and info.expiresAt > now then
+				remaining = math.floor(info.expiresAt - now)
+			end
+			if remaining and remaining > 0 then
+				activeEffects[userId][potionType] = {
+					multiplier = tonumber(info.multiplier) or 1,
+					tier = tonumber(info.tier) or 0,
+					expiresAt = now + remaining,
+				}
+			end
 		end
 	end
 
@@ -488,6 +501,20 @@ function PotionService.GrantDivinePotions(player, amount)
 	grantDivinePotions(player, amount)
 end
 
+local function handleCancelPotion(player, potionType)
+	if potionType ~= "Luck" and potionType ~= "Cash" and potionType ~= "Divine" then
+		return
+	end
+	local userId = player.UserId
+	local effects = getEffects(userId)
+	if not effects[potionType] or not effects[potionType].expiresAt or effects[potionType].expiresAt <= os.time() then
+		return
+	end
+	effects[potionType] = nil
+	persistPotionState(player)
+	sendPotionUpdate(player)
+end
+
 function PotionService.ClearPotions(player)
 	local userId = player.UserId
 	activeEffects[userId] = {}
@@ -537,6 +564,12 @@ function PotionService.Init(playerDataModule)
 	UseOwnedPotion.OnServerEvent:Connect(function(player, potionType, tier)
 		PlayerData.WithLock(player, function()
 			activateOwnedPotion(player, potionType, tier)
+		end)
+	end)
+
+	CancelPotionRequest.OnServerEvent:Connect(function(player, potionType)
+		PlayerData.WithLock(player, function()
+			handleCancelPotion(player, potionType)
 		end)
 	end)
 

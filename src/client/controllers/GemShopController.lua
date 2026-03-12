@@ -35,12 +35,15 @@ local balanceLabel
 local autoOpenEnabled  = false
 
 local HOTBAR_MAX = 9
-local STORAGE_MAX = 200
+
+local function getStorageMax()
+	return (HUDController.Data.hasExpandStorage == true) and 1000 or 200
+end
 
 local function isStorageFull()
 	local inv = HUDController.Data.inventory or {}
 	local sto = HUDController.Data.storage or {}
-	return #inv >= HOTBAR_MAX and #sto >= STORAGE_MAX
+	return #inv >= HOTBAR_MAX and #sto >= getStorageMax()
 end
 local autoOpenCaseId   = nil
 local pendingGemSpin = false

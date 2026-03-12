@@ -20,6 +20,8 @@ local UpgradeLuckRequest = RemoteEvents:WaitForChild("UpgradeLuckRequest")
 local UpgradeLuckResult = RemoteEvents:WaitForChild("UpgradeLuckResult")
 local UpgradeCashRequest = RemoteEvents:WaitForChild("UpgradeCashRequest")
 local UpgradeCashResult = RemoteEvents:WaitForChild("UpgradeCashResult")
+local UpgradeMutationLuckRequest = RemoteEvents:WaitForChild("UpgradeMutationLuckRequest")
+local UpgradeMutationLuckResult = RemoteEvents:WaitForChild("UpgradeMutationLuckResult")
 
 local EconomyService = {}
 
@@ -313,6 +315,26 @@ local function handleUpgradeCash(player)
 end
 
 -------------------------------------------------
+-- MUTATION LUCK UPGRADE (spend cash for +2% mutation chance per level)
+-------------------------------------------------
+
+local function handleUpgradeMutationLuck(player)
+	if not PlayerData then return end
+	if not PlayerData.IsTutorialComplete(player) then
+		UpgradeMutationLuckResult:FireClient(player, { success = false, reason = "Complete the tutorial first!" })
+		return
+	end
+	local currentLevel = PlayerData.GetMutationLuckUpgrade(player)
+	local cost = Economy.GetMutationLuckUpgradeCost(currentLevel)
+	if not PlayerData.SpendCash(player, cost) then
+		UpgradeMutationLuckResult:FireClient(player, { success = false, reason = "Not enough cash!" })
+		return
+	end
+	PlayerData.AddMutationLuckUpgrade(player, 1)
+	UpgradeMutationLuckResult:FireClient(player, { success = true, newLevel = PlayerData.GetMutationLuckUpgrade(player) })
+end
+
+-------------------------------------------------
 -- PASSIVE INCOME (flat base rate only; equipped streamer income
 -- is now accumulated on display pads and collected manually
 -- via BaseService key collection pads)
@@ -373,6 +395,10 @@ function EconomyService.Init(playerDataModule, potionServiceModule, questService
 
 	UpgradeCashRequest.OnServerEvent:Connect(function(player)
 		PlayerData.WithLock(player, function() handleUpgradeCash(player) end)
+	end)
+
+	UpgradeMutationLuckRequest.OnServerEvent:Connect(function(player)
+		PlayerData.WithLock(player, function() handleUpgradeMutationLuck(player) end)
 	end)
 
 	startPassiveIncome()

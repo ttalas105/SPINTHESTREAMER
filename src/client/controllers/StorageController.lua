@@ -46,7 +46,10 @@ local FONT   = Enum.Font.FredokaOne
 local FONT2  = Enum.Font.GothamBold
 local BG     = Color3.fromRGB(127, 194, 255)
 local ACCENT = Color3.fromRGB(68, 104, 183)
-local STORAGE_MAX = 200
+
+local function getStorageMax()
+	return (HUDController.Data.hasExpandStorage == true) and 1000 or 200
+end
 
 local RARITY_ORDER = { Common = 1, Rare = 2, Epic = 3, Legendary = 4, Mythic = 5 }
 
@@ -102,7 +105,7 @@ local function buildGrid()
 
 	-- Update header
 	if headerLabel then
-		headerLabel.Text = "Storage (" .. #storage .. "/" .. STORAGE_MAX .. ")"
+		headerLabel.Text = "Storage (" .. #storage .. "/" .. getStorageMax() .. ")"
 	end
 
 	if #storage == 0 then
@@ -502,7 +505,7 @@ function StorageController.Init()
 	headerLabel.Size = UDim2.new(1, -120, 1, 0)
 	headerLabel.Position = UDim2.new(0, 16, 0, 0)
 	headerLabel.BackgroundTransparency = 1
-	headerLabel.Text = "Storage (0/" .. STORAGE_MAX .. ")"
+	headerLabel.Text = "Storage (0/" .. getStorageMax() .. ")"
 	headerLabel.TextColor3 = Color3.new(1, 1, 1); headerLabel.Font = FONT; headerLabel.TextSize = 28
 	headerLabel.TextXAlignment = Enum.TextXAlignment.Left
 	headerLabel.Parent = titleBar

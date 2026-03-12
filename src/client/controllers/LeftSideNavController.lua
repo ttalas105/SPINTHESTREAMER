@@ -27,17 +27,17 @@ local isMobile = UIHelper.IsMobile()
 -------------------------------------------------
 -- Nav button style (smaller on mobile to avoid overlapping touch controls)
 -------------------------------------------------
-local BUTTON_W = isMobile and 80 or 120
-local BUTTON_H = isMobile and 88 or 130
-local BUTTON_PADDING = isMobile and 14 or 30
-local BUBBLE_CORNER = isMobile and 16 or 22
+local BUTTON_W = isMobile and 80 or 90
+local BUTTON_H = isMobile and 88 or 100
+local BUTTON_PADDING = isMobile and 14 or 20
+local BUBBLE_CORNER = isMobile and 16 or 18
 local STROKE_THICKNESS = 1.5
 local STROKE_COLOR = Color3.fromRGB(30, 25, 50)
 
 local menuItems = {
+	{ name = "Store",   icon = "\u{1F6D2}", imageId = "rbxassetid://114090124339958", color = Color3.fromRGB(255, 90, 120),   label = "Store", bgColor = Color3.fromRGB(120, 210, 130) },
 	{ name = "Index",   icon = "\u{1F4D6}", imageId = "rbxassetid://113805125234370", color = Color3.fromRGB(100, 200, 255),  label = "Index"   },
 	{ name = "Storage", icon = "\u{1F4E6}", imageId = "rbxassetid://86182968978837", color = Color3.fromRGB(255, 165, 50), label = "Storage" },
-	{ name = "Store",   icon = "\u{1F6D2}", imageId = "rbxassetid://114090124339958", color = Color3.fromRGB(255, 90, 120),   label = "Store", bgColor = Color3.fromRGB(120, 210, 130) },
 }
 
 -------------------------------------------------
@@ -82,7 +82,7 @@ local function layoutNav(container, btnFrames, viewportHeight)
 end
 
 function LeftSideNavController.Init()
-	local screenGui = UIHelper.CreateScreenGui("LeftSideNavGui", 4)
+	local screenGui = UIHelper.CreateScreenGui("LeftSideNavGui", 4, 1.0)
 	screenGui.Parent = playerGui
 
 	local totalHeight = (#menuItems * BUTTON_H) + ((#menuItems - 1) * BUTTON_PADDING)
@@ -98,12 +98,13 @@ function LeftSideNavController.Init()
 	local listLayout = Instance.new("UIListLayout")
 	listLayout.FillDirection = Enum.FillDirection.Vertical
 	listLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	listLayout.SortOrder = Enum.SortOrder.LayoutOrder
 	listLayout.Padding = UDim.new(0, BUTTON_PADDING)
 	listLayout.Parent = container
 
 	local btnFrames = {}
 
-	for _, item in ipairs(menuItems) do
+	for idx, item in ipairs(menuItems) do
 		local hasImage = item.imageId ~= ""
 		local iconBtn, clickZone = UIHelper.CreateIconButton({
 			Name = item.name,
@@ -124,16 +125,43 @@ function LeftSideNavController.Init()
 			Parent = container,
 		})
 
+		iconBtn.LayoutOrder = idx
 		buttons[item.name] = iconBtn
 		table.insert(btnFrames, iconBtn)
 
-		-- Keep Index notification bubble outside the icon box (top-right corner)
 		if item.name == "Index" then
 			local badge = iconBtn:FindFirstChild("Badge")
 			if badge then
 				badge.Position = UDim2.new(1, 8, 0, -10)
 				badge.AnchorPoint = Vector2.new(1, 0)
 			end
+		end
+
+		if item.name == "Store" then
+			local exclBadge = Instance.new("Frame")
+			exclBadge.Name = "StoreBadge"
+			exclBadge.Size = UDim2.new(0, 26, 0, 26)
+			exclBadge.Position = UDim2.new(1, 6, 0, -8)
+			exclBadge.AnchorPoint = Vector2.new(1, 0)
+			exclBadge.BackgroundColor3 = Color3.fromRGB(235, 50, 50)
+			exclBadge.BorderSizePixel = 0
+			exclBadge.ZIndex = 10
+			exclBadge.Parent = iconBtn
+			Instance.new("UICorner", exclBadge).CornerRadius = UDim.new(1, 0)
+			local exclStroke = Instance.new("UIStroke")
+			exclStroke.Color = Color3.fromRGB(180, 30, 30)
+			exclStroke.Thickness = 2
+			exclStroke.Parent = exclBadge
+
+			local exclText = Instance.new("TextLabel")
+			exclText.Size = UDim2.new(1, 0, 1, 0)
+			exclText.BackgroundTransparency = 1
+			exclText.Text = "!"
+			exclText.TextColor3 = Color3.new(1, 1, 1)
+			exclText.Font = Enum.Font.FredokaOne
+			exclText.TextSize = 18
+			exclText.ZIndex = 11
+			exclText.Parent = exclBadge
 		end
 
 		clickZone.MouseEnter:Connect(function()

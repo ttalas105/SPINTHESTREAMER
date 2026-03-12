@@ -23,6 +23,9 @@ local StoreController = {}
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
+local RemoteEvents = ReplicatedStorage:WaitForChild("RemoteEvents")
+local OpenPremiumCrate = RemoteEvents:WaitForChild("OpenPremiumCrate")
+
 local screenGui
 local modalFrame
 local overlay
@@ -38,16 +41,19 @@ local MODAL_W = 920
 local MODAL_H = 760
 
 local HOTBAR_MAX = 9
-local STORAGE_MAX = 200
 
 -------------------------------------------------
 -- HELPERS
 -------------------------------------------------
 
+local function getStorageMax()
+	return (HUDController.Data.hasExpandStorage == true) and 1000 or 200
+end
+
 local function isInventoryFull()
 	local inv = HUDController.Data.inventory or {}
 	local sto = HUDController.Data.storage or {}
-	return #inv >= HOTBAR_MAX and #sto >= STORAGE_MAX
+	return #inv >= HOTBAR_MAX and #sto >= getStorageMax()
 end
 
 local function showStoreToast(text)
@@ -452,232 +458,10 @@ local function buildGemCard(parent, cfg)
 end
 
 -------------------------------------------------
--- ENHANCED CASE CARD (with odds display)
--------------------------------------------------
-
-local function buildEnhancedCaseCard(parent, caseData, order)
-	local productId = Economy.Products[caseData.key]
-	local accent = caseData.accent
-
-	local card = Instance.new("Frame")
-	card.Name = "EnhancedCase_" .. caseData.key
-	card.Size = UDim2.new(1, 0, 0, 0)
-	card.AutomaticSize = Enum.AutomaticSize.Y
-	card.BackgroundColor3 = CARD_BG
-	card.BorderSizePixel = 0
-	card.LayoutOrder = order
-	card.ZIndex = 52
-	card.Parent = parent
-	Instance.new("UICorner", card).CornerRadius = UDim.new(0, 16)
-
-	local outerStroke = createStroke(card, accent, 3)
-	outerStroke.Transparency = 0.15
-
-	local grad = Instance.new("UIGradient")
-	grad.Color = ColorSequence.new({
-		ColorSequenceKeypoint.new(0, Color3.fromRGB(84, 116, 208)),
-		ColorSequenceKeypoint.new(0.5, Color3.fromRGB(64, 88, 170)),
-		ColorSequenceKeypoint.new(1, Color3.fromRGB(48, 68, 133)),
-	})
-	grad.Rotation = 90
-	grad.Parent = card
-
-	local cardLayout = Instance.new("UIListLayout")
-	cardLayout.FillDirection = Enum.FillDirection.Vertical
-	cardLayout.SortOrder = Enum.SortOrder.LayoutOrder
-	cardLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-	cardLayout.Padding = UDim.new(0, 8)
-	cardLayout.Parent = card
-
-	local cardPad = Instance.new("UIPadding")
-	cardPad.PaddingTop = UDim.new(0, 14)
-	cardPad.PaddingBottom = UDim.new(0, 14)
-	cardPad.PaddingLeft = UDim.new(0, 14)
-	cardPad.PaddingRight = UDim.new(0, 14)
-	cardPad.Parent = card
-
-	local topRow = Instance.new("Frame")
-	topRow.Size = UDim2.new(1, 0, 0, 68)
-	topRow.BackgroundTransparency = 1
-	topRow.LayoutOrder = 0
-	topRow.ZIndex = 53
-	topRow.Parent = card
-
-	local imgFrame = Instance.new("Frame")
-	imgFrame.Size = UDim2.new(0, 60, 0, 60)
-	imgFrame.Position = UDim2.new(0, 0, 0.5, 0)
-	imgFrame.AnchorPoint = Vector2.new(0, 0.5)
-	imgFrame.BackgroundColor3 = Color3.fromRGB(18, 14, 30)
-	imgFrame.ClipsDescendants = true
-	imgFrame.ZIndex = 54
-	imgFrame.Parent = topRow
-	Instance.new("UICorner", imgFrame).CornerRadius = UDim.new(0, 14)
-	createStroke(imgFrame, accent, 2)
-
-	local imgGlow = Instance.new("UIGradient")
-	imgGlow.Color = ColorSequence.new({
-		ColorSequenceKeypoint.new(0, Color3.fromRGB(50, 40, 80)),
-		ColorSequenceKeypoint.new(1, Color3.fromRGB(18, 14, 30)),
-	})
-	imgGlow.Rotation = 135
-	imgGlow.Parent = imgFrame
-
-	local img = Instance.new("ImageLabel")
-	img.Size = UDim2.new(1, -6, 1, -6)
-	img.Position = UDim2.new(0.5, 0, 0.5, 0)
-	img.AnchorPoint = Vector2.new(0.5, 0.5)
-	img.BackgroundTransparency = 1
-	img.ScaleType = Enum.ScaleType.Fit
-	img.ZIndex = 55
-	img.Visible = false
-	img.Parent = imgFrame
-
-	fetchProductIconAsync(productId, img, nil)
-
-	local titleL = Instance.new("TextLabel")
-	titleL.Size = UDim2.new(1, -76, 0, 28)
-	titleL.Position = UDim2.new(0, 72, 0, 8)
-	titleL.BackgroundTransparency = 1
-	titleL.Text = caseData.name
-	titleL.TextColor3 = Color3.new(1, 1, 1)
-	titleL.Font = BUBBLE_FONT
-	titleL.TextSize = 20
-	titleL.TextXAlignment = Enum.TextXAlignment.Left
-	titleL.ZIndex = 54
-	titleL.Parent = topRow
-	createStroke(titleL, Color3.fromRGB(0, 0, 0), 2.5, Enum.ApplyStrokeMode.Contextual)
-
-	local subtitleL = Instance.new("TextLabel")
-	subtitleL.Size = UDim2.new(1, -76, 0, 16)
-	subtitleL.Position = UDim2.new(0, 72, 0, 36)
-	subtitleL.BackgroundTransparency = 1
-	subtitleL.Text = "Exclusive Robux Case \u{2022} 1 Spin"
-	subtitleL.TextColor3 = accent
-	subtitleL.Font = FONT_SUB
-	subtitleL.TextSize = 12
-	subtitleL.TextXAlignment = Enum.TextXAlignment.Left
-	subtitleL.ZIndex = 54
-	subtitleL.Parent = topRow
-
-	for i, entry in ipairs(caseData.pool) do
-		local effectInfo = Effects.ByName[entry.effect]
-		local streamerInfo = Streamers.ById[entry.streamerId]
-		local rarityText = streamerInfo and streamerInfo.rarity or "?"
-		local effectColor = effectInfo and effectInfo.color or Color3.fromRGB(200, 200, 200)
-
-		local row = Instance.new("Frame")
-		row.Size = UDim2.new(1, 0, 0, 28)
-		row.BackgroundColor3 = (i % 2 == 0) and Color3.fromRGB(40, 32, 60) or Color3.fromRGB(32, 24, 50)
-		row.BackgroundTransparency = 0.15
-		row.BorderSizePixel = 0
-		row.LayoutOrder = i
-		row.ZIndex = 53
-		row.Parent = card
-		Instance.new("UICorner", row).CornerRadius = UDim.new(0, 8)
-
-		local nameL2 = Instance.new("TextLabel")
-		nameL2.Size = UDim2.new(0.5, 0, 1, 0)
-		nameL2.Position = UDim2.new(0, 12, 0, 0)
-		nameL2.BackgroundTransparency = 1
-		nameL2.Text = entry.label
-		nameL2.TextColor3 = effectColor
-		nameL2.Font = BUBBLE_FONT
-		nameL2.TextSize = 14
-		nameL2.TextXAlignment = Enum.TextXAlignment.Left
-		nameL2.ZIndex = 54
-		nameL2.Parent = row
-		createStroke(nameL2, Color3.fromRGB(0, 0, 0), 1.5, Enum.ApplyStrokeMode.Contextual)
-
-		local rarityL = Instance.new("TextLabel")
-		rarityL.Size = UDim2.new(0.22, 0, 1, 0)
-		rarityL.Position = UDim2.new(0.5, 0, 0, 0)
-		rarityL.BackgroundTransparency = 1
-		rarityL.Text = rarityText
-		rarityL.TextColor3 = Color3.fromRGB(200, 195, 220)
-		rarityL.Font = FONT_SUB
-		rarityL.TextSize = 12
-		rarityL.TextXAlignment = Enum.TextXAlignment.Center
-		rarityL.ZIndex = 54
-		rarityL.Parent = row
-
-		local oddsL = Instance.new("TextLabel")
-		oddsL.Size = UDim2.new(0.28, -12, 1, 0)
-		oddsL.Position = UDim2.new(0.72, 0, 0, 0)
-		oddsL.BackgroundTransparency = 1
-		oddsL.Text = entry.weight .. "%"
-		oddsL.TextColor3 = Color3.fromRGB(255, 255, 100)
-		oddsL.Font = BUBBLE_FONT
-		oddsL.TextSize = 15
-		oddsL.TextXAlignment = Enum.TextXAlignment.Right
-		oddsL.ZIndex = 54
-		oddsL.Parent = row
-		createStroke(oddsL, Color3.fromRGB(0, 0, 0), 1.5, Enum.ApplyStrokeMode.Contextual)
-	end
-
-	local btnWrap = Instance.new("Frame")
-	btnWrap.Size = UDim2.new(1, 0, 0, 50)
-	btnWrap.BackgroundTransparency = 1
-	btnWrap.LayoutOrder = 100
-	btnWrap.ZIndex = 53
-	btnWrap.Parent = card
-
-	local btn = Instance.new("TextButton")
-	btn.Name = "BuyBtn"
-	btn.Size = UDim2.new(0.55, 0, 0, 42)
-	btn.Position = UDim2.new(0.5, 0, 0.5, 0)
-	btn.AnchorPoint = Vector2.new(0.5, 0.5)
-	btn.BackgroundColor3 = Color3.fromRGB(50, 210, 80)
-	btn.Text = "R$ ..."
-	btn.TextColor3 = Color3.new(1, 1, 1)
-	btn.Font = BUBBLE_FONT
-	btn.TextSize = 18
-	btn.BorderSizePixel = 0
-	btn.AutoButtonColor = false
-	btn.ZIndex = 54
-	btn.Parent = btnWrap
-	Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 12)
-	createStroke(btn, Color3.fromRGB(30, 160, 55), 2.5)
-	createStroke(btn, Color3.fromRGB(0, 0, 0), 1.5, Enum.ApplyStrokeMode.Contextual)
-
-	fetchProductPriceAsync(productId, btn)
-
-	local btnGrad = Instance.new("UIGradient")
-	btnGrad.Color = ColorSequence.new({
-		ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255)),
-		ColorSequenceKeypoint.new(1, Color3.fromRGB(200, 255, 210)),
-	})
-	btnGrad.Rotation = 90
-	btnGrad.Parent = btn
-
-	local bTI = TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
-	btn.MouseEnter:Connect(function()
-		TweenService:Create(btn, bTI, {
-			BackgroundColor3 = Color3.fromRGB(80, 255, 120),
-			Size = UDim2.new(0.58, 0, 0, 46),
-		}):Play()
-	end)
-	btn.MouseLeave:Connect(function()
-		TweenService:Create(btn, bTI, {
-			BackgroundColor3 = Color3.fromRGB(50, 210, 80),
-			Size = UDim2.new(0.55, 0, 0, 42),
-		}):Play()
-	end)
-	btn.MouseButton1Click:Connect(function()
-		if isInventoryFull() then
-			showStoreToast("Inventory & storage are full!")
-			return
-		end
-		if productId and productId > 0 then
-			MarketplaceService:PromptProductPurchase(player, productId)
-		end
-	end)
-
-	return card
-end
-
--------------------------------------------------
 -- TAB CONTENT BUILDERS
 -------------------------------------------------
+
+local premiumCaseOpenRefs = {}
 
 local function clearScroll()
 	if not scroll then return end
@@ -685,6 +469,7 @@ local function clearScroll()
 		child:Destroy()
 	end
 	scroll.CanvasPosition = Vector2.new(0, 0)
+	premiumCaseOpenRefs = {}
 end
 
 local function setupShowcaseRoot()
@@ -767,145 +552,262 @@ local function makeGreenBuyButton(parent, widthScale, yOffset, productId, onClic
 	return btn
 end
 
-local function buildCaseShowCard(parent, caseData, xScale, buttonColor, priceOverride)
-	local productId = Economy.Products[caseData.key]
+local RARITY_COLORS = {
+	Common    = Color3.fromRGB(180, 180, 190),
+	Rare      = Color3.fromRGB(80, 170, 255),
+	Epic      = Color3.fromRGB(180, 80, 255),
+	Legendary = Color3.fromRGB(255, 180, 40),
+	Mythic    = Color3.fromRGB(255, 80, 120),
+}
+
+local function buildPremiumCaseCard(parent, caseData, order)
+	local accent = caseData.accent
+	local caseKey = caseData.key
+
 	local card = Instance.new("Frame")
-	card.Size = UDim2.new(0.485, 0, 1, 0)
-	card.Position = UDim2.new(xScale, 0, 0, 0)
-	card.BackgroundColor3 = Color3.fromRGB(20, 38, 125)
+	card.Name = "PremiumCase_" .. caseKey
+	card.Size = UDim2.new(1, 0, 0, 240)
+	card.BackgroundColor3 = Color3.fromRGB(60, 62, 75)
 	card.BorderSizePixel = 0
+	card.LayoutOrder = order
 	card.ZIndex = 53
 	card.Parent = parent
-	Instance.new("UICorner", card).CornerRadius = UDim.new(0, 18)
-	createStroke(card, Color3.fromRGB(233, 219, 124), 2.8)
-	createStroke(card, Color3.fromRGB(70, 98, 201), 1.5, Enum.ApplyStrokeMode.Contextual)
+	card.ClipsDescendants = true
+	Instance.new("UICorner", card).CornerRadius = UDim.new(0, 20)
+	createStroke(card, accent, 3)
 
 	local grad = Instance.new("UIGradient")
 	grad.Color = ColorSequence.new({
-		ColorSequenceKeypoint.new(0, Color3.fromRGB(32, 64, 163)),
-		ColorSequenceKeypoint.new(1, Color3.fromRGB(16, 35, 106)),
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(80, 82, 100)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(50, 52, 68)),
 	})
 	grad.Rotation = 90
 	grad.Parent = card
 
-	local iconBubble = Instance.new("Frame")
-	iconBubble.Size = UDim2.new(0, 76, 0, 76)
-	iconBubble.Position = UDim2.new(0, 10, 0, 10)
-	iconBubble.BackgroundColor3 = Color3.fromRGB(17, 23, 82)
-	iconBubble.BorderSizePixel = 0
-	iconBubble.ZIndex = 54
-	iconBubble.Parent = card
-	Instance.new("UICorner", iconBubble).CornerRadius = UDim.new(1, 0)
-	createStroke(iconBubble, caseData.accent, 2.4)
+	-- Case image (left side, big)
+	local imgFrame = Instance.new("Frame")
+	imgFrame.Size = UDim2.new(0, 120, 0, 120)
+	imgFrame.Position = UDim2.new(0, 16, 0, 14)
+	imgFrame.BackgroundColor3 = Color3.fromRGB(45, 47, 60)
+	imgFrame.BorderSizePixel = 0
+	imgFrame.ZIndex = 54
+	imgFrame.Parent = card
+	Instance.new("UICorner", imgFrame).CornerRadius = UDim.new(0, 16)
+	createStroke(imgFrame, accent, 2.5)
 
-	local icon = Instance.new("ImageLabel")
-	icon.Size = UDim2.new(1, -8, 1, -8)
-	icon.Position = UDim2.new(0.5, 0, 0.5, 0)
-	icon.AnchorPoint = Vector2.new(0.5, 0.5)
-	icon.BackgroundTransparency = 1
-	icon.ScaleType = Enum.ScaleType.Fit
-	icon.Visible = false
-	icon.ZIndex = 55
-	icon.Parent = iconBubble
-	fetchProductIconAsync(productId, icon, nil)
+	if caseData.imageId and caseData.imageId ~= "" then
+		local icon = Instance.new("ImageLabel")
+		icon.Size = UDim2.new(1, -8, 1, -8)
+		icon.Position = UDim2.new(0.5, 0, 0.5, 0)
+		icon.AnchorPoint = Vector2.new(0.5, 0.5)
+		icon.BackgroundTransparency = 1
+		icon.ScaleType = Enum.ScaleType.Fit
+		icon.Image = caseData.imageId
+		icon.ZIndex = 55
+		icon.Parent = imgFrame
+	end
 
+	-- Title
 	local title = Instance.new("TextLabel")
-	title.Size = UDim2.new(1, -96, 0, 34)
-	title.Position = UDim2.new(0, 92, 0, 12)
+	title.Size = UDim2.new(0, 320, 0, 36)
+	title.Position = UDim2.new(0, 150, 0, 12)
 	title.BackgroundTransparency = 1
 	title.Text = caseData.name
 	title.TextColor3 = Color3.new(1, 1, 1)
 	title.Font = BUBBLE_FONT
-	title.TextSize = 21
+	title.TextSize = 28
 	title.TextXAlignment = Enum.TextXAlignment.Left
-	title.TextWrapped = true
 	title.ZIndex = 54
 	title.Parent = card
-	createStroke(title, Color3.fromRGB(0, 0, 0), 2.6, Enum.ApplyStrokeMode.Contextual)
+	createStroke(title, Color3.fromRGB(0, 0, 0), 3, Enum.ApplyStrokeMode.Contextual)
 
-	local subtitle = Instance.new("TextLabel")
-	subtitle.Size = UDim2.new(1, -96, 0, 16)
-	subtitle.Position = UDim2.new(0, 92, 0, 46)
-	subtitle.BackgroundTransparency = 1
-	subtitle.Text = "Exclusive Robux Case • 1 Spin"
-	subtitle.TextColor3 = Color3.fromRGB(210, 230, 255)
-	subtitle.Font = FONT_SUB
-	subtitle.TextSize = 12
-	subtitle.TextXAlignment = Enum.TextXAlignment.Left
-	subtitle.ZIndex = 54
-	subtitle.Parent = card
+	local mutBanner = Instance.new("TextLabel")
+	mutBanner.Size = UDim2.new(0, 360, 0, 18)
+	mutBanner.Position = UDim2.new(0, 150, 0, 46)
+	mutBanner.BackgroundTransparency = 1
+	mutBanner.Text = "MAY CONTAIN ELEMENTAL MUTATIONS!"
+	mutBanner.TextColor3 = Color3.fromRGB(255, 200, 60)
+	mutBanner.Font = FONT_SUB
+	mutBanner.TextSize = 13
+	mutBanner.TextXAlignment = Enum.TextXAlignment.Left
+	mutBanner.ZIndex = 54
+	mutBanner.Parent = card
+	createStroke(mutBanner, Color3.fromRGB(0, 0, 0), 1.8, Enum.ApplyStrokeMode.Contextual)
 
-	local hero = Instance.new("ImageLabel")
-	hero.Size = UDim2.new(0, 120, 0, 94)
-	hero.Position = UDim2.new(0.5, 0, 0, 76)
-	hero.AnchorPoint = Vector2.new(0.5, 0)
-	hero.BackgroundTransparency = 1
-	hero.ScaleType = Enum.ScaleType.Fit
-	hero.Visible = false
-	hero.ZIndex = 54
-	hero.Parent = card
-	fetchProductIconAsync(productId, hero, nil)
-
+	-- Streamer pool rows
 	for i, entry in ipairs(caseData.pool) do
-		local streamerInfo = Streamers.ById[entry.streamerId]
-		local rarityText = streamerInfo and streamerInfo.rarity or "?"
+		local sInfo = Streamers.ById[entry.streamerId]
+		local rarityText = sInfo and sInfo.rarity or "?"
+		local displayName = sInfo and sInfo.displayName or entry.streamerId
+		local rarityColor = RARITY_COLORS[rarityText] or Color3.new(1, 1, 1)
 
+		local rowY = 68 + ((i - 1) * 26)
 		local row = Instance.new("Frame")
-		row.Size = UDim2.new(1, -14, 0, 24)
-		row.Position = UDim2.new(0, 7, 0, 174 + ((i - 1) * 24))
-		row.BackgroundTransparency = 1
+		row.Size = UDim2.new(0, 380, 0, 24)
+		row.Position = UDim2.new(0, 150, 0, rowY)
+		row.BackgroundColor3 = (i % 2 == 0) and Color3.fromRGB(72, 74, 90) or Color3.fromRGB(62, 64, 80)
+		row.BackgroundTransparency = 0.3
+		row.BorderSizePixel = 0
 		row.ZIndex = 54
 		row.Parent = card
+		Instance.new("UICorner", row).CornerRadius = UDim.new(0, 6)
 
-		local n = Instance.new("TextLabel")
-		n.Size = UDim2.new(0.46, 0, 1, 0)
-		n.BackgroundTransparency = 1
-		n.Text = entry.streamerId
-		n.TextColor3 = Color3.new(1, 1, 1)
-		n.Font = BUBBLE_FONT
-		n.TextSize = 19
-		n.TextXAlignment = Enum.TextXAlignment.Left
-		n.ZIndex = 55
-		n.Parent = row
-		createStroke(n, Color3.fromRGB(0, 0, 0), 2.4, Enum.ApplyStrokeMode.Contextual)
+		local nameL = Instance.new("TextLabel")
+		nameL.Size = UDim2.new(0.42, 0, 1, 0)
+		nameL.Position = UDim2.new(0, 10, 0, 0)
+		nameL.BackgroundTransparency = 1
+		nameL.Text = displayName
+		nameL.TextColor3 = rarityColor
+		nameL.Font = BUBBLE_FONT
+		nameL.TextSize = 16
+		nameL.TextXAlignment = Enum.TextXAlignment.Left
+		nameL.ZIndex = 55
+		nameL.Parent = row
+		createStroke(nameL, Color3.fromRGB(0, 0, 0), 2, Enum.ApplyStrokeMode.Contextual)
 
-		local rarity = Instance.new("TextLabel")
-		rarity.Size = UDim2.new(0.25, 0, 1, 0)
-		rarity.Position = UDim2.new(0.49, 0, 0, 0)
-		rarity.BackgroundTransparency = 1
-		rarity.Text = rarityText
-		rarity.TextColor3 = Color3.fromRGB(228, 178, 255)
-		rarity.Font = BUBBLE_FONT
-		rarity.TextSize = 16
-		rarity.TextXAlignment = Enum.TextXAlignment.Center
-		rarity.ZIndex = 55
-		rarity.Parent = row
-		createStroke(rarity, Color3.fromRGB(0, 0, 0), 1.8, Enum.ApplyStrokeMode.Contextual)
+		local rarityL = Instance.new("TextLabel")
+		rarityL.Size = UDim2.new(0.28, 0, 1, 0)
+		rarityL.Position = UDim2.new(0.42, 0, 0, 0)
+		rarityL.BackgroundTransparency = 1
+		rarityL.Text = rarityText
+		rarityL.TextColor3 = rarityColor
+		rarityL.Font = FONT_SUB
+		rarityL.TextSize = 13
+		rarityL.TextXAlignment = Enum.TextXAlignment.Center
+		rarityL.ZIndex = 55
+		rarityL.Parent = row
 
-		local odds = Instance.new("TextLabel")
-		odds.Size = UDim2.new(0.29, 0, 1, 0)
-		odds.Position = UDim2.new(0.71, 0, 0, 0)
-		odds.BackgroundTransparency = 1
-		odds.Text = tostring(entry.weight) .. "%"
-		odds.TextColor3 = (entry.weight <= 5) and Color3.fromRGB(255, 112, 120) or Color3.fromRGB(130, 255, 145)
-		odds.Font = BUBBLE_FONT
-		odds.TextSize = 21
-		odds.TextXAlignment = Enum.TextXAlignment.Right
-		odds.ZIndex = 55
-		odds.Parent = row
-		createStroke(odds, Color3.fromRGB(0, 0, 0), 2.4, Enum.ApplyStrokeMode.Contextual)
+		local oddsL = Instance.new("TextLabel")
+		oddsL.Size = UDim2.new(0.28, -10, 1, 0)
+		oddsL.Position = UDim2.new(0.72, 0, 0, 0)
+		oddsL.BackgroundTransparency = 1
+		oddsL.Text = tostring(entry.weight) .. "%"
+		oddsL.TextColor3 = (entry.weight <= 5) and Color3.fromRGB(255, 112, 120) or Color3.fromRGB(130, 255, 145)
+		oddsL.Font = BUBBLE_FONT
+		oddsL.TextSize = 18
+		oddsL.TextXAlignment = Enum.TextXAlignment.Right
+		oddsL.ZIndex = 55
+		oddsL.Parent = row
+		createStroke(oddsL, Color3.fromRGB(0, 0, 0), 2, Enum.ApplyStrokeMode.Contextual)
 	end
 
-	local btn = makeGreenBuyButton(card, 0.56, -10, productId, function()
-		if isInventoryFull() then
-			showStoreToast("Inventory & storage are full!")
+	-- Right side: buy pack buttons + open button
+	local rightX = 550
+	local bTI = TweenInfo.new(0.12, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+
+	for j, pack in ipairs(caseData.packs) do
+		local btnY = 12 + ((j - 1) * 50)
+		local btn = Instance.new("TextButton")
+		btn.Name = "Pack" .. pack.amount
+		btn.Size = UDim2.new(0, 150, 0, 42)
+		btn.Position = UDim2.new(0, rightX, 0, btnY)
+		btn.BackgroundColor3 = Color3.fromRGB(50, 210, 80)
+		btn.Text = "x" .. pack.amount .. "  R$ ..."
+		btn.TextColor3 = Color3.new(1, 1, 1)
+		btn.Font = BUBBLE_FONT
+		btn.TextSize = 16
+		btn.BorderSizePixel = 0
+		btn.AutoButtonColor = false
+		btn.ZIndex = 55
+		btn.Parent = card
+		Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 12)
+		createStroke(btn, Color3.fromRGB(30, 160, 55), 2.5)
+
+		task.spawn(function()
+			local ok, info = pcall(function()
+				return MarketplaceService:GetProductInfo(pack.productId, Enum.InfoType.Product)
+			end)
+			if ok and info and info.PriceInRobux then
+				btn.Text = "x" .. pack.amount .. "  R$ " .. tostring(info.PriceInRobux)
+			end
+		end)
+
+		btn.MouseEnter:Connect(function()
+			TweenService:Create(btn, bTI, { BackgroundColor3 = Color3.fromRGB(80, 255, 120), Size = UDim2.new(0, 155, 0, 45) }):Play()
+		end)
+		btn.MouseLeave:Connect(function()
+			TweenService:Create(btn, bTI, { BackgroundColor3 = Color3.fromRGB(50, 210, 80), Size = UDim2.new(0, 150, 0, 42) }):Play()
+		end)
+		btn.MouseButton1Click:Connect(function()
+			if pack.productId and pack.productId > 0 then
+				MarketplaceService:PromptProductPurchase(player, pack.productId)
+			end
+		end)
+	end
+
+	-- OPEN button (bottom right)
+	local openBtn = Instance.new("TextButton")
+	openBtn.Name = "OpenBtn"
+	openBtn.Size = UDim2.new(0, 150, 0, 52)
+	openBtn.Position = UDim2.new(0, rightX, 0, 174)
+	openBtn.BackgroundColor3 = Color3.fromRGB(66, 166, 255)
+	openBtn.Text = ""
+	openBtn.BorderSizePixel = 0
+	openBtn.AutoButtonColor = false
+	openBtn.ZIndex = 55
+	openBtn.Parent = card
+	Instance.new("UICorner", openBtn).CornerRadius = UDim.new(1, 0)
+	createStroke(openBtn, Color3.fromRGB(30, 100, 200), 2.5)
+
+	local openGrad = Instance.new("UIGradient")
+	openGrad.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(100, 190, 255)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(55, 140, 240)),
+	})
+	openGrad.Rotation = 90
+	openGrad.Parent = openBtn
+
+	local openBtnText = Instance.new("TextLabel")
+	openBtnText.Size = UDim2.new(1, 0, 1, 0)
+	openBtnText.BackgroundTransparency = 1
+	local initOwned = HUDController.Data.ownedCrates or {}
+	openBtnText.Text = "OPEN (" .. (initOwned[caseKey] or 0) .. ")"
+	openBtnText.TextColor3 = Color3.new(1, 1, 1)
+	openBtnText.Font = BUBBLE_FONT
+	openBtnText.TextSize = 20
+	openBtnText.ZIndex = 56
+	openBtnText.Parent = openBtn
+	createStroke(openBtnText, Color3.fromRGB(0, 0, 0), 2, Enum.ApplyStrokeMode.Contextual)
+
+	premiumCaseOpenRefs[caseKey] = openBtnText
+
+	openBtn.MouseEnter:Connect(function()
+		TweenService:Create(openBtn, bTI, { BackgroundColor3 = Color3.fromRGB(90, 200, 255), Size = UDim2.new(0, 155, 0, 55) }):Play()
+	end)
+	openBtn.MouseLeave:Connect(function()
+		TweenService:Create(openBtn, bTI, { BackgroundColor3 = Color3.fromRGB(66, 166, 255), Size = UDim2.new(0, 150, 0, 52) }):Play()
+	end)
+	openBtn.MouseButton1Click:Connect(function()
+		local SpinController = require(script.Parent.SpinController)
+		if SpinController.IsActive() then return end
+		local inv = HUDController.Data.inventory or {}
+		local sto = HUDController.Data.storage or {}
+		local storageMax = getStorageMax()
+		if #inv >= HOTBAR_MAX and #sto >= storageMax then
+			openBtnText.Text = "STORAGE FULL!"
+			task.delay(2, function()
+				local owned = HUDController.Data.ownedCrates or {}
+				local cnt = owned[caseKey] or 0
+				openBtnText.Text = "OPEN (" .. cnt .. ")"
+			end)
 			return
 		end
-		if productId and productId > 0 then
-			MarketplaceService:PromptProductPurchase(player, productId)
+		local owned = HUDController.Data.ownedCrates or {}
+		local cnt = owned[caseKey] or 0
+		if cnt <= 0 then
+			openBtnText.Text = "NONE!"
+			task.delay(1, function() openBtnText.Text = "OPEN (0)" end)
+			return
 		end
-	end, priceOverride)
-	btn.BackgroundColor3 = buttonColor
+		SpinController.SetCurrentCost(0)
+		SpinController.SetCurrentCrateId(nil)
+		SpinController.SetOwnedCrateMode(true)
+		SpinController.SetPremiumCaseKey(caseKey)
+		SpinController.Show()
+		StoreController.Close()
+		OpenPremiumCrate:FireServer(caseKey)
+		SpinController.WaitForResult()
+	end)
 
 	return card
 end
@@ -981,12 +883,14 @@ local function buildPremiumTile(parent, xScale, cfg, priceOverride)
 	iconBox.BackgroundColor3 = Color3.fromRGB(9, 17, 45)
 	iconBox.BorderSizePixel = 0
 	iconBox.ZIndex = 54
+	iconBox.ClipsDescendants = true
 	iconBox.Parent = tile
 	Instance.new("UICorner", iconBox).CornerRadius = UDim.new(0, 14)
 	createStroke(iconBox, Color3.fromRGB(250, 209, 103), 2.2)
 
+	local iconScale = cfg.iconScale or 1
 	local icon = Instance.new("ImageLabel")
-	icon.Size = UDim2.new(1, -8, 1, -8)
+	icon.Size = UDim2.new(iconScale, -8, iconScale, -8)
 	icon.Position = UDim2.new(0.5, 0, 0.5, 0)
 	icon.AnchorPoint = Vector2.new(0.5, 0.5)
 	icon.BackgroundTransparency = 1
@@ -1054,7 +958,7 @@ local function buildShowcaseTab()
 	local premiumRow = createRowFrame(1, 188)
 	buildPremiumTile(premiumRow, 0, {
 		title = "VIP Pass",
-		desc = "1.5x Luck\nPermanent",
+		desc = "1.5x Luck & Coins\nPermanent",
 		productId = Economy.Products.VIP,
 		owned = HUDController.Data.hasVIP == true,
 	}, prices.VIP)
@@ -1065,11 +969,25 @@ local function buildShowcaseTab()
 		owned = HUDController.Data.hasX2Luck == true,
 	}, prices.X2Luck)
 
-	local caseRow = createRowFrame(2, 336)
-	buildCaseShowCard(caseRow, EnhancedCases.List[1], 0, Color3.fromRGB(78, 190, 245), prices.LunarEnhanced)
-	buildCaseShowCard(caseRow, EnhancedCases.List[2], 0.515, Color3.fromRGB(100, 206, 85), prices.SolarEnhanced)
+	local premiumRow2 = createRowFrame(2, 188)
+	buildPremiumTile(premiumRow2, 0, {
+		title = "Storage+",
+		desc = "1000 Storage\nPermanent",
+		productId = Economy.Products.ExpandStorage,
+		owned = HUDController.Data.hasExpandStorage == true,
+	}, prices.ExpandStorage)
+	buildPremiumTile(premiumRow2, 0.515, {
+		title = "Auto Skip",
+		desc = "Auto Skip Spins\nPermanent",
+		productId = Economy.Products.AutoSkip,
+		owned = HUDController.Data.hasAutoSkip == true,
+		iconScale = 1.6,
+	}, prices.AutoSkip)
 
-	local gemsRow = createRowFrame(3, 188)
+	buildPremiumCaseCard(scroll, EnhancedCases.List[1], 3)
+	buildPremiumCaseCard(scroll, EnhancedCases.List[2], 4)
+
+	local gemsRow = createRowFrame(5, 188)
 	buildGemTile(gemsRow, 0, Economy.GemPacks[1], 1, prices.Gems1K)
 	buildGemTile(gemsRow, 0.34, Economy.GemPacks[2], 2, prices.Gems10K)
 	buildGemTile(gemsRow, 0.68, Economy.GemPacks[3], 3, prices.Gems100K)
@@ -1185,6 +1103,16 @@ function StoreController.Init()
 
 	-- Build single store section
 	buildShowcaseTab()
+
+	HUDController.OnDataUpdated(function()
+		if not isOpen then return end
+		local owned = HUDController.Data.ownedCrates or {}
+		for caseKey, textLabel in pairs(premiumCaseOpenRefs) do
+			if textLabel and textLabel.Parent then
+				textLabel.Text = "OPEN (" .. (owned[caseKey] or 0) .. ")"
+			end
+		end
+	end)
 end
 
 -------------------------------------------------

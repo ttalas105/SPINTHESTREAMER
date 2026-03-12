@@ -55,6 +55,18 @@ function ReceiptHandler.Init(playerDataModule, spinServiceModule)
 			task.spawn(trackRobux)
 			return Enum.ProductPurchaseDecision.PurchaseGranted
 
+		-- Expand Storage (permanent 200 → 1000)
+		elseif productId == Economy.Products.ExpandStorage then
+			PlayerData.SetExpandStorage(player, true)
+			task.spawn(trackRobux)
+			return Enum.ProductPurchaseDecision.PurchaseGranted
+
+		-- Auto Skip (permanent auto-skip during spins)
+		elseif productId == Economy.Products.AutoSkip then
+			PlayerData.SetAutoSkip(player, true)
+			task.spawn(trackRobux)
+			return Enum.ProductPurchaseDecision.PurchaseGranted
+
 		-- Store products (ServerLuck, Spins, DoubleCash, PremiumSlot)
 		elseif productId == Economy.Products.ServerLuck then
 			if SpinService then
@@ -84,65 +96,18 @@ function ReceiptHandler.Init(playerDataModule, spinServiceModule)
 			return Enum.ProductPurchaseDecision.PurchaseGranted
 		end
 
-		-- Enhanced Cases (Robux-only exclusive cases)
-		for _, caseData in ipairs(EnhancedCases.List) do
-			if productId == Economy.Products[caseData.key] then
-				local data = PlayerData.Get(player)
-				if data then
-					local invFull = #(data.inventory or {}) >= PlayerData.HOTBAR_MAX
-					local stoFull = #(data.storage or {}) >= PlayerData.STORAGE_MAX
-					if invFull and stoFull then
-						local remotes = ReplicatedStorage:FindFirstChild("RemoteEvents")
-						local resultRemote = remotes and remotes:FindFirstChild("EnhancedCaseResult")
-						if resultRemote then
-							resultRemote:FireClient(player, { success = false, reason = "Inventory and storage are full!" })
-						end
-						return Enum.ProductPurchaseDecision.NotProcessedYet
-					end
-				end
-
-				local streamerId, effect = EnhancedCases.Roll(caseData.key)
-				if streamerId then
-					local dest = PlayerData.AddToInventory(player, streamerId, effect)
-					PlayerData.IncrementStat(player, "totalSpins", 1)
-
-					local streamerInfo = Streamers.ById[streamerId]
-					local effectInfo = effect and Effects.ByName[effect] or nil
-					local displayName = streamerInfo and streamerInfo.displayName or streamerId
-					if effectInfo then
-						displayName = effectInfo.prefix .. " " .. displayName
-					end
-
-					local remotes = ReplicatedStorage:FindFirstChild("RemoteEvents")
-					local resultRemote = remotes and remotes:FindFirstChild("EnhancedCaseResult")
-					if resultRemote then
-						resultRemote:FireClient(player, {
-							success = true,
-							caseKey = caseData.key,
-							caseName = caseData.name,
-							streamerId = streamerId,
-							displayName = displayName,
-							rarity = streamerInfo and streamerInfo.rarity or "Common",
-							effect = effect,
-							destination = dest,
-						})
-					end
-
-					if streamerInfo and streamerInfo.rarity == "Mythic" then
-						local mythicAlert = remotes and remotes:FindFirstChild("MythicAlert")
-						if mythicAlert then
-							mythicAlert:FireAllClients({
-								playerName = player.Name,
-								streamerId = streamerId,
-								displayName = displayName,
-								effect = effect,
-							})
-						end
-					end
-				end
-				task.spawn(trackRobux)
-				return Enum.ProductPurchaseDecision.PurchaseGranted
+		-- Premium Cases (Wraith / Starlight) — add to ownedCrates for later opening
+		local premiumInfo = EnhancedCases.ProductToCase[productId]
+		if premiumInfo then
+			local data = PlayerData.Get(player)
+			if data then
+				if not data.ownedCrates then data.ownedCrates = {} end
+				local key = premiumInfo.key
+				data.ownedCrates[key] = (data.ownedCrates[key] or 0) + premiumInfo.amount
+				PlayerData.Replicate(player)
 			end
+			task.spawn(trackRobux)
+			return Enum.ProductPurchaseDecision.PurchaseGranted
 		end
 
 		-- Gem packs

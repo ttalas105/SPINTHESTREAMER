@@ -14,13 +14,15 @@ do
 	local remotes = ReplicatedStorage:WaitForChild("RemoteEvents")
 	local newRemotes = {
 		"ClaimQuestReward", "QuestUpdate", "EnhancedCaseResult",
-		"BuyCrateStock", "BuyCrateResult", "OpenOwnedCrate", "OpenCrateResult",
+		"BuyCrateStock", "BuyCrateResult", "OpenOwnedCrate", "OpenPremiumCrate", "OpenCrateResult",
 		"GetCaseStock", "CaseStockUpdate",
 		"GetPotionStock", "PotionStockUpdate", "BuyPotionStock", "UseOwnedPotion",
 		"SetPlayerBusy",
 		"SettingsUpdate",
 		"SacrificeQueueAction",
 		"HoldUpdate", "HoldSync",
+		"UpgradeMutationLuckRequest", "UpgradeMutationLuckResult",
+		"CancelPotionRequest",
 	}
 	for _, name in ipairs(newRemotes) do
 		if not remotes:FindFirstChild(name) then
@@ -439,9 +441,11 @@ do
 	local remotes = ReplicatedStorage:WaitForChild("RemoteEvents")
 	local newRemotes = {
 		"ClaimQuestReward", "QuestUpdate", "EnhancedCaseResult",
-		"BuyCrateStock", "BuyCrateResult", "OpenOwnedCrate", "OpenCrateResult",
+		"BuyCrateStock", "BuyCrateResult", "OpenOwnedCrate", "OpenPremiumCrate", "OpenCrateResult",
 		"GetCaseStock", "CaseStockUpdate",
 		"GetPotionStock", "PotionStockUpdate", "BuyPotionStock", "UseOwnedPotion",
+		"UpgradeMutationLuckRequest", "UpgradeMutationLuckResult",
+		"CancelPotionRequest",
 	}
 	for _, name in ipairs(newRemotes) do
 		if not remotes:FindFirstChild(name) then

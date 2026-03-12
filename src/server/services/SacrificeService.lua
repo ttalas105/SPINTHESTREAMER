@@ -260,7 +260,17 @@ local function handleGemTrade(player, tradeIndex)
 		end
 	end
 
-	PlayerData.ConsumeSacrificeQueue(player, queueId)
+	local consumed = PlayerData.ConsumeSacrificeQueue(player, queueId)
+	if #consumed > trade.count then
+		for ei = trade.count + 1, #consumed do
+			local item = consumed[ei]
+			if item and item ~= false then
+				local sid = type(item) == "table" and item.id or item
+				local eff = type(item) == "table" and item.effect or nil
+				PlayerData.AddToInventory(player, sid, eff)
+			end
+		end
+	end
 	PlayerData.AddGems(player, trade.gems)
 	SacrificeResult:FireClient(player, { success = true, sacrificeType = "GemTrade", gems = trade.gems })
 	if QuestService then
@@ -290,9 +300,6 @@ local function handleOneTime(player, oneTimeId)
 	local queue = PlayerData.GetSacrificeQueue(player, queueId)
 	local queueCount = countQueueItems(queue)
 
-	local isEffectReq = cfg.req[1] and cfg.req[1].effectReq ~= nil
-	local isRarityReq = cfg.req[1] and cfg.req[1].rarity ~= nil
-
 	local totalNeeded = 0
 	for _, r in ipairs(cfg.req) do totalNeeded = totalNeeded + (r.count or 1) end
 
@@ -301,28 +308,42 @@ local function handleOneTime(player, oneTimeId)
 		return
 	end
 
-	if isEffectReq then
-		local r = cfg.req[1]
-		local count = 0
-		for _, item in ipairs(queue) do
-			if item and item ~= false and itemMatchesEffect(item, r.effectReq) then count = count + 1 end
-		end
-		if count < (r.count or 1) then
-			SacrificeResult:FireClient(player, { success = false, reason = ("Need %d %s cards in queue."):format(r.count or 1, r.effectReq) })
-			return
-		end
-	elseif isRarityReq then
+	local hasEffectReq = false
+	local hasRarityReq = false
+	local hasExactReq = false
+	for _, r in ipairs(cfg.req) do
+		if r.effectReq then hasEffectReq = true
+		elseif r.rarity then hasRarityReq = true
+		elseif r.streamerId then hasExactReq = true end
+	end
+
+	if hasEffectReq or hasRarityReq then
+		local used = {}
 		for _, r in ipairs(cfg.req) do
-			local count = 0
-			for _, item in ipairs(queue) do
-				if item and item ~= false and itemMatchesRarity(item, r.rarity) then count = count + 1 end
+			local need = r.count or 1
+			for qi, item in ipairs(queue) do
+				if need <= 0 then break end
+				if item and item ~= false and not used[qi] then
+					local matches = false
+					if r.effectReq then
+						matches = itemMatchesEffect(item, r.effectReq)
+					elseif r.rarity and r.effect then
+						matches = itemMatchesRarityAndEffect(item, r.rarity, r.effect)
+					elseif r.rarity then
+						matches = itemMatchesRarity(item, r.rarity)
+					end
+					if matches then
+						used[qi] = true
+						need = need - 1
+					end
+				end
 			end
-			if count < (r.count or 1) then
+			if need > 0 then
 				SacrificeResult:FireClient(player, { success = false, reason = "Queue doesn't have the required streamers." })
 				return
 			end
 		end
-	else
+	elseif hasExactReq then
 		local used = {}
 		for _, r in ipairs(cfg.req) do
 			local need = r.count or 1
@@ -340,7 +361,17 @@ local function handleOneTime(player, oneTimeId)
 		end
 	end
 
-	PlayerData.ConsumeSacrificeQueue(player, queueId)
+	local consumed = PlayerData.ConsumeSacrificeQueue(player, queueId)
+	if #consumed > totalNeeded then
+		for ei = totalNeeded + 1, #consumed do
+			local item = consumed[ei]
+			if item and item ~= false then
+				local sid = type(item) == "table" and item.id or item
+				local eff = type(item) == "table" and item.effect or nil
+				PlayerData.AddToInventory(player, sid, eff)
+			end
+		end
+	end
 	PlayerData.SetSacrificeOneTimeCompleted(player, oneTimeId)
 	PlayerData.AddGems(player, cfg.gems)
 	SacrificeResult:FireClient(player, { success = true, sacrificeType = "OneTime", oneTimeId = oneTimeId, gems = cfg.gems })
@@ -379,7 +410,17 @@ local function handleElemental(player, effect, rarity)
 		end
 	end
 
-	PlayerData.ConsumeSacrificeQueue(player, queueId)
+	local consumed = PlayerData.ConsumeSacrificeQueue(player, queueId)
+	if #consumed > need then
+		for ei = need + 1, #consumed do
+			local item = consumed[ei]
+			if item and item ~= false then
+				local sid = type(item) == "table" and item.id or item
+				local eff = type(item) == "table" and item.effect or nil
+				PlayerData.AddToInventory(player, sid, eff)
+			end
+		end
+	end
 	local newId = randomStreamerOfRarity(rarity)
 	if newId then
 		PlayerData.AddToInventory(player, newId, effect)

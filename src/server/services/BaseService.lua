@@ -919,7 +919,7 @@ end
 local function bindCollectTouch(displayInfo, player: Player)
 	if not displayInfo or not displayInfo.greenPart then return end
 	local padSlot = displayInfo.padSlot
-	displayInfo.greenPart.Touched:Connect(function(hit)
+	local conn = displayInfo.greenPart.Touched:Connect(function(hit)
 		local char = hit.Parent
 		if not char then return end
 		local hum = char:FindFirstChildOfClass("Humanoid")
@@ -934,6 +934,7 @@ local function bindCollectTouch(displayInfo, player: Player)
 
 		tryCollectMoney(touchPlayer, padSlot)
 	end)
+	displayInfo.touchConnection = conn
 end
 
 local function bindPrompt(displayInfo, player: Player)
@@ -1094,6 +1095,19 @@ local function assignBase(player)
 		baseModel = playerBasesFolder:WaitForChild("BaseSlot_" .. slot, 10)
 	end
 
+	-- Clean up any leftover artifacts from previous occupants
+	if baseModel and baseModel:IsA("Model") then
+		for _, d in ipairs(baseModel:GetDescendants()) do
+			if d:IsA("BasePart") then
+				local oldGui = d:FindFirstChild("MoneyCounterGui")
+				if oldGui then pcall(function() oldGui:Destroy() end) end
+				d:SetAttribute("OwnerUserId", nil)
+			end
+		end
+		local oldSign = baseModel:FindFirstChild("OwnerSignAnchor")
+		if oldSign then pcall(function() oldSign:Destroy() end) end
+	end
+
 	local displays = {}
 	if baseModel and baseModel:IsA("Model") then
 		for attempt = 1, 10 do
@@ -1123,8 +1137,10 @@ local function assignBase(player)
 		end
 
 		-- Restore previously equipped streamers from saved data.
+		-- Also recover any items on pad slots that no longer exist (e.g., from old 20-slot system).
 		local data = PlayerData and PlayerData.Get(player)
 		if data and data.equippedPads then
+			local strandedKeys = {}
 			for key, item in pairs(data.equippedPads) do
 				local padSlot = tonumber(key)
 				if padSlot and displays[padSlot] then
@@ -1135,7 +1151,23 @@ local function assignBase(player)
 						updateMoneyText(player, padSlot)
 						updatePromptText(player, padSlot)
 					end
+				elseif padSlot then
+					table.insert(strandedKeys, key)
 				end
+			end
+			-- Return stranded items to inventory/storage
+			for _, key in ipairs(strandedKeys) do
+				local item = data.equippedPads[key]
+				if item then
+					local sid = type(item) == "table" and item.id or item
+					local eff = type(item) == "table" and item.effect or nil
+					PlayerData.AddToInventory(player, sid, eff)
+					data.equippedPads[key] = nil
+				end
+			end
+			if #strandedKeys > 0 then
+				warn("[BaseService] Recovered " .. #strandedKeys .. " stranded items for " .. player.Name)
+				PlayerData.Replicate(player)
 			end
 		end
 	else
@@ -1172,7 +1204,15 @@ function BaseService.Init(playerDataModule, potionServiceModule)
 	end
 
 	Players.PlayerAdded:Connect(function(player)
-		task.wait(1)
+		-- Wait for PlayerData to be fully loaded before assigning base.
+		-- DataStore can take several seconds under load; a fixed delay is unreliable.
+		for _ = 1, 40 do
+			if PlayerData and PlayerData.Get(player) then break end
+			task.wait(0.25)
+		end
+		if not PlayerData.Get(player) then
+			warn("[BaseService] PlayerData not loaded after 10s for " .. player.Name .. " — assigning base with defaults")
+		end
 		assignBase(player)
 	end)
 
@@ -1195,6 +1235,19 @@ function BaseService.Init(playerDataModule, potionServiceModule)
 				if displayInfo.promptAnchor then
 					pcall(function() displayInfo.promptAnchor:Destroy() end)
 				end
+				-- Disconnect touch events so they don't leak
+				if displayInfo.touchConnection then
+					pcall(function() displayInfo.touchConnection:Disconnect() end)
+					displayInfo.touchConnection = nil
+				end
+				-- Remove MoneyCounterGui from green parts
+				if displayInfo.greenPart then
+					local gui = displayInfo.greenPart:FindFirstChild("MoneyCounterGui")
+					if gui then
+						pcall(function() gui:Destroy() end)
+					end
+					displayInfo.greenPart:SetAttribute("OwnerUserId", nil)
+				end
 			end
 			BaseService._occupiedSlots[baseInfo.slotIndex] = nil
 			BaseService._bases[userId] = nil
@@ -1210,6 +1263,10 @@ function BaseService.Init(playerDataModule, potionServiceModule)
 	for _, player in ipairs(Players:GetPlayers()) do
 		if not BaseService._bases[player.UserId] then
 			task.spawn(function()
+				for _ = 1, 40 do
+					if PlayerData and PlayerData.Get(player) then break end
+					task.wait(0.25)
+				end
 				assignBase(player)
 			end)
 		end
@@ -1279,7 +1336,7 @@ function BaseService.Init(playerDataModule, potionServiceModule)
 				local equipped = data.equippedPads[key]
 				if equipped then
 					local hasHotbarSpace = #data.inventory < PlayerData.HOTBAR_MAX
-					local hasStorageSpace = data.storage and #data.storage < PlayerData.STORAGE_MAX
+					local hasStorageSpace = data.storage and #data.storage < PlayerData.GetStorageMax(player)
 					if not hasHotbarSpace and not hasStorageSpace then
 						EquipResult:FireClient(player, { success = false, reason = "Inventory and storage are full!" })
 						return
@@ -1327,7 +1384,7 @@ function BaseService.Init(playerDataModule, potionServiceModule)
 						local orphanId = type(orphanItem) == "table" and orphanItem.id or orphanItem
 						local orphanEffect = type(orphanItem) == "table" and orphanItem.effect or nil
 						local hasHotbarSpace2 = #data.inventory < PlayerData.HOTBAR_MAX
-						local hasStorageSpace2 = data.storage and #data.storage < PlayerData.STORAGE_MAX
+						local hasStorageSpace2 = data.storage and #data.storage < PlayerData.GetStorageMax(player)
 						if not hasHotbarSpace2 and not hasStorageSpace2 then
 							EquipResult:FireClient(player, { success = false, reason = "Inventory and storage are full!" })
 							return

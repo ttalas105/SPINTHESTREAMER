@@ -11,6 +11,7 @@ local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
 
 local Economy = require(ReplicatedStorage.Shared.Config.Economy)
+local Streamers = require(ReplicatedStorage.Shared.Config.Streamers)
 local UIHelper = require(script.Parent.UIHelper)
 local HUDController = require(script.Parent.HUDController)
 
@@ -517,7 +518,8 @@ local function buildCaseRow(crateId, parent)
 		if SpinController.IsActive() then return end
 		local inv = HUDController.Data.inventory or {}
 		local sto = HUDController.Data.storage or {}
-		if #inv >= 9 and #sto >= 200 then
+		local storageMax = (HUDController.Data.hasExpandStorage == true) and 1000 or 200
+		if #inv >= 9 and #sto >= storageMax then
 			openBtnText.Text = "STORAGE FULL!"
 			task.delay(2, function() updateAllCards() end)
 			return
@@ -918,6 +920,8 @@ function SpinStandController.Init()
 	for i = 1, Economy.TotalCases do
 		buildCaseRow(i, scroll)
 	end
+
+	-- Premium Robux cases removed from spin stand (buy/open in Robux Store only)
 
 	-------------------------------------------------
 	-- EVENTS

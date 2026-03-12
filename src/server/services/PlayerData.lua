@@ -61,6 +61,16 @@ end
 -- Capacity constants
 PlayerData.HOTBAR_MAX  = 9
 PlayerData.STORAGE_MAX = 200
+PlayerData.EXPANDED_STORAGE_MAX = 1000
+
+local function storageMaxFor(data)
+	return (data and data.hasExpandStorage) and PlayerData.EXPANDED_STORAGE_MAX or PlayerData.STORAGE_MAX
+end
+
+function PlayerData.GetStorageMax(player): number
+	local data = PlayerData.Get(player)
+	return storageMaxFor(data)
+end
 
 -- In Studio, DataStore is blocked by default (Enable Studio Access to API Services = off).
 -- Try real DataStore first; if it fails, use in-memory mock so no errors are shown.
@@ -109,10 +119,13 @@ local DEFAULT_DATA = {
 	rebirthCount = 0,
 	luck = 0,                 -- personal luck stat; 1 luck = +1% drop luck (stacked with crate luck)
 	cashUpgrade = 0,          -- coin multiplier upgrade count; each +1 = +2% cash production
+	mutationLuckUpgrade = 0,  -- mutation luck upgrade count; each +1 = +2% mutation chance
 	premiumSlotUnlocked = false,
 	doubleCash = false,
 	hasVIP = false,
 	hasX2Luck = false,
+	hasExpandStorage = false,
+	hasAutoSkip = false,
 	spinCredits = 0,
 	-- Potion persistence (server-authoritative state restored by PotionService on join)
 	activePotionEffects = {},
@@ -144,6 +157,7 @@ local DEFAULT_DATA = {
 	caseStockLastRestock = 0,
 	potionShopStock = {},
 	potionStockLastRestock = 0,
+	firstJoinBonusUsed = false,
 	-- Lifetime stats (for global leaderboards)
 	totalSpins = 0,
 	totalCashEarned = 0,
@@ -257,9 +271,9 @@ local function loadData(player)
 			for i = #data.inventory, PlayerData.HOTBAR_MAX + 1, -1 do
 				table.insert(overflow, 1, table.remove(data.inventory, i))
 			end
-			for _, item in ipairs(overflow) do
-				if #data.storage < PlayerData.STORAGE_MAX then
-					table.insert(data.storage, item)
+		for _, item in ipairs(overflow) do
+			if #data.storage < storageMaxFor(data) then
+				table.insert(data.storage, item)
 				end
 			end
 		end
@@ -300,10 +314,13 @@ local function buildFullPayload(player, data)
 		rebirthCount = data.rebirthCount,
 		luck = data.luck or 0,
 		cashUpgrade = data.cashUpgrade or 0,
+		mutationLuckUpgrade = data.mutationLuckUpgrade or 0,
 		premiumSlotUnlocked = data.premiumSlotUnlocked,
 		doubleCash = data.doubleCash,
 		hasVIP = data.hasVIP or false,
 		hasX2Luck = data.hasX2Luck or false,
+		hasExpandStorage = data.hasExpandStorage or false,
+		hasAutoSkip = data.hasAutoSkip or false,
 		spinCredits = data.spinCredits,
 		totalSlots = SlotsConfig.GetTotalSlots(data.rebirthCount, data.premiumSlotUnlocked),
 		tutorialComplete = data.tutorialComplete or false,
@@ -329,16 +346,46 @@ end
 -- OPTIMIZATION: Only send changed top-level fields (delta replication)
 -- Scalar fields use == comparison; tables always resend (cheap enough for correctness)
 local SCALAR_FIELDS = {
-	"cash", "gems", "rebirthCount", "luck", "cashUpgrade",
-	"premiumSlotUnlocked", "doubleCash", "hasVIP", "hasX2Luck",
+	"cash", "gems", "rebirthCount", "luck", "cashUpgrade", "mutationLuckUpgrade",
+	"premiumSlotUnlocked", "doubleCash", "hasVIP", "hasX2Luck", "hasExpandStorage", "hasAutoSkip",
 	"spinCredits", "totalSlots", "tutorialComplete",
 }
 local SCALAR_SET = {}
 for _, f in ipairs(SCALAR_FIELDS) do SCALAR_SET[f] = true end
 
+local function updateLeaderstats(player, data)
+	local ls = player:FindFirstChild("leaderstats")
+	if not ls then
+		ls = Instance.new("Folder")
+		ls.Name = "leaderstats"
+		ls.Parent = player
+
+		local spinsVal = Instance.new("IntValue")
+		spinsVal.Name = "Spins"
+		spinsVal.Parent = ls
+
+		local moneyVal = Instance.new("IntValue")
+		moneyVal.Name = "Money"
+		moneyVal.Parent = ls
+
+		local rebirthVal = Instance.new("IntValue")
+		rebirthVal.Name = "Rebirth"
+		rebirthVal.Parent = ls
+	end
+
+	local spins = ls:FindFirstChild("Spins")
+	if spins then spins.Value = data.totalSpins or 0 end
+	local money = ls:FindFirstChild("Money")
+	if money then money.Value = math.floor(data.cash or 0) end
+	local rebirth = ls:FindFirstChild("Rebirth")
+	if rebirth then rebirth.Value = data.rebirthCount or 0 end
+end
+
 function PlayerData.Replicate(player)
 	local data = PlayerData._cache[player.UserId]
 	if not data then return end
+
+	updateLeaderstats(player, data)
 
 	local full = buildFullPayload(player, data)
 	local userId = player.UserId
@@ -520,7 +567,7 @@ function PlayerData.AddToInventory(player, streamerId: string, effect: string?):
 	if #data.inventory < PlayerData.HOTBAR_MAX then
 		table.insert(data.inventory, item)
 		dest = "hotbar"
-	elseif #data.storage < PlayerData.STORAGE_MAX then
+	elseif #data.storage < storageMaxFor(data) then
 		table.insert(data.storage, item)
 		dest = "storage"
 	else
@@ -609,7 +656,7 @@ function PlayerData.AddToStorage(player, streamerId: string, effect: string?): b
 	local data = PlayerData.Get(player)
 	if not data then return false end
 	if not data.storage then data.storage = {} end
-	if #data.storage >= PlayerData.STORAGE_MAX then return false end
+	if #data.storage >= storageMaxFor(data) then return false end
 	local item = { id = streamerId }
 	if effect then item.effect = effect end
 	table.insert(data.storage, item)
@@ -686,7 +733,7 @@ function PlayerData.MoveHotbarToStorage(player, hotbarIndex: number): boolean
 	if not data then return false end
 	if not data.storage then data.storage = {} end
 	if hotbarIndex < 1 or hotbarIndex > #data.inventory then return false end
-	if #data.storage >= PlayerData.STORAGE_MAX then return false end
+	if #data.storage >= storageMaxFor(data) then return false end
 	local item = table.remove(data.inventory, hotbarIndex)
 	table.insert(data.storage, item)
 	PlayerData.Replicate(player)
@@ -798,7 +845,7 @@ function PlayerData.FullSyncSacrificeHolding(player, wantedItems)
 		else
 			if #data.inventory < PlayerData.HOTBAR_MAX then
 				table.insert(data.inventory, hItem)
-			elseif data.storage and #data.storage < PlayerData.STORAGE_MAX then
+			elseif data.storage and #data.storage < storageMaxFor(data) then
 				table.insert(data.storage, hItem)
 			else
 				table.insert(keepInHolding, hItem)
@@ -850,7 +897,7 @@ function PlayerData.ReturnAllSacrificeHolding(player)
 	for _, item in ipairs(data.sacrificeHolding) do
 		if #data.inventory < PlayerData.HOTBAR_MAX then
 			table.insert(data.inventory, item)
-		elseif #data.storage < PlayerData.STORAGE_MAX then
+		elseif #data.storage < storageMaxFor(data) then
 			table.insert(data.storage, item)
 		end
 	end
@@ -960,7 +1007,7 @@ function PlayerData.RemoveFromSacrificeQueue(player, queueId: string, queueIndex
 
 	if #data.inventory < PlayerData.HOTBAR_MAX then
 		table.insert(data.inventory, item)
-	elseif data.storage and #data.storage < PlayerData.STORAGE_MAX then
+	elseif data.storage and #data.storage < storageMaxFor(data) then
 		table.insert(data.storage, item)
 	else
 		return false
@@ -988,7 +1035,7 @@ function PlayerData.ClearSacrificeQueue(player, queueId: string): (boolean, numb
 	if itemCount == 0 then return true, 0 end
 
 	local invSpace = PlayerData.HOTBAR_MAX - #data.inventory
-	local stoSpace = (data.storage and (PlayerData.STORAGE_MAX - #data.storage)) or 0
+	local stoSpace = (data.storage and (storageMaxFor(data) - #data.storage)) or 0
 	local totalSpace = invSpace + stoSpace
 
 	if totalSpace < itemCount then
@@ -1000,7 +1047,7 @@ function PlayerData.ClearSacrificeQueue(player, queueId: string): (boolean, numb
 		if item and item ~= false then
 			if #data.inventory < PlayerData.HOTBAR_MAX then
 				table.insert(data.inventory, item)
-			elseif data.storage and #data.storage < PlayerData.STORAGE_MAX then
+			elseif data.storage and #data.storage < storageMaxFor(data) then
 				table.insert(data.storage, item)
 			end
 		end
@@ -1074,7 +1121,7 @@ function PlayerData.UnequipFromPad(player, padSlot: number): boolean
 	-- Move back to hotbar if space, otherwise storage
 	if #data.inventory < PlayerData.HOTBAR_MAX then
 		table.insert(data.inventory, item)
-	elseif data.storage and #data.storage < PlayerData.STORAGE_MAX then
+	elseif data.storage and #data.storage < storageMaxFor(data) then
 		table.insert(data.storage, item)
 	else
 		return false
@@ -1171,6 +1218,27 @@ end
 --- Get the cash upgrade multiplier (1.0 + cashUpgrade * 0.02)
 function PlayerData.GetCashUpgradeMultiplier(player): number
 	local upgrades = PlayerData.GetCashUpgrade(player)
+	return 1 + (upgrades * 0.02)
+end
+
+-------------------------------------------------
+-- MUTATION LUCK UPGRADE (each level = +2% mutation chance)
+-------------------------------------------------
+
+function PlayerData.GetMutationLuckUpgrade(player): number
+	local data = PlayerData.Get(player)
+	return data and (data.mutationLuckUpgrade or 0) or 0
+end
+
+function PlayerData.AddMutationLuckUpgrade(player, amount: number)
+	local data = PlayerData.Get(player)
+	if not data then return end
+	data.mutationLuckUpgrade = math.max(0, (data.mutationLuckUpgrade or 0) + amount)
+	PlayerData.Replicate(player)
+end
+
+function PlayerData.GetMutationLuckMultiplier(player): number
+	local upgrades = PlayerData.GetMutationLuckUpgrade(player)
 	return 1 + (upgrades * 0.02)
 end
 
@@ -1301,10 +1369,37 @@ function PlayerData.HasX2Luck(player): boolean
 	return data.hasX2Luck == true
 end
 
+function PlayerData.SetExpandStorage(player, active: boolean)
+	local data = PlayerData.Get(player)
+	if not data then return end
+	data.hasExpandStorage = active
+	PlayerData.Replicate(player)
+end
+
+function PlayerData.HasExpandStorage(player): boolean
+	local data = PlayerData.Get(player)
+	if not data then return false end
+	return data.hasExpandStorage == true
+end
+
+function PlayerData.SetAutoSkip(player, active: boolean)
+	local data = PlayerData.Get(player)
+	if not data then return end
+	data.hasAutoSkip = active
+	PlayerData.Replicate(player)
+end
+
+function PlayerData.HasAutoSkip(player): boolean
+	local data = PlayerData.Get(player)
+	if not data then return false end
+	return data.hasAutoSkip == true
+end
+
 function PlayerData.IncrementStat(player, statName: string, amount: number)
 	local data = PlayerData.Get(player)
 	if not data then return end
 	data[statName] = (data[statName] or 0) + amount
+	updateLeaderstats(player, data)
 end
 
 function PlayerData.GetStat(player, statName: string): number
