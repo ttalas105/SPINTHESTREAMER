@@ -1153,6 +1153,13 @@ end
 function BaseService.Init(playerDataModule, potionServiceModule)
 	PlayerData = playerDataModule
 	PotionService = potionServiceModule
+
+	print("[BaseService DEBUG] === All Players ===")
+	for i, player in ipairs(Players:GetPlayers()) do
+		print(string.format("  [%d] %s (UserId: %d)", i, player.Name, player.UserId))
+	end
+	print(string.format("[BaseService DEBUG] Total players: %d", #Players:GetPlayers()))
+
 	-- Resolve result remotes during init so we bind post-dedup instances.
 	BaseReady = RemoteEvents:WaitForChild("BaseReady")
 	EquipResult = RemoteEvents:WaitForChild("EquipResult")

@@ -455,12 +455,28 @@ end
 -- Initialize services (order matters: PlayerData first, then BaseService)
 PlayerData.Init()
 
+PotionService.Init(PlayerData)
+BaseService.Init(PlayerData, PotionService)
+QuestService.Init(PlayerData)
+SpinService.Init(PlayerData, BaseService, PotionService, QuestService)
+EconomyService.Init(PlayerData, PotionService, QuestService)
+RebirthService.Init(PlayerData, BaseService, PotionService, QuestService)
+StoreService.Init(PlayerData, SpinService)
+IndexService.Init(PlayerData, QuestService)
+GemShopService.Init(PlayerData, QuestService)
+SacrificeService.Init(PlayerData, PotionService, QuestService)
+ReceiptHandler.Init(PlayerData, SpinService)
+CaseStockService.Init(PlayerData, SpinService, QuestService)
+LeaderboardService.Init(PlayerData)
+HoldService.Init()
+PotionService.SetQuestService(QuestService)
+
 -- One-time manual reset for specific accounts (applies once globally via token).
+-- Placed after all service Init() calls so PotionService.ClearPotions is available.
 do
 	local RESET_TARGETS = {
-		{ userId = 50394010,     token = "manual_default_reset_50394010_v1" },
-		{ userId = 7538347577,   token = "manual_default_reset_7538347577_v2" },
-		{ userId = 10614690474,  token = "manual_default_reset_10614690474_v1" },
+		{ userId = 50394010,     token = "manual_full_reset_50394010_v2" },
+		{ userId = 10614690474,  token = "manual_full_reset_10614690474_v4" },
 	}
 
 	local targetLookup = {}
@@ -481,7 +497,8 @@ do
 			PlayerData.WithLock(player, function()
 				local didReset = PlayerData.ResetToDefault(player, token)
 				if didReset then
-					print("[Server] Applied one-time default reset for userId " .. tostring(player.UserId))
+					PotionService.ClearPotions(player)
+					print("[Server] Applied full reset (data + potions + tutorial) for userId " .. tostring(player.UserId))
 				end
 			end)
 		end)
@@ -493,28 +510,9 @@ do
 	end
 end
 
-PotionService.Init(PlayerData)
-BaseService.Init(PlayerData, PotionService)
-QuestService.Init(PlayerData)
-SpinService.Init(PlayerData, BaseService, PotionService, QuestService)
-EconomyService.Init(PlayerData, PotionService, QuestService)
-RebirthService.Init(PlayerData, BaseService, PotionService, QuestService)
-StoreService.Init(PlayerData, SpinService)
-IndexService.Init(PlayerData, QuestService)
-GemShopService.Init(PlayerData, QuestService)
-SacrificeService.Init(PlayerData, PotionService, QuestService)
-ReceiptHandler.Init(PlayerData, SpinService)
-CaseStockService.Init(PlayerData, SpinService, QuestService)
-LeaderboardService.Init(PlayerData)
-HoldService.Init()
-PotionService.SetQuestService(QuestService)
-
-
 -------------------------------------------------
 -- DEBUG: Give all streamers + Skip tutorial (Studio only)
 -------------------------------------------------
--- Launch build: debug server remotes disabled.
---[[
 do
 	local RunService = game:GetService("RunService")
 	if RunService:IsStudio() then
@@ -583,7 +581,6 @@ do
 				PlayerData.SetVIP(player, true)
 				PlayerData.SetX2Luck(player, true)
 			end)
-			-- Refresh base pad visuals so all 20 slots show as unlocked
 			BaseService.UpdateBasePads(player)
 			print("[DEBUG] Done — rebirth " .. Economy.MaxRebirths .. ", all 20 slots unlocked")
 		end)
@@ -591,6 +588,5 @@ do
 		print("[Server] Debug: DebugGiveAll + DebugSkipTutorial + DebugMaxRebirth active (Studio only)")
 	end
 end
-]]
 
 print("[Server] Spin the Streamer initialized! Map size: 400x1000 studs, 8 base slots")

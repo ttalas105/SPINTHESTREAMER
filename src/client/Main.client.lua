@@ -799,8 +799,6 @@ end
 -- DEBUG: Give all streamers + Skip tutorial (Studio only)
 -- Buttons in bottom-right corner to avoid overlapping other UI
 -------------------------------------------------
--- Launch build: debug client buttons disabled.
---[[
 if RunService:IsStudio() then
 	task.defer(function()
 		local debugGiveAll = RemoteEvents:FindFirstChild("DebugGiveAll")
@@ -881,7 +879,6 @@ if RunService:IsStudio() then
 		end
 	end)
 end
-]]
 
 -------------------------------------------------
 -- HIDE PLAYER HEALTH BARS + MOVEMENT SPEED
@@ -1075,12 +1072,20 @@ HUDController.OnDataUpdated(function(data)
 	end
 	SlotPadController.Refresh(data)
 
-	if not tutorialStarted and data.tutorialComplete ~= nil then
-		tutorialStarted = true
-		if TutorialController.ShouldStart(data) then
+	if data.tutorialComplete ~= nil then
+		if not tutorialStarted and TutorialController.ShouldStart(data) then
+			tutorialStarted = true
 			task.delay(1.5, function()
 				TutorialController.Start()
 			end)
+		elseif tutorialStarted and not TutorialController.IsActive() and TutorialController.ShouldStart(data) then
+			tutorialStarted = true
+			TutorialController.Init()
+			task.delay(1.5, function()
+				TutorialController.Start()
+			end)
+		elseif not TutorialController.ShouldStart(data) then
+			tutorialStarted = true
 		end
 	end
 end)
