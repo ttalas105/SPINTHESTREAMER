@@ -984,13 +984,13 @@ local function buildShowcaseTab()
 		iconScale = 1.6,
 	}, prices.AutoSkip)
 
-	buildPremiumCaseCard(scroll, EnhancedCases.List[1], 3)
-	buildPremiumCaseCard(scroll, EnhancedCases.List[2], 4)
-
-	local gemsRow = createRowFrame(5, 188)
+	local gemsRow = createRowFrame(3, 188)
 	buildGemTile(gemsRow, 0, Economy.GemPacks[1], 1, prices.Gems1K)
 	buildGemTile(gemsRow, 0.34, Economy.GemPacks[2], 2, prices.Gems10K)
 	buildGemTile(gemsRow, 0.68, Economy.GemPacks[3], 3, prices.Gems100K)
+
+	buildPremiumCaseCard(scroll, EnhancedCases.List[1], 4)
+	buildPremiumCaseCard(scroll, EnhancedCases.List[2], 5)
 end
 
 -------------------------------------------------

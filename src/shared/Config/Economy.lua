@@ -298,10 +298,10 @@ Economy.RobuxPrices = {
 	Gems1K        = 99,
 	Gems10K       = 599,
 	Gems100K      = 1999,
-	VIP           = 199,
-	X2Luck        = 99,
-	ExpandStorage = 49,
-	AutoSkip      = 99,
+	VIP           = 399,
+	X2Luck        = 299,
+	ExpandStorage = 199,
+	AutoSkip      = 299,
 }
 
 Economy.ExpandedStorageMax = 1000
