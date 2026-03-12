@@ -27,17 +27,17 @@ local isMobile = UIHelper.IsMobile()
 -------------------------------------------------
 -- Nav button style (match left nav; smaller on mobile)
 -------------------------------------------------
-local BUTTON_W = isMobile and 80 or 120
-local BUTTON_H = isMobile and 88 or 130
-local BUTTON_PADDING = isMobile and 14 or 30
-local BUBBLE_CORNER = isMobile and 16 or 22
+local BUTTON_W = isMobile and 80 or 90
+local BUTTON_H = isMobile and 88 or 100
+local BUTTON_PADDING = isMobile and 14 or 20
+local BUBBLE_CORNER = isMobile and 16 or 18
 local STROKE_THICKNESS = 1.5
 local STROKE_COLOR = Color3.fromRGB(30, 25, 50)
 
 local menuItems = {
 	{ name = "Rebirth",  icon = "\u{2728}", imageId = "rbxassetid://83431543153884", color = Color3.fromRGB(255, 100, 140),  label = "Rebirth"  },
-	{ name = "Quests",   icon = "\u{1F4CB}", imageId = "", color = Color3.fromRGB(80, 200, 120),   label = "Quests", bgColor = Color3.fromRGB(100, 210, 140) },
-	{ name = "Settings", icon = "\u{2699}\u{FE0F}", imageId = "", color = Color3.fromRGB(100, 160, 220),  label = "Settings", bgColor = Color3.fromRGB(150, 195, 245) },
+	{ name = "Quests",   icon = "\u{1F4CB}", imageId = "rbxassetid://137078881844163", color = Color3.fromRGB(80, 200, 120),   label = "Quests", bgColor = Color3.fromRGB(100, 210, 140) },
+	{ name = "Settings", icon = "\u{2699}\u{FE0F}", imageId = "rbxassetid://109975567908988", color = Color3.fromRGB(100, 160, 220),  label = "Settings", bgColor = Color3.fromRGB(150, 195, 245) },
 }
 
 -------------------------------------------------
@@ -82,7 +82,7 @@ local function layoutNav(container, btnFrames, viewportHeight)
 end
 
 function RightSideNavController.Init()
-	local screenGui = UIHelper.CreateScreenGui("RightSideNavGui", 4)
+	local screenGui = UIHelper.CreateScreenGui("RightSideNavGui", 4, 1.0)
 	screenGui.Parent = playerGui
 
 	local totalHeight = (#menuItems * BUTTON_H) + ((#menuItems - 1) * BUTTON_PADDING)

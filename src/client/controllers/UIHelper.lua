@@ -301,7 +301,7 @@ function UIHelper.CreateIconButton(props)
 		icon.Parent = container
 	end
 
-	local labelTextSize = mobile and 16 or 24
+	local labelTextSize = mobile and 16 or 18
 	local labelStrokeThick = mobile and 1.5 or 2.5
 
 	local label = Instance.new("TextLabel")

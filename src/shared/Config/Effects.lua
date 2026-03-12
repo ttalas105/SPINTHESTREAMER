@@ -91,7 +91,7 @@ Effects.List = {
 		color          = Color3.fromRGB(140, 15, 50),
 		glowColor      = Color3.fromRGB(70, 5, 25),
 		cashMultiplier = 100,
-		rarityMult     = 800,
+		rarityMult     = 1000,
 		rollChance     = 0.03,
 	},
 }

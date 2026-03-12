@@ -631,6 +631,7 @@ local function buildOneTimeContent(oneTimeId)
 				local displayId = r.streamerId and Streamers.ById[r.streamerId] and Streamers.ById[r.streamerId].displayName or r.streamerId
 				if r.effect and r.streamerId then reqLabel = r.effect .. " " .. (displayId or "?")
 				elseif r.streamerId then reqLabel = displayId or "?"
+				elseif r.rarity and r.effect then reqLabel = r.effect .. "\n" .. r.rarity
 				elseif r.rarity then reqLabel = r.rarity
 				else reqLabel = "?" end
 
@@ -657,13 +658,20 @@ local function buildOneTimeContent(oneTimeId)
 						filterFn = function(itm)
 							local id = type(itm) == "table" and itm.id or itm
 							local info = Streamers.ById[id]
-							return info and info.rarity == capR.rarity
+							if not info or info.rarity ~= capR.rarity then return false end
+							if capR.effect then
+								local e = type(itm) == "table" and itm.effect or nil
+								if e ~= capR.effect then return false end
+							end
+							return true
 						end
 					end
 					local pickerTitle = "Pick a "
 					if capR.effect and capR.streamerId then
 						local dn = Streamers.ById[capR.streamerId] and Streamers.ById[capR.streamerId].displayName or capR.streamerId
 						pickerTitle = pickerTitle .. capR.effect .. " " .. dn
+					elseif capR.rarity and capR.effect then
+						pickerTitle = pickerTitle .. capR.effect .. " " .. capR.rarity
 					else
 						pickerTitle = pickerTitle .. (capR.streamerId or capR.rarity or "?")
 					end
@@ -734,14 +742,26 @@ buildEffectOneTimeContent = function(oneTimeId, cfg, done)
 	clearContent()
 	local r = cfg.req[1]
 	local effectName = r.effectReq
-	local need = r.count or 20
 	local effectInfo = Effects.ByName[effectName]
 	local effectColor = effectInfo and effectInfo.color or Color3.fromRGB(200, 200, 200)
+
+	local totalNeed = 0
+	for _, req in ipairs(cfg.req) do totalNeed = totalNeed + (req.count or 1) end
 
 	local queueId = "OneTime_" .. oneTimeId
 	local queue = getQueueItems(queueId)
 	local queued = countQueueItems(queue)
 	local accentColor = done and Color3.fromRGB(80, 220, 100) or effectColor
+
+	local descParts = {}
+	for _, req in ipairs(cfg.req) do
+		if req.effectReq then
+			table.insert(descParts, (req.count or 1) .. " " .. req.effectReq .. " streamers")
+		elseif req.rarity and req.effect then
+			table.insert(descParts, (req.count or 1) .. " " .. req.effect .. " " .. req.rarity)
+		end
+	end
+	local descText = "Sacrifice " .. table.concat(descParts, " + ")
 
 	local header = Instance.new("Frame")
 	header.Size = UDim2.new(1, -sx(12), 0, sx(90))
@@ -762,7 +782,7 @@ buildEffectOneTimeContent = function(oneTimeId, cfg, done)
 	local sub = Instance.new("TextLabel")
 	sub.Size = UDim2.new(1, -sx(24), 0, sx(36)); sub.Position = UDim2.new(0.5, 0, 0, sx(44))
 	sub.AnchorPoint = Vector2.new(0.5, 0); sub.BackgroundTransparency = 1
-	sub.Text = done and "Already completed!" or ("Sacrifice " .. need .. " " .. effectName .. " cards")
+	sub.Text = done and "Already completed!" or descText
 	sub.TextColor3 = Color3.fromRGB(200, 190, 230); sub.Font = FONT; sub.TextSize = sx(14)
 	sub.TextWrapped = true; sub.Parent = header
 
@@ -770,8 +790,8 @@ buildEffectOneTimeContent = function(oneTimeId, cfg, done)
 
 	local slotSize = sx(50)
 	local slotGap = sx(6)
-	local slotsPerRow = math.min(need, 10)
-	local totalRows = math.ceil(need / slotsPerRow)
+	local slotsPerRow = math.min(totalNeed, 10)
+	local totalRows = math.ceil(totalNeed / slotsPerRow)
 	local slotRowH = totalRows * (slotSize + slotGap) + sx(12)
 
 	local slotContainer = Instance.new("Frame")
@@ -784,8 +804,8 @@ buildEffectOneTimeContent = function(oneTimeId, cfg, done)
 	local cntLabel = Instance.new("TextLabel")
 	cntLabel.Size = UDim2.new(1, -sx(16), 0, sx(26)); cntLabel.Position = UDim2.new(0.5, 0, 0, sx(4))
 	cntLabel.AnchorPoint = Vector2.new(0.5, 0); cntLabel.BackgroundTransparency = 1
-	cntLabel.Text = queued .. " / " .. need .. " queued"
-	cntLabel.TextColor3 = queued >= need and Color3.fromRGB(100, 255, 120) or effectColor
+	cntLabel.Text = queued .. " / " .. totalNeed .. " queued"
+	cntLabel.TextColor3 = queued >= totalNeed and Color3.fromRGB(100, 255, 120) or effectColor
 	cntLabel.Font = FONT; cntLabel.TextSize = sx(16); cntLabel.Parent = slotContainer
 
 	local slotGrid = Instance.new("Frame")
@@ -799,38 +819,64 @@ buildEffectOneTimeContent = function(oneTimeId, cfg, done)
 	local sgPad = Instance.new("UIPadding", slotGrid)
 	sgPad.PaddingTop = UDim.new(0, sx(4)); sgPad.PaddingBottom = UDim.new(0, sx(4))
 
-	for i = 1, need do
-		local item = queue[i]
-		local isFilled = item ~= nil and item ~= false
-		local slot = Instance.new("TextButton")
-		slot.Size = UDim2.new(0, slotSize, 0, slotSize)
-		slot.BackgroundColor3 = isFilled and Color3.fromRGB(40, 120, 60) or Color3.fromRGB(50, 42, 80)
-		slot.BorderSizePixel = 0; slot.LayoutOrder = i; slot.Text = ""; slot.Parent = slotGrid
-		Instance.new("UICorner", slot).CornerRadius = UDim.new(1, 0)
-		local slotStk = Instance.new("UIStroke", slot)
-		slotStk.Color = isFilled and Color3.fromRGB(80, 240, 100) or effectColor
-		slotStk.Thickness = isFilled and 2 or 1.5
-		slotStk.Transparency = isFilled and 0 or 0.5
+	local slotIdx = 0
+	for _, req in ipairs(cfg.req) do
+		local count = req.count or 1
+		for _ = 1, count do
+			slotIdx = slotIdx + 1
+			local item = queue[slotIdx]
+			local isFilled = item ~= nil and item ~= false
+			local slot = Instance.new("TextButton")
+			slot.Size = UDim2.new(0, slotSize, 0, slotSize)
+			slot.BackgroundColor3 = isFilled and Color3.fromRGB(40, 120, 60) or Color3.fromRGB(50, 42, 80)
+			slot.BorderSizePixel = 0; slot.LayoutOrder = slotIdx; slot.Text = ""; slot.Parent = slotGrid
+			Instance.new("UICorner", slot).CornerRadius = UDim.new(1, 0)
+			local slotStk = Instance.new("UIStroke", slot)
+			slotStk.Color = isFilled and Color3.fromRGB(80, 240, 100) or effectColor
+			slotStk.Thickness = isFilled and 2 or 1.5
+			slotStk.Transparency = isFilled and 0 or 0.5
 
-		if isFilled then
-			local id = type(item) == "table" and item.id or (item or "?")
-			buildAvatarSlot(slot, id)
-			local capI = i
-			slot.MouseButton1Click:Connect(function()
-				requestQueueRemove(queueId, capI)
-			end)
-		else
-			local capSlot = i
-			slot.MouseButton1Click:Connect(function()
-				showPicker("Pick a " .. effectName .. " streamer", function(itm)
-					local eff = type(itm) == "table" and itm.effect or nil
-					return eff == effectName
-				end, queueId, nil, capSlot)
-			end)
+			if isFilled then
+				local id = type(item) == "table" and item.id or (item or "?")
+				buildAvatarSlot(slot, id)
+				local capI = slotIdx
+				slot.MouseButton1Click:Connect(function()
+					requestQueueRemove(queueId, capI)
+				end)
+			else
+				if req.effectReq then
+					local capSlot = slotIdx
+					local capEffect = req.effectReq
+					slot.MouseButton1Click:Connect(function()
+						showPicker("Pick a " .. capEffect .. " streamer", function(itm)
+							local eff = type(itm) == "table" and itm.effect or nil
+							return eff == capEffect
+						end, queueId, nil, capSlot)
+					end)
+				elseif req.rarity and req.effect then
+					local reqLabel = req.effect .. "\n" .. req.rarity
+					local pl = Instance.new("TextLabel")
+					pl.Size = UDim2.new(1, -sx(4), 1, -sx(4)); pl.BackgroundTransparency = 1
+					pl.Text = reqLabel; pl.TextColor3 = Color3.fromRGB(120, 110, 160)
+					pl.Font = FONT; pl.TextSize = sx(9); pl.TextWrapped = true; pl.Parent = slot
+
+					local capSlot = slotIdx
+					local capR = req
+					slot.MouseButton1Click:Connect(function()
+						showPicker("Pick a " .. capR.effect .. " " .. capR.rarity, function(itm)
+							local id = type(itm) == "table" and itm.id or itm
+							local info = Streamers.ById[id]
+							if not info or info.rarity ~= capR.rarity then return false end
+							local eff = type(itm) == "table" and itm.effect or nil
+							return eff == capR.effect
+						end, queueId, nil, capSlot)
+					end)
+				end
+			end
 		end
 	end
 
-	local canSac = queued >= need
+	local canSac = queued >= totalNeed
 	local actionRow = Instance.new("Frame")
 	actionRow.Size = UDim2.new(1, -sx(12), 0, sx(50)); actionRow.BackgroundTransparency = 1; actionRow.Parent = contentFrame
 	local arl = Instance.new("UIListLayout", actionRow)
@@ -1203,7 +1249,6 @@ function SacrificeController.Init()
 		{ "TheOGs",          "The OGs",          Color3.fromRGB(180, 180, 180) },
 		{ "FPSLegends",      "FPS Legends",      Color3.fromRGB(255, 80, 80)  },
 		{ "TwitchRoyalty",   "Twitch Royalty",    Color3.fromRGB(180, 120, 255)},
-		{ "TheUntouchables", "The Untouchables",  Color3.fromRGB(255, 50, 50) },
 		{ "Rainbow",         "Rainbow",          Color3.fromRGB(120, 255, 200) },
 		{ "MythicRoyale",    "Mythic Royale",    Color3.fromRGB(255, 215, 0)   },
 	}

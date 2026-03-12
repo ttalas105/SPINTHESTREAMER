@@ -2,7 +2,7 @@
 	SlotsConfig.lua
 	Defines how many pad slots unlock per rebirth level.
 	Layout: 4 rows x 5 columns = 20 total possible pads.
-	Players start with 4 open slots; each rebirth adds 1 more.
+	Players start with 4 open slots; each rebirth adds 1 more (max 10).
 	Premium Slot = 1 extra slot purchasable with Robux (slot 20).
 ]]
 
@@ -11,8 +11,8 @@ local SlotsConfig = {}
 -- Starting slots (no rebirths needed)
 SlotsConfig.StartingSlots = 4
 
--- Maximum possible rebirth-based slots (slots 1-19)
-SlotsConfig.MaxRebirthSlots = 19
+-- Maximum possible rebirth-based slots (slots 1-10)
+SlotsConfig.MaxRebirthSlots = 10
 
 -- Premium slot adds 1 on top
 SlotsConfig.PremiumSlotBonus = 1

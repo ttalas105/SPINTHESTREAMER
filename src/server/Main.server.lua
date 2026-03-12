@@ -14,7 +14,7 @@ do
 	local remotes = ReplicatedStorage:WaitForChild("RemoteEvents")
 	local newRemotes = {
 		"ClaimQuestReward", "QuestUpdate", "EnhancedCaseResult",
-		"BuyCrateStock", "BuyCrateResult", "OpenOwnedCrate", "OpenCrateResult",
+		"BuyCrateStock", "BuyCrateResult", "OpenOwnedCrate", "OpenPremiumCrate", "OpenCrateResult",
 		"GetCaseStock", "CaseStockUpdate",
 		"GetPotionStock", "PotionStockUpdate", "BuyPotionStock", "UseOwnedPotion",
 		"SetPlayerBusy",
@@ -441,7 +441,7 @@ do
 	local remotes = ReplicatedStorage:WaitForChild("RemoteEvents")
 	local newRemotes = {
 		"ClaimQuestReward", "QuestUpdate", "EnhancedCaseResult",
-		"BuyCrateStock", "BuyCrateResult", "OpenOwnedCrate", "OpenCrateResult",
+		"BuyCrateStock", "BuyCrateResult", "OpenOwnedCrate", "OpenPremiumCrate", "OpenCrateResult",
 		"GetCaseStock", "CaseStockUpdate",
 		"GetPotionStock", "PotionStockUpdate", "BuyPotionStock", "UseOwnedPotion",
 		"UpgradeMutationLuckRequest", "UpgradeMutationLuckResult",

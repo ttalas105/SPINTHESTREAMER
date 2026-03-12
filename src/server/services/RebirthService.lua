@@ -2,7 +2,7 @@
 	RebirthService.lua
 	Handles rebirth: cost check, reset cash + potions, increment rebirth.
 	Equipped streamers stay on base pads (no return to inventory).
-	Max 7 rebirths. Each gives +5% coin bonus and unlocks the next case.
+	Each rebirth gives a coin bonus and luck bonus.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")

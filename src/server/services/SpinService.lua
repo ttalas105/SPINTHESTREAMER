@@ -11,6 +11,7 @@ local Players = game:GetService("Players")
 local Streamers = require(ReplicatedStorage.Shared.Config.Streamers)
 local Economy = require(ReplicatedStorage.Shared.Config.Economy)
 local Effects = require(ReplicatedStorage.Shared.Config.Effects)
+local EnhancedCases = require(ReplicatedStorage.Shared.Config.EnhancedCases)
 
 local VIP_LUCK = Economy.VIPLuckMultiplier or 1.5
 local X2L_LUCK = Economy.X2LuckMultiplier or 2
@@ -147,14 +148,14 @@ end
 -------------------------------------------------
 -- EFFECT ROLL
 -- After picking a streamer, roll whether they get an effect (e.g. Acid).
--- Each effect has a base rollChance (0-1) divided by rarityMult.
--- So Acid (15% base, 2x harder) = 7.5% chance per pull.
+-- Chance = 1 / rarityMult, so displayed odds (streamer.odds * rarityMult)
+-- match the TRUE probability of getting that streamer+effect combo per spin.
 -------------------------------------------------
 
 local function rollEffect(mutationMult)
 	local mult = mutationMult or 1
 	for _, effect in ipairs(Effects.List) do
-		local chance = ((effect.rollChance or 0) / (effect.rarityMult or 1)) * mult
+		local chance = (1 / (effect.rarityMult or 1)) * mult
 		if rng:NextNumber() < chance then
 			return effect.name
 		end
@@ -249,7 +250,7 @@ local function handleSpin(player)
 	local data = PlayerData.Get(player)
 	if not data then return end
 	local hasInventorySpace = (#(data.inventory or {}) < PlayerData.HOTBAR_MAX)
-	local hasStorageSpace = (#(data.storage or {}) < PlayerData.STORAGE_MAX)
+	local hasStorageSpace = (#(data.storage or {}) < PlayerData.GetStorageMax(player))
 	if not hasInventorySpace and not hasStorageSpace then
 		SpinResult:FireClient(player, { success = false, reason = "Inventory and storage are full!" })
 		return
@@ -380,7 +381,7 @@ local function handleCrateSpin(player, crateId: number)
 	local data = PlayerData.Get(player)
 	if not data then return end
 	local hasInventorySpace = (#(data.inventory or {}) < PlayerData.HOTBAR_MAX)
-	local hasStorageSpace = (#(data.storage or {}) < PlayerData.STORAGE_MAX)
+	local hasStorageSpace = (#(data.storage or {}) < PlayerData.GetStorageMax(player))
 	if not hasInventorySpace and not hasStorageSpace then
 		SpinResult:FireClient(player, { success = false, reason = "Inventory and storage are full!" })
 		return
@@ -507,7 +508,7 @@ function SpinService._handleCrateOpen(player, crateId: number)
 	local data = PlayerData.Get(player)
 	if not data then return end
 	local hasInventorySpace = (#(data.inventory or {}) < PlayerData.HOTBAR_MAX)
-	local hasStorageSpace = (#(data.storage or {}) < PlayerData.STORAGE_MAX)
+	local hasStorageSpace = (#(data.storage or {}) < PlayerData.GetStorageMax(player))
 	if not hasInventorySpace and not hasStorageSpace then
 		SpinResult:FireClient(player, { success = false, reason = "Inventory and storage are full!" })
 		return
@@ -574,6 +575,96 @@ function SpinService._handleCrateOpen(player, crateId: number)
 		effect = effect,
 		destination = destination,
 		pity = isPityHit or nil,
+	})
+
+	PlayerData.IncrementStat(player, "totalSpins", 1)
+
+	if QuestService then
+		QuestService.Increment(player, "spins", 1)
+		if streamer.rarity == "Epic" or streamer.rarity == "Legendary" or streamer.rarity == "Mythic" then
+			QuestService.Increment(player, "epicPulls", 1)
+		end
+		if streamer.rarity == "Legendary" or streamer.rarity == "Mythic" then
+			QuestService.Increment(player, "legendaryPulls", 1)
+		end
+		if streamer.rarity == "Mythic" then
+			QuestService.Increment(player, "mythicPulls", 1)
+		end
+		if effect then
+			QuestService.Increment(player, "effectPulls", 1)
+		end
+	end
+
+	if streamer.rarity == "Mythic" then
+		MythicAlert:FireAllClients({
+			playerName = player.Name,
+			streamerId = streamer.id,
+			displayName = displayName,
+			effect = effect,
+		})
+	end
+end
+
+-------------------------------------------------
+-- PREMIUM CRATE OPEN (Wraith / Starlight cases)
+-------------------------------------------------
+
+function SpinService._handlePremiumCrateOpen(player, caseKey: string)
+	if not PlayerData then return end
+	local now = os.clock()
+	local userId = player.UserId
+	if lastSpinTime[userId] and (now - lastSpinTime[userId]) < SPIN_COOLDOWN then
+		SpinResult:FireClient(player, { success = false, reason = "Too fast! Wait a moment." })
+		return
+	end
+	lastSpinTime[userId] = now
+
+	local data = PlayerData.Get(player)
+	if not data then return end
+	local hasInventorySpace = (#(data.inventory or {}) < PlayerData.HOTBAR_MAX)
+	local hasStorageSpace = (#(data.storage or {}) < PlayerData.GetStorageMax(player))
+	if not hasInventorySpace and not hasStorageSpace then
+		SpinResult:FireClient(player, { success = false, reason = "Inventory and storage are full!" })
+		return
+	end
+
+	local streamerId = EnhancedCases.Roll(caseKey)
+	if not streamerId then
+		SpinResult:FireClient(player, { success = false, reason = "Config error." })
+		return
+	end
+
+	local streamer = Streamers.ById[streamerId]
+	if not streamer then
+		SpinResult:FireClient(player, { success = false, reason = "Config error." })
+		return
+	end
+
+	local effect = rollEffect(1)
+	local destination = PlayerData.AddToInventory(player, streamer.id, effect)
+
+	local displayName = streamer.displayName
+	if effect then
+		local effectInfo = Effects.ByName[effect]
+		if effectInfo then displayName = effectInfo.prefix .. " " .. displayName end
+	end
+
+	local effectiveOdds = streamer.odds
+	if effect then
+		local ei = Effects.ByName[effect]
+		if ei and ei.rarityMult then
+			effectiveOdds = math.floor(effectiveOdds * ei.rarityMult)
+		end
+	end
+
+	SpinResult:FireClient(player, {
+		success = true,
+		streamerId = streamer.id,
+		displayName = displayName,
+		rarity = streamer.rarity,
+		odds = effectiveOdds,
+		effect = effect,
+		destination = destination,
 	})
 
 	PlayerData.IncrementStat(player, "totalSpins", 1)

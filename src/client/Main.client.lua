@@ -344,7 +344,7 @@ local TIPS = {
 	"🧪 Use potions to multiply your luck and earnings!",
 	"💎 Sacrifice duplicate streamers for gems.",
 	"📖 Check the Index to see which streamers you're missing.",
-	"👑 VIP Pass gives you 1.5x cash forever!",
+	"👑 VIP Pass gives you 1.5x luck & coins forever!",
 	"🔄 Rebirth to unlock stronger potions and bonuses.",
 	"🌟 Divine Potions multiply EVERYTHING by 5x!",
 	"🎰 Spin the wheel for a chance at legendary streamers!",

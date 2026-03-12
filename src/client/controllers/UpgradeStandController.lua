@@ -209,9 +209,32 @@ local function buildUpgradeCard(parent, cfg)
 	cardGrad.Rotation = 18
 	cardGrad.Parent = card
 
+	local textLeft = 16
+	if cfg.imageId and cfg.imageId ~= "" then
+		local iconFrame = Instance.new("Frame")
+		iconFrame.Size = UDim2.new(0, 72, 0, 72)
+		iconFrame.Position = UDim2.new(0, 14, 0, 10)
+		iconFrame.BackgroundColor3 = Color3.fromRGB(30, 40, 80)
+		iconFrame.BorderSizePixel = 0
+		iconFrame.Parent = card
+		Instance.new("UICorner", iconFrame).CornerRadius = UDim.new(0, 14)
+		addStroke(iconFrame, cfg.accent, 2)
+
+		local icon = Instance.new("ImageLabel")
+		icon.Size = UDim2.new(1, -8, 1, -8)
+		icon.Position = UDim2.new(0.5, 0, 0.5, 0)
+		icon.AnchorPoint = Vector2.new(0.5, 0.5)
+		icon.BackgroundTransparency = 1
+		icon.ScaleType = Enum.ScaleType.Fit
+		icon.Image = cfg.imageId
+		icon.Parent = iconFrame
+
+		textLeft = 96
+	end
+
 	local title = Instance.new("TextLabel")
-	title.Size = UDim2.new(0.7, 0, 0, 24)
-	title.Position = UDim2.new(0, 16, 0, 10)
+	title.Size = UDim2.new(0.7, -textLeft, 0, 24)
+	title.Position = UDim2.new(0, textLeft, 0, 10)
 	title.BackgroundTransparency = 1
 	title.Text = cfg.title
 	title.TextColor3 = cfg.accent
@@ -236,8 +259,8 @@ local function buildUpgradeCard(parent, cfg)
 	level.Parent = card
 
 	local flow = Instance.new("TextLabel")
-	flow.Size = UDim2.new(1, -32, 0, 20)
-	flow.Position = UDim2.new(0, 16, 0, 38)
+	flow.Size = UDim2.new(1, -textLeft - 16, 0, 20)
+	flow.Position = UDim2.new(0, textLeft, 0, 38)
 	flow.BackgroundTransparency = 1
 	flow.Text = "Current: +0%  ->  Next: +0%"
 	flow.TextColor3 = cfg.accent
@@ -249,7 +272,7 @@ local function buildUpgradeCard(parent, cfg)
 
 	local current = Instance.new("TextLabel")
 	current.Size = UDim2.new(0.47, 0, 0, 18)
-	current.Position = UDim2.new(0, 16, 0, 62)
+	current.Position = UDim2.new(0, textLeft, 0, 62)
 	current.BackgroundTransparency = 1
 	current.Text = "Current bonus: +0%"
 	current.TextColor3 = Color3.fromRGB(145, 140, 170)
@@ -283,7 +306,7 @@ local function buildUpgradeCard(parent, cfg)
 	scaleTxt.Parent = card
 
 	local dotsHolder, dots = buildProgressDots(card)
-	dotsHolder.Position = UDim2.new(0, 16, 0, 104)
+	dotsHolder.Position = UDim2.new(0, textLeft, 0, 104)
 
 	local btn = Instance.new("TextButton")
 	btn.Name = "UpgradeBtn"
@@ -583,13 +606,18 @@ function UpgradeStandController.Init()
 	divider.ZIndex = 3
 	divider.Parent = modalFrame
 
-	-- ===== CARDS AREA =====
-	local cardsContainer = Instance.new("Frame")
+	-- ===== CARDS AREA (scrollable) =====
+	local cardsContainer = Instance.new("ScrollingFrame")
 	cardsContainer.Name = "Cards"
-	cardsContainer.Size = UDim2.new(1, -30, 1, -90)
+	cardsContainer.Size = UDim2.new(1, -30, 1, -82)
 	cardsContainer.Position = UDim2.new(0.5, 0, 0, 72)
 	cardsContainer.AnchorPoint = Vector2.new(0.5, 0)
 	cardsContainer.BackgroundTransparency = 1
+	cardsContainer.BorderSizePixel = 0
+	cardsContainer.ScrollBarThickness = 6
+	cardsContainer.ScrollBarImageColor3 = Color3.fromRGB(180, 200, 255)
+	cardsContainer.ScrollBarImageTransparency = 0.3
+	cardsContainer.AutomaticCanvasSize = Enum.AutomaticSize.Y
 	cardsContainer.ZIndex = 3
 	cardsContainer.Parent = modalFrame
 
@@ -598,6 +626,15 @@ function UpgradeStandController.Init()
 	layout.Padding = UDim.new(0, 12)
 	layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 	layout.Parent = cardsContainer
+
+	local padding = Instance.new("UIPadding")
+	padding.PaddingBottom = UDim.new(0, 10)
+	padding.Parent = cardsContainer
+
+	local function updateCanvasSize()
+		cardsContainer.CanvasSize = UDim2.new(0, 0, 0, layout.AbsoluteContentSize.Y + 20)
+	end
+	layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(updateCanvasSize)
 
 	-- LUCK CARD
 	refs.luck = buildUpgradeCard(cardsContainer, {
@@ -609,6 +646,7 @@ function UpgradeStandController.Init()
 		btnStroke = Color3.fromRGB(30, 140, 50),
 		scalingText = "x3.0 per level",
 		tooltip = "Increases drop odds. Each level adds +5% luck. Stacks with rebirth, VIP, and potion luck.",
+		imageId = "rbxassetid://80665977760972",
 	})
 	refs.luck.btn.MouseButton1Click:Connect(function()
 		UpgradeLuckRequest:FireServer()
@@ -624,6 +662,7 @@ function UpgradeStandController.Init()
 		btnStroke = Color3.fromRGB(180, 120, 20),
 		scalingText = "x3.0 per level",
 		tooltip = "Increases streamer income. Each level adds +2% coins. Stacks with VIP and potions.",
+		imageId = "rbxassetid://122793197665026",
 	})
 	refs.cash.btn.MouseButton1Click:Connect(function()
 		UpgradeCashRequest:FireServer()
@@ -639,10 +678,14 @@ function UpgradeStandController.Init()
 		btnStroke = Color3.fromRGB(100, 40, 160),
 		scalingText = "x6.0 per level",
 		tooltip = "Increases elemental mutation odds. Each level adds +2% mutation chance. Stacks multiplicatively with base effect rates.",
+		imageId = "rbxassetid://88936868067548",
 	})
 	refs.mutationLuck.btn.MouseButton1Click:Connect(function()
 		UpgradeMutationLuckRequest:FireServer()
 	end)
+
+	-- Force canvas size now that all cards are built
+	task.defer(updateCanvasSize)
 
 	-------------------------------------------------
 	-- EVENTS

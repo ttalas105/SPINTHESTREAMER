@@ -130,28 +130,28 @@ function HUDController.Init()
 		StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.Health, false)
 	end)
 
-	local screenGui = UIHelper.CreateScreenGui("HUDGui", 3)
+	local screenGui = UIHelper.CreateScreenGui("HUDGui", 3, 1.0)
 	screenGui.Parent = playerGui
 
 	local hudContainer = Instance.new("Frame")
 	hudContainer.Name = "HUDContainer"
-	hudContainer.Size = UDim2.new(0, 360, 0, 176)
-	hudContainer.Position = UDim2.new(1, -12, 0, 8)
-	hudContainer.AnchorPoint = Vector2.new(1, 0)
+	hudContainer.Size = UDim2.new(0, 200, 0, 130)
+	hudContainer.Position = UDim2.new(0, 12, 0.5, 210)
+	hudContainer.AnchorPoint = Vector2.new(0, 0)
 	hudContainer.BackgroundTransparency = 1
 	hudContainer.BorderSizePixel = 0
 	hudContainer.Parent = screenGui
 
 	cashLabel = Instance.new("TextLabel")
 	cashLabel.Name = "CashLabel"
-	cashLabel.Size = UDim2.new(1, 0, 0, 38)
+	cashLabel.Size = UDim2.new(1, 0, 0, 28)
 	cashLabel.Position = UDim2.new(0, 0, 0, 0)
 	cashLabel.BackgroundTransparency = 1
 	cashLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
 	cashLabel.Font = Enum.Font.FredokaOne
-	cashLabel.TextSize = 34
+	cashLabel.TextSize = 22
 	cashLabel.Text = "$0"
-	cashLabel.TextXAlignment = Enum.TextXAlignment.Right
+	cashLabel.TextXAlignment = Enum.TextXAlignment.Left
 	cashLabel.Parent = hudContainer
 
 	cashPopScale = Instance.new("UIScale")
@@ -166,14 +166,14 @@ function HUDController.Init()
 
 	gemsLabel = Instance.new("TextLabel")
 	gemsLabel.Name = "GemsLabel"
-	gemsLabel.Size = UDim2.new(1, 0, 0, 30)
-	gemsLabel.Position = UDim2.new(0, 0, 0, 40)
+	gemsLabel.Size = UDim2.new(1, 0, 0, 24)
+	gemsLabel.Position = UDim2.new(0, 0, 0, 28)
 	gemsLabel.BackgroundTransparency = 1
 	gemsLabel.TextColor3 = Color3.fromRGB(100, 200, 255)
 	gemsLabel.Font = Enum.Font.FredokaOne
-	gemsLabel.TextSize = 26
+	gemsLabel.TextSize = 18
 	gemsLabel.Text = "\u{1F48E} 0 Gems"
-	gemsLabel.TextXAlignment = Enum.TextXAlignment.Right
+	gemsLabel.TextXAlignment = Enum.TextXAlignment.Left
 	gemsLabel.Parent = hudContainer
 
 	local gemsStroke = Instance.new("UIStroke")
@@ -183,8 +183,8 @@ function HUDController.Init()
 
 	local statsStack = Instance.new("Frame")
 	statsStack.Name = "StatsStack"
-	statsStack.Size = UDim2.new(1, 0, 0, 78)
-	statsStack.Position = UDim2.new(0, 0, 0, 74)
+	statsStack.Size = UDim2.new(1, 0, 0, 72)
+	statsStack.Position = UDim2.new(0, 0, 0, 54)
 	statsStack.BackgroundTransparency = 1
 	statsStack.BorderSizePixel = 0
 	statsStack.Parent = hudContainer
@@ -197,13 +197,13 @@ function HUDController.Init()
 
 	luckLabel = Instance.new("TextLabel")
 	luckLabel.Name = "LuckLabel"
-	luckLabel.Size = UDim2.new(1, 0, 0, 24)
+	luckLabel.Size = UDim2.new(1, 0, 0, 20)
 	luckLabel.BackgroundTransparency = 1
 	luckLabel.TextColor3 = Color3.fromRGB(220, 200, 255)
 	luckLabel.Font = Enum.Font.FredokaOne
-	luckLabel.TextSize = 18
+	luckLabel.TextSize = 14
 	luckLabel.Text = "Luck: 0 (+0%)"
-	luckLabel.TextXAlignment = Enum.TextXAlignment.Right
+	luckLabel.TextXAlignment = Enum.TextXAlignment.Left
 	luckLabel.LayoutOrder = 1
 	luckLabel.Parent = statsStack
 
@@ -214,13 +214,13 @@ function HUDController.Init()
 
 	moneyMultLabel = Instance.new("TextLabel")
 	moneyMultLabel.Name = "MoneyMultLabel"
-	moneyMultLabel.Size = UDim2.new(1, 0, 0, 24)
+	moneyMultLabel.Size = UDim2.new(1, 0, 0, 20)
 	moneyMultLabel.BackgroundTransparency = 1
 	moneyMultLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
 	moneyMultLabel.Font = Enum.Font.FredokaOne
-	moneyMultLabel.TextSize = 18
+	moneyMultLabel.TextSize = 14
 	moneyMultLabel.Text = "Money: x1.0"
-	moneyMultLabel.TextXAlignment = Enum.TextXAlignment.Right
+	moneyMultLabel.TextXAlignment = Enum.TextXAlignment.Left
 	moneyMultLabel.LayoutOrder = 2
 	moneyMultLabel.Parent = statsStack
 
@@ -231,13 +231,13 @@ function HUDController.Init()
 
 	potionsLabel = Instance.new("TextLabel")
 	potionsLabel.Name = "PotionsLabel"
-	potionsLabel.Size = UDim2.new(1, 0, 0, 24)
+	potionsLabel.Size = UDim2.new(1, 0, 0, 20)
 	potionsLabel.BackgroundTransparency = 1
 	potionsLabel.TextColor3 = Color3.fromRGB(120, 255, 180)
 	potionsLabel.Font = Enum.Font.FredokaOne
-	potionsLabel.TextSize = 18
+	potionsLabel.TextSize = 14
 	potionsLabel.Text = ""
-	potionsLabel.TextXAlignment = Enum.TextXAlignment.Right
+	potionsLabel.TextXAlignment = Enum.TextXAlignment.Left
 	potionsLabel.Visible = false
 	potionsLabel.LayoutOrder = 3
 	potionsLabel.Parent = statsStack

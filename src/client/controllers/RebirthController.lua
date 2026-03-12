@@ -1,7 +1,7 @@
 --[[
 	RebirthController.lua
 	Rebirth UI – bright pastel-themed panel showing actual rebirth rewards:
-	coin bonus, base slot unlock, luck bonus, case/potion unlocks.
+	coin bonus, base slot unlock, luck bonus, potion unlocks.
 ]]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -29,7 +29,6 @@ local titleRef, subtitleRef
 local levelTextRef
 local progressFillRef, progressTextRef
 local coinBonusValueRef, slotValueRef, luckValueRef
-local caseUnlockRow, caseUnlockImage, caseUnlockText
 local potionUnlockRow, potionUnlockText
 local noUnlocksRef
 local costRef, confirmBtnRef, confirmTextRef
@@ -122,9 +121,8 @@ local function updateDisplay()
 		if coinBonusValueRef then
 			coinBonusValueRef.Text = "+" .. Economy.GetRebirthBonusPercent(current) .. "%"
 		end
-		if slotValueRef then slotValueRef.Text = "MAXED" end
+		if slotValueRef then slotValueRef.Text = tostring(SlotsConfig.GetSlotsForRebirth(current)) .. " (Coming Soon!)" end
 		if luckValueRef then luckValueRef.Text = "+" .. (current * 2) .. "%" end
-		if caseUnlockRow then caseUnlockRow.Visible = false end
 		if potionUnlockRow then potionUnlockRow.Visible = false end
 		if noUnlocksRef then noUnlocksRef.Visible = false end
 		if costRef then costRef.Visible = false end
@@ -158,7 +156,7 @@ local function updateDisplay()
 		if nextSlots > currentSlots then
 			slotValueRef.Text = currentSlots .. " \u{2192} " .. nextSlots
 		else
-			slotValueRef.Text = tostring(currentSlots) .. " (max)"
+			slotValueRef.Text = tostring(currentSlots) .. " (Coming Soon!)"
 		end
 	end
 
@@ -167,21 +165,6 @@ local function updateDisplay()
 	end
 
 	local hasBonusUnlock = false
-
-	if caseUnlockRow then
-		if info.unlocksCase then
-			caseUnlockRow.Visible = true
-			hasBonusUnlock = true
-			if caseUnlockImage then
-				caseUnlockImage.Image = Economy.CrateImageIds[info.unlocksCase] or ""
-			end
-			if caseUnlockText then
-				caseUnlockText.Text = Economy.CrateNames[info.unlocksCase] or ("Case " .. info.unlocksCase)
-			end
-		else
-			caseUnlockRow.Visible = false
-		end
-	end
 
 	if potionUnlockRow then
 		local potionName = POTION_UNLOCKS[nextLevel]
@@ -487,9 +470,13 @@ local function buildUI()
 		cValue.Text = ""
 		cValue.TextColor3 = valueColor
 		cValue.Font = FONT
-		cValue.TextSize = 26
+		cValue.TextScaled = true
 		cValue.ZIndex = 5
 		cValue.Parent = card
+		local constraint = Instance.new("UITextSizeConstraint")
+		constraint.MaxTextSize = 26
+		constraint.MinTextSize = 12
+		constraint.Parent = cValue
 		addStroke(cValue, valueDarkColor, 1.5)
 
 		return card, cValue
@@ -585,22 +572,8 @@ local function buildUI()
 		return row, txt
 	end
 
-	caseUnlockRow, caseUnlockText = makeUnlockRow(
-		"CaseUnlock", rowStart,
-		"\u{1F4E6}", Color3.fromRGB(60, 140, 255)
-	)
-
-	caseUnlockImage = Instance.new("ImageLabel")
-	caseUnlockImage.Size = UDim2.new(0, 26, 0, 26)
-	caseUnlockImage.Position = UDim2.new(1, 0, 0.5, 0)
-	caseUnlockImage.AnchorPoint = Vector2.new(1, 0.5)
-	caseUnlockImage.BackgroundTransparency = 1
-	caseUnlockImage.ScaleType = Enum.ScaleType.Fit
-	caseUnlockImage.ZIndex = 5
-	caseUnlockImage.Parent = caseUnlockRow
-
 	potionUnlockRow, potionUnlockText = makeUnlockRow(
-		"PotionUnlock", rowStart + rowH + 2,
+		"PotionUnlock", rowStart,
 		"\u{1F9EA}", Color3.fromRGB(170, 80, 220)
 	)
 

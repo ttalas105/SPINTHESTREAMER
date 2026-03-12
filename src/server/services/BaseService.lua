@@ -1272,7 +1272,7 @@ function BaseService.Init(playerDataModule, potionServiceModule)
 				local equipped = data.equippedPads[key]
 				if equipped then
 					local hasHotbarSpace = #data.inventory < PlayerData.HOTBAR_MAX
-					local hasStorageSpace = data.storage and #data.storage < PlayerData.STORAGE_MAX
+					local hasStorageSpace = data.storage and #data.storage < PlayerData.GetStorageMax(player)
 					if not hasHotbarSpace and not hasStorageSpace then
 						EquipResult:FireClient(player, { success = false, reason = "Inventory and storage are full!" })
 						return
@@ -1320,7 +1320,7 @@ function BaseService.Init(playerDataModule, potionServiceModule)
 						local orphanId = type(orphanItem) == "table" and orphanItem.id or orphanItem
 						local orphanEffect = type(orphanItem) == "table" and orphanItem.effect or nil
 						local hasHotbarSpace2 = #data.inventory < PlayerData.HOTBAR_MAX
-						local hasStorageSpace2 = data.storage and #data.storage < PlayerData.STORAGE_MAX
+						local hasStorageSpace2 = data.storage and #data.storage < PlayerData.GetStorageMax(player)
 						if not hasHotbarSpace2 and not hasStorageSpace2 then
 							EquipResult:FireClient(player, { success = false, reason = "Inventory and storage are full!" })
 							return

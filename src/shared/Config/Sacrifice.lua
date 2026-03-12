@@ -11,11 +11,11 @@ local Sacrifice = {}
 -- Sacrifice X streamers of rarity → get Y gems
 -------------------------------------------------
 Sacrifice.GemTrades = {
-	{ rarity = "Common",    count = 50,  gems = 400 },
-	{ rarity = "Rare",     count = 30,  gems = 800 },
-	{ rarity = "Epic",     count = 15,  gems = 2500 },
-	{ rarity = "Legendary", count = 8,  gems = 4000 },
-	{ rarity = "Mythic",   count = 3,   gems = 6000 },
+	{ rarity = "Common",    count = 50,  gems = 150 },
+	{ rarity = "Rare",     count = 30,  gems = 350 },
+	{ rarity = "Epic",     count = 15,  gems = 1000 },
+	{ rarity = "Legendary", count = 8,  gems = 1800 },
+	{ rarity = "Mythic",   count = 3,   gems = 2500 },
 }
 
 -------------------------------------------------
@@ -47,7 +47,7 @@ Sacrifice.OneTime = {
 	},
 	Rainbow = {
 		name    = "Rainbow",
-		gems    = 100000,
+		gems    = 20000,
 		req     = {
 			{ rarity = "Common",    count = 1 },
 			{ rarity = "Rare",      count = 1 },
@@ -129,14 +129,6 @@ Sacrifice.OneTime = {
 			{ streamerId = "Jynxzi",    effect = "Lunar", count = 1 },
 		},
 	},
-	TheUntouchables = {
-		name    = "The Untouchables",
-		gems    = 100000,
-		req     = {
-			{ streamerId = "IShowSpeed", effect = nil, count = 1 },
-			{ streamerId = "XQC",        effect = nil, count = 1 },
-		},
-	},
 	MythicRoyale = {
 		name    = "Mythic Royale",
 		gems    = 3000000,
@@ -195,17 +187,31 @@ Sacrifice.OneTime = {
 	LunarTide = {
 		name = "Lunar Tide",
 		gems = 50000,
-		req  = { { effectReq = "Lunar", count = 20 } },
+		req  = {
+			{ effectReq = "Lunar", count = 18 },
+			{ rarity = "Epic",      effect = "Lunar", count = 1 },
+			{ rarity = "Legendary", effect = "Lunar", count = 1 },
+		},
 	},
 	SolarFlare = {
 		name = "Solar Flare",
 		gems = 73000,
-		req  = { { effectReq = "Solar", count = 20 } },
+		req  = {
+			{ effectReq = "Solar", count = 17 },
+			{ rarity = "Epic",      effect = "Solar", count = 1 },
+			{ rarity = "Legendary", effect = "Solar", count = 1 },
+			{ rarity = "Mythic",    effect = "Solar", count = 1 },
+		},
 	},
 	VoidAbyss = {
 		name = "Void Abyss",
 		gems = 100000,
-		req  = { { effectReq = "Void", count = 20 } },
+		req  = {
+			{ effectReq = "Void", count = 17 },
+			{ rarity = "Epic",      effect = "Void", count = 1 },
+			{ rarity = "Legendary", effect = "Void", count = 1 },
+			{ rarity = "Mythic",    effect = "Void", count = 1 },
+		},
 	},
 }
 

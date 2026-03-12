@@ -35,12 +35,12 @@ Economy.CrateCosts = {
 	10000000,      -- Case 10
 	25000000,      -- Case 11
 	60000000,      -- Case 12
-	150000000,     -- Case 13
-	350000000,     -- Case 14
-	800000000,     -- Case 15
-	2000000000,    -- Case 16
-	5000000000,    -- Case 17
-	12500000000,   -- Case 18
+	300000000,     -- Case 13
+	750000000,     -- Case 14
+	1800000000,    -- Case 15
+	4500000000,    -- Case 16
+	12000000000,   -- Case 17
+	30000000000,   -- Case 18
 }
 
 Economy.CrateLuckBonuses = {
@@ -211,24 +211,15 @@ function Economy.GetRebirthBonusPercent(rebirthLevel: number): number
 	return totalPercent
 end
 
---- Cases 1-3 are free. Case N (4-18) requires Rebirth (N-3).
-function Economy.GetCrateRebirthRequirement(crateId: number): number
-	if crateId <= 3 then return 0 end
-	return crateId - 3
-end
-
 --- Info for a specific rebirth level (1-indexed)
 function Economy.GetRebirthInfo(rebirthLevel: number)
 	if rebirthLevel < 1 or rebirthLevel > Economy.MaxRebirths then return nil end
 	local cost = Economy.RebirthCosts[rebirthLevel]
 	local coinBonus = Economy.GetRebirthBonusPercent(rebirthLevel)
-	local unlocksCase = rebirthLevel + 3
-	if unlocksCase > Economy.TotalCases then unlocksCase = nil end
 	return {
 		level = rebirthLevel,
 		cost = cost,
 		coinBonus = coinBonus,
-		unlocksCase = unlocksCase,
 	}
 end
 
@@ -291,12 +282,11 @@ end
 Economy.Products = {
 	VIP             = 3545297066,  -- Permanent 1.5x luck + 1.5x money
 	X2Luck          = 3545296777,  -- Permanent 2x luck
+	ExpandStorage   = 3554038902,  -- Permanent storage upgrade (200 → 1000)
+	AutoSkip        = 3554039297,  -- Permanent auto-skip during spins
 	Gems1K          = 3545346119,  -- Buy 1,000 gems
 	Gems10K         = 3545346338,  -- Buy 10,000 gems
 	Gems100K        = 3545346581,  -- Buy 100,000 gems
-	LunarEnhanced   = 3545377954,  -- Lunar Enhanced Case (1 spin)
-	SolarEnhanced   = 3545378176,  -- Solar Enhanced Case (1 spin)
-	VoidEnhanced    = 3545378349,  -- Void Enhanced Case (1 spin)
 	ServerLuck      = 0,
 	Buy5Spins       = 0,
 	Buy10Spins      = 0,
@@ -305,14 +295,16 @@ Economy.Products = {
 }
 
 Economy.RobuxPrices = {
-	LunarEnhanced = 1299,
-	SolarEnhanced = 1999,
-	Gems1K        = 299,
-	Gems10K       = 999,
+	Gems1K        = 99,
+	Gems10K       = 599,
 	Gems100K      = 1999,
 	VIP           = 199,
 	X2Luck        = 99,
+	ExpandStorage = 49,
+	AutoSkip      = 99,
 }
+
+Economy.ExpandedStorageMax = 1000
 
 Economy.GemPacks = {
 	{ key = "Gems1K",  amount = 1000,   label = "1,000 Gems"   },

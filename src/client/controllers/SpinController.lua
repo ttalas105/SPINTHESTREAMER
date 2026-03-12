@@ -8,6 +8,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
+local MarketplaceService = game:GetService("MarketplaceService")
 
 local DesignConfig = require(ReplicatedStorage.Shared.Config.DesignConfig)
 local Rarities = require(ReplicatedStorage.Shared.Config.Rarities)
@@ -15,6 +16,7 @@ local Streamers = require(ReplicatedStorage.Shared.Config.Streamers)
 local Economy = require(ReplicatedStorage.Shared.Config.Economy)
 local Effects = require(ReplicatedStorage.Shared.Config.Effects)
 local GemCases = require(ReplicatedStorage.Shared.Config.GemCases)
+local EnhancedCases = require(ReplicatedStorage.Shared.Config.EnhancedCases)
 local UIHelper = require(script.Parent.UIHelper)
 local HUDController = require(script.Parent.HUDController)
 local UISounds = require(script.Parent.UISounds)
@@ -68,18 +70,25 @@ local onHideCallback = nil
 local autoSpinEnabled = false
 local autoSpinButton = nil
 
+local autoSkipEnabled = false
+local autoSkipButton = nil
+
 local spinGeneration = 0
 local onSpinResult = nil
 local isOwnedCrateOpen = false
 local currentGemCaseId = nil
+local currentPremiumCaseKey = nil
 
 local HOTBAR_MAX = 9
-local STORAGE_MAX = 200
+
+local function getStorageMax()
+	return (HUDController.Data.hasExpandStorage == true) and 1000 or 200
+end
 
 local function isStorageFull()
 	local inv = HUDController.Data.inventory or {}
 	local sto = HUDController.Data.storage or {}
-	return #inv >= HOTBAR_MAX and #sto >= STORAGE_MAX
+	return #inv >= HOTBAR_MAX and #sto >= getStorageMax()
 end
 
 local spinSessionActive = false
@@ -143,6 +152,144 @@ local function addOutlinedText(parent, props)
 end
 
 -------------------------------------------------
+-- CAROUSEL STRIP BUILDER
+-------------------------------------------------
+
+local function rebuildCarouselStrip(streamerList)
+	if not carouselContainer then return end
+	for _, item in ipairs(items) do
+		if item.frame then item.frame:Destroy() end
+	end
+	items = {}
+
+	local allStreamers = {}
+	local repeats = math.max(1, math.ceil(200 / math.max(1, #streamerList)))
+	for _ = 1, repeats do
+		for _, streamer in ipairs(streamerList) do
+			table.insert(allStreamers, streamer)
+		end
+	end
+	for i = #allStreamers, 2, -1 do
+		local j = math.random(1, i)
+		allStreamers[i], allStreamers[j] = allStreamers[j], allStreamers[i]
+	end
+
+	local COSMETIC_EFFECT_CHANCE = 0.15
+	for i, streamer in ipairs(allStreamers) do
+		local eff = math.random() < COSMETIC_EFFECT_CHANCE
+			and Effects.List[math.random(1, #Effects.List)] or nil
+		local rarityColor = Rarities.ByName[streamer.rarity] and Rarities.ByName[streamer.rarity].color or Color3.fromRGB(100, 100, 100)
+
+		local card = Instance.new("Frame")
+		card.Name = "Card_" .. i
+		card.Size = UDim2.new(0, ITEM_WIDTH, 0, ITEM_HEIGHT)
+		card.Position = UDim2.new(0, (i - 1) * ITEM_STEP, 0.5, 0)
+		card.AnchorPoint = Vector2.new(0, 0.5)
+		card.BackgroundColor3 = rarityColor
+		card.BorderSizePixel = 0
+		card.Parent = carouselContainer
+
+		Instance.new("UICorner", card).CornerRadius = UDim.new(0, 12)
+
+		local cardStroke = Instance.new("UIStroke")
+		cardStroke.Name = "CardStroke"
+		cardStroke.Color = rarityColor
+		cardStroke.Thickness = 2
+		cardStroke.Transparency = 0.4
+		cardStroke.Parent = card
+
+		local cardGrad = Instance.new("UIGradient")
+		cardGrad.Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, Color3.new(1, 1, 1)),
+			ColorSequenceKeypoint.new(1, Color3.fromRGB(50, 50, 70)),
+		})
+		cardGrad.Transparency = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 0.65),
+			NumberSequenceKeypoint.new(1, 0),
+		})
+		cardGrad.Rotation = 90
+		cardGrad.Parent = card
+
+		if eff then
+			local badge = Instance.new("TextLabel")
+			badge.Name = "EffectTag"
+			badge.Size = UDim2.new(1, -6, 0, 18)
+			badge.Position = UDim2.new(0.5, 0, 0, 5)
+			badge.AnchorPoint = Vector2.new(0.5, 0)
+			badge.BackgroundTransparency = 1
+			badge.Text = eff.prefix:upper()
+			badge.TextColor3 = eff.color
+			badge.Font = FONT
+			badge.TextSize = 12
+			badge.TextScaled = false
+			badge.Parent = card
+			local effStroke = Instance.new("UIStroke")
+			effStroke.Color = Color3.fromRGB(0, 0, 0)
+			effStroke.Thickness = 1
+			effStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+			effStroke.Parent = badge
+
+			local star = Instance.new("TextLabel")
+			star.Name = "Star"
+			star.Size = UDim2.new(0, 20, 0, 20)
+			star.Position = UDim2.new(1, -6, 0, 4)
+			star.AnchorPoint = Vector2.new(1, 0)
+			star.BackgroundTransparency = 1
+			star.Text = "\u{2728}"
+			star.TextSize = 14
+			star.Font = Enum.Font.SourceSans
+			star.Parent = card
+		end
+
+		local nameY = eff and 0.18 or 0.10
+		local nameLabel = Instance.new("TextLabel")
+		nameLabel.Name = "StreamerName"
+		nameLabel.Size = UDim2.new(1, -10, 0, 50)
+		nameLabel.Position = UDim2.new(0.5, 0, nameY, 0)
+		nameLabel.AnchorPoint = Vector2.new(0.5, 0)
+		nameLabel.BackgroundTransparency = 1
+		nameLabel.Text = streamer.displayName
+		nameLabel.TextColor3 = Color3.new(1, 1, 1)
+		nameLabel.Font = FONT
+		nameLabel.TextSize = 16
+		nameLabel.TextScaled = false
+		nameLabel.TextWrapped = true
+		nameLabel.Parent = card
+		local nameStroke = Instance.new("UIStroke")
+		nameStroke.Color = Color3.fromRGB(0, 0, 0)
+		nameStroke.Thickness = 1.5
+		nameStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+		nameStroke.Parent = nameLabel
+
+		local rarLabel = Instance.new("TextLabel")
+		rarLabel.Name = "RarityTag"
+		rarLabel.Size = UDim2.new(1, -10, 0, 20)
+		rarLabel.Position = UDim2.new(0.5, 0, 1, -30)
+		rarLabel.AnchorPoint = Vector2.new(0.5, 0)
+		rarLabel.BackgroundTransparency = 1
+		rarLabel.Text = streamer.rarity:upper()
+		rarLabel.TextColor3 = rarityColor
+		rarLabel.Font = FONT
+		rarLabel.TextSize = 13
+		rarLabel.TextScaled = false
+		rarLabel.Parent = card
+		local rarStroke = Instance.new("UIStroke")
+		rarStroke.Color = Color3.fromRGB(0, 0, 0)
+		rarStroke.Thickness = 1
+		rarStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+		rarStroke.Parent = rarLabel
+
+		items[i] = {
+			frame = card,
+			streamer = streamer,
+			effect = eff,
+		}
+	end
+
+	carouselContainer.Size = UDim2.new(0, #items * ITEM_STEP, 1, 0)
+end
+
+-------------------------------------------------
 -- BUILD CAROUSEL
 -------------------------------------------------
 
@@ -196,143 +343,7 @@ local function buildCarousel(parent)
 	carouselContainer.AnchorPoint = Vector2.new(0, 0)
 	carouselContainer.Parent = carouselFrame
 
-	-- Build shuffled item strip
-	local allStreamers = {}
-	for _ = 1, 12 do
-		for _, streamer in ipairs(Streamers.List) do
-			table.insert(allStreamers, streamer)
-		end
-	end
-	for i = #allStreamers, 2, -1 do
-		local j = math.random(1, i)
-		allStreamers[i], allStreamers[j] = allStreamers[j], allStreamers[i]
-	end
-
-	local COSMETIC_EFFECT_CHANCE = 0.15
-	local allCosmetics = {}
-	for ci = 1, #allStreamers do
-		allCosmetics[ci] = math.random() < COSMETIC_EFFECT_CHANCE
-			and Effects.List[math.random(1, #Effects.List)] or nil
-	end
-
-	items = {}
-	for i, streamer in ipairs(allStreamers) do
-		local eff = allCosmetics[i]
-		local rarityColor = Rarities.ByName[streamer.rarity] and Rarities.ByName[streamer.rarity].color or Color3.fromRGB(100, 100, 100)
-
-		local card = Instance.new("Frame")
-		card.Name = "Card_" .. i
-		card.Size = UDim2.new(0, ITEM_WIDTH, 0, ITEM_HEIGHT)
-		card.Position = UDim2.new(0, (i - 1) * ITEM_STEP, 0.5, 0)
-		card.AnchorPoint = Vector2.new(0, 0.5)
-		card.BackgroundColor3 = rarityColor
-		card.BorderSizePixel = 0
-		card.Parent = carouselContainer
-
-		local cardCorner = Instance.new("UICorner")
-		cardCorner.CornerRadius = UDim.new(0, 12)
-		cardCorner.Parent = card
-
-		local cardStroke = Instance.new("UIStroke")
-		cardStroke.Name = "CardStroke"
-		cardStroke.Color = rarityColor
-		cardStroke.Thickness = 2
-		cardStroke.Transparency = 0.4
-		cardStroke.Parent = card
-
-		-- Depth gradient
-		local cardGrad = Instance.new("UIGradient")
-		cardGrad.Color = ColorSequence.new({
-			ColorSequenceKeypoint.new(0, Color3.new(1, 1, 1)),
-			ColorSequenceKeypoint.new(1, Color3.fromRGB(50, 50, 70)),
-		})
-		cardGrad.Transparency = NumberSequence.new({
-			NumberSequenceKeypoint.new(0, 0.65),
-			NumberSequenceKeypoint.new(1, 0),
-		})
-		cardGrad.Rotation = 90
-		cardGrad.Parent = card
-
-		-- Effect badge
-		if eff then
-			local badge = Instance.new("TextLabel")
-			badge.Name = "EffectTag"
-			badge.Size = UDim2.new(1, -6, 0, 18)
-			badge.Position = UDim2.new(0.5, 0, 0, 5)
-			badge.AnchorPoint = Vector2.new(0.5, 0)
-			badge.BackgroundTransparency = 1
-			badge.Text = eff.prefix:upper()
-			badge.TextColor3 = eff.color
-			badge.Font = FONT
-			badge.TextSize = 12
-			badge.TextScaled = false
-			badge.Parent = card
-			local effStroke = Instance.new("UIStroke")
-			effStroke.Color = Color3.fromRGB(0, 0, 0)
-			effStroke.Thickness = 1
-			effStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
-			effStroke.Parent = badge
-
-			local star = Instance.new("TextLabel")
-			star.Name = "Star"
-			star.Size = UDim2.new(0, 20, 0, 20)
-			star.Position = UDim2.new(1, -6, 0, 4)
-			star.AnchorPoint = Vector2.new(1, 0)
-			star.BackgroundTransparency = 1
-			star.Text = "\u{2728}"
-			star.TextSize = 14
-			star.Font = Enum.Font.SourceSans
-			star.Parent = card
-		end
-
-		-- Streamer name
-		local nameY = eff and 0.18 or 0.10
-		local nameLabel = Instance.new("TextLabel")
-		nameLabel.Name = "StreamerName"
-		nameLabel.Size = UDim2.new(1, -10, 0, 50)
-		nameLabel.Position = UDim2.new(0.5, 0, nameY, 0)
-		nameLabel.AnchorPoint = Vector2.new(0.5, 0)
-		nameLabel.BackgroundTransparency = 1
-		nameLabel.Text = streamer.displayName
-		nameLabel.TextColor3 = Color3.new(1, 1, 1)
-		nameLabel.Font = FONT
-		nameLabel.TextSize = 16
-		nameLabel.TextScaled = false
-		nameLabel.TextWrapped = true
-		nameLabel.Parent = card
-		local nameStroke = Instance.new("UIStroke")
-		nameStroke.Color = Color3.fromRGB(0, 0, 0)
-		nameStroke.Thickness = 1.5
-		nameStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
-		nameStroke.Parent = nameLabel
-
-		-- Rarity label
-		local rarLabel = Instance.new("TextLabel")
-		rarLabel.Name = "RarityTag"
-		rarLabel.Size = UDim2.new(1, -10, 0, 20)
-		rarLabel.Position = UDim2.new(0.5, 0, 1, -30)
-		rarLabel.AnchorPoint = Vector2.new(0.5, 0)
-		rarLabel.BackgroundTransparency = 1
-		rarLabel.Text = streamer.rarity:upper()
-		rarLabel.TextColor3 = rarityColor
-		rarLabel.Font = FONT
-		rarLabel.TextSize = 13
-		rarLabel.TextScaled = false
-		rarLabel.Parent = card
-		local rarStroke = Instance.new("UIStroke")
-		rarStroke.Color = Color3.fromRGB(0, 0, 0)
-		rarStroke.Thickness = 1
-		rarStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
-		rarStroke.Parent = rarLabel
-
-		items[i] = {
-			frame = card,
-			streamer = streamer,
-			effect = eff,
-		}
-	end
-
-	carouselContainer.Size = UDim2.new(0, #items * ITEM_STEP, 1, 0)
+	rebuildCarouselStrip(Streamers.List)
 
 	-- Center selector line
 	local selectorLine = Instance.new("Frame")
@@ -655,7 +666,25 @@ local function playSpinAnimation(resultData, callback)
 	local targetCenterX = (targetIndex - 1) * ITEM_STEP + ITEM_WIDTH / 2
 	local endX = halfFrame - targetCenterX
 
-	local setWidth = #Streamers.List * ITEM_STEP
+	local uniqueCount = #Streamers.List
+	if currentPremiumCaseKey then
+		local cd = EnhancedCases.ByKey[currentPremiumCaseKey]
+		if cd then uniqueCount = #cd.pool end
+	elseif currentGemCaseId then
+		local cd = GemCases.ById[currentGemCaseId]
+		if cd then
+			if cd.items then
+				uniqueCount = #cd.items
+			elseif cd.excludeRarities then
+				local cnt = 0
+				for _, s in ipairs(Streamers.List) do
+					if not cd.excludeRarities[s.rarity] then cnt = cnt + 1 end
+				end
+				uniqueCount = cnt
+			end
+		end
+	end
+	local setWidth = uniqueCount * ITEM_STEP
 	if setWidth <= 0 then setWidth = ITEM_STEP end
 
 	-- Start from the currently visible offset, but never outside the
@@ -682,6 +711,12 @@ local function playSpinAnimation(resultData, callback)
 	local lastTickIndex = -1
 
 	if skipButton then skipButton.Visible = true end
+
+	if autoSkipEnabled and HUDController.Data.hasAutoSkip == true then
+		task.delay(0.3, function()
+			skipRequested = true
+		end)
+	end
 
 	if currentAnimConnection then
 		pcall(function() currentAnimConnection:Disconnect() end)
@@ -1096,7 +1131,24 @@ local function showResult(data)
 			resultFrame.Visible = false
 			spinContainer.Visible = true
 			if carouselFrame then carouselFrame.Visible = true end
-			if isOwnedCrateOpen and currentCrateId then
+			if currentPremiumCaseKey then
+				local HUD = require(script.Parent.HUDController)
+				local owned = HUD.Data.ownedCrates or {}
+				local count = owned[currentPremiumCaseKey] or 0
+				if count > 0 then
+					local OpenPremiumCrate = RemoteEvents:WaitForChild("OpenPremiumCrate")
+					OpenPremiumCrate:FireServer(currentPremiumCaseKey)
+					SpinController.WaitForResult()
+				else
+					autoSpinEnabled = false
+					if autoSpinButton then
+						autoSpinButton.BackgroundColor3 = Color3.fromRGB(55, 50, 80)
+						autoSpinButton.Text = "AUTO"
+						autoSpinButton.TextColor3 = Color3.fromRGB(180, 180, 210)
+					end
+					SpinController.Hide()
+				end
+			elseif isOwnedCrateOpen and currentCrateId then
 				local HUD = require(script.Parent.HUDController)
 				local owned = HUD.Data.ownedCrates
 				local count = owned and (owned[currentCrateId] or owned[tostring(currentCrateId)] or 0) or 0
@@ -1423,6 +1475,50 @@ function SpinController.Init()
 		skipRequested = true
 	end)
 
+	-- AUTO SKIP button (positioned next to AUTO on the right side)
+	autoSkipButton = createPillButton(spinContainer, {
+		Name = "AutoSkipBtn",
+		Size = UDim2.new(0, 130, 0, 42),
+		Position = UDim2.new(0.96, 0, 0.94, 0),
+		AnchorPoint = Vector2.new(1, 0.5),
+		Color = Color3.fromRGB(55, 50, 80),
+		HoverColor = Color3.fromRGB(70, 65, 100),
+		Text = "AUTO SKIP",
+		TextColor = Color3.fromRGB(180, 180, 210),
+		TextSize = 16,
+		StrokeColor = Color3.fromRGB(80, 70, 120),
+		StrokeThickness = 2,
+		TextStrokeColor = Color3.fromRGB(20, 15, 40),
+		TextStrokeThickness = 1.5,
+		ZIndex = 5,
+	})
+
+	local function updateAutoSkipVisual()
+		if autoSkipEnabled and HUDController.Data.hasAutoSkip == true then
+			autoSkipButton.BackgroundColor3 = Color3.fromRGB(50, 120, 200)
+			autoSkipButton.Text = "SKIP: ON"
+			autoSkipButton.TextColor3 = Color3.new(1, 1, 1)
+			local s = autoSkipButton:FindFirstChildOfClass("UIStroke")
+			if s then s.Color = Color3.fromRGB(30, 90, 170) end
+		else
+			autoSkipEnabled = false
+			autoSkipButton.BackgroundColor3 = Color3.fromRGB(55, 50, 80)
+			autoSkipButton.Text = "AUTO SKIP"
+			autoSkipButton.TextColor3 = Color3.fromRGB(180, 180, 210)
+			local s = autoSkipButton:FindFirstChildOfClass("UIStroke")
+			if s then s.Color = Color3.fromRGB(80, 70, 120) end
+		end
+	end
+
+	autoSkipButton.MouseButton1Click:Connect(function()
+		if HUDController.Data.hasAutoSkip == true then
+			autoSkipEnabled = not autoSkipEnabled
+			updateAutoSkipVisual()
+		else
+			MarketplaceService:PromptProductPurchase(player, Economy.Products.AutoSkip)
+		end
+	end)
+
 	-- Listen for spin results
 	SpinResult.OnClientEvent:Connect(function(data)
 		if data.success then
@@ -1462,6 +1558,41 @@ function SpinController._startSpin(data)
 	spinGeneration = spinGeneration + 1
 	resultFrame.Visible = false
 	stopPreSpinVisual()
+
+	if currentPremiumCaseKey then
+		local caseData = EnhancedCases.ByKey[currentPremiumCaseKey]
+		if caseData then
+			local poolStreamers = {}
+			for _, entry in ipairs(caseData.pool) do
+				local s = Streamers.ById[entry.streamerId]
+				if s then table.insert(poolStreamers, s) end
+			end
+			if #poolStreamers > 0 then
+				rebuildCarouselStrip(poolStreamers)
+			end
+		end
+	elseif currentGemCaseId then
+		local caseData = GemCases.ById[currentGemCaseId]
+		if caseData then
+			local poolStreamers = {}
+			if caseData.items then
+				for _, entry in ipairs(caseData.items) do
+					local s = Streamers.ById[entry.streamerId]
+					if s then table.insert(poolStreamers, s) end
+				end
+			elseif caseData.effect then
+				local exclude = caseData.excludeRarities or {}
+				for _, s in ipairs(Streamers.List) do
+					if not exclude[s.rarity] then
+						table.insert(poolStreamers, s)
+					end
+				end
+			end
+			if #poolStreamers > 0 then
+				rebuildCarouselStrip(poolStreamers)
+			end
+		end
+	end
 
 	local existingMsg = screenGui:FindFirstChild("ReceivedMessage")
 	if existingMsg then existingMsg:Destroy() end
@@ -1582,7 +1713,10 @@ function SpinController.RequestSpin()
 		end
 	end)
 
-	if isOwnedCrateOpen and currentCrateId then
+	if currentPremiumCaseKey then
+		local OpenPremiumCrate = RemoteEvents:WaitForChild("OpenPremiumCrate")
+		OpenPremiumCrate:FireServer(currentPremiumCaseKey)
+	elseif isOwnedCrateOpen and currentCrateId then
 		local OpenOwnedCrate = RemoteEvents:WaitForChild("OpenOwnedCrate")
 		OpenOwnedCrate:FireServer(currentCrateId)
 	elseif currentGemCaseId then
@@ -1616,7 +1750,14 @@ function SpinController.Hide()
 	animationDone = false
 	autoSpinEnabled = false
 	isOwnedCrateOpen = false
+	local needReelReset = currentGemCaseId ~= nil or currentPremiumCaseKey ~= nil
 	currentGemCaseId = nil
+	if currentPremiumCaseKey then
+		currentPremiumCaseKey = nil
+	end
+	if needReelReset then
+		rebuildCarouselStrip(Streamers.List)
+	end
 	if autoSpinButton then
 		autoSpinButton.BackgroundColor3 = Color3.fromRGB(55, 50, 80)
 		autoSpinButton.Text = "AUTO"
@@ -1625,6 +1766,14 @@ function SpinController.Hide()
 		if s then s.Color = Color3.fromRGB(80, 70, 120) end
 	end
 	if skipButton then skipButton.Visible = false end
+	autoSkipEnabled = false
+	if autoSkipButton then
+		autoSkipButton.BackgroundColor3 = Color3.fromRGB(55, 50, 80)
+		autoSkipButton.Text = "AUTO SKIP"
+		autoSkipButton.TextColor3 = Color3.fromRGB(180, 180, 210)
+		local s = autoSkipButton:FindFirstChildOfClass("UIStroke")
+		if s then s.Color = Color3.fromRGB(80, 70, 120) end
+	end
 	if currentAnimConnection then
 		pcall(function() currentAnimConnection:Disconnect() end)
 		currentAnimConnection = nil
@@ -1669,6 +1818,10 @@ end
 
 function SpinController.SetGemCaseVisual(caseId)
 	currentGemCaseId = caseId
+end
+
+function SpinController.SetPremiumCaseKey(caseKey)
+	currentPremiumCaseKey = caseKey
 end
 
 function SpinController.WaitForResult()

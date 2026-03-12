@@ -149,7 +149,7 @@ local function persistPotionState(player)
 			savedEffects[potionType] = {
 				multiplier = tonumber(info.multiplier) or 1,
 				tier = tonumber(info.tier) or 0,
-				expiresAt = math.floor(info.expiresAt),
+				remainingSeconds = math.floor(info.expiresAt - now),
 			}
 		end
 	end
@@ -213,14 +213,18 @@ local function loadPotionState(player)
 	local savedEffects = type(data.activePotionEffects) == "table" and data.activePotionEffects or {}
 	for potionType, info in pairs(savedEffects) do
 		if (potionType == "Luck" or potionType == "Cash" or potionType == "Divine")
-			and type(info) == "table"
-			and type(info.expiresAt) == "number"
-			and info.expiresAt > now then
-			activeEffects[userId][potionType] = {
-				multiplier = tonumber(info.multiplier) or 1,
-				tier = tonumber(info.tier) or 0,
-				expiresAt = math.floor(info.expiresAt),
-			}
+			and type(info) == "table" then
+			local remaining = tonumber(info.remainingSeconds)
+			if not remaining and type(info.expiresAt) == "number" and info.expiresAt > now then
+				remaining = math.floor(info.expiresAt - now)
+			end
+			if remaining and remaining > 0 then
+				activeEffects[userId][potionType] = {
+					multiplier = tonumber(info.multiplier) or 1,
+					tier = tonumber(info.tier) or 0,
+					expiresAt = now + remaining,
+				}
+			end
 		end
 	end
 
